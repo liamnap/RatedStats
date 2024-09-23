@@ -1,0 +1,12 @@
+## Title: RatedStats
+## Version: 1.0
+## Author: liamp
+## Interface: 110000
+## DefaultState: enabled
+## SavedVariables: RSTATS_Database
+
+## OptionalDeps: LibDataBroker-1.1, LibDBIcon-1.0
+
+config.lua
+minimap.lua
+init.lua
