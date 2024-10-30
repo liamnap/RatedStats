@@ -724,7 +724,7 @@ function RefreshDataEvent(self, event, ...)
             
             if roundIndex >= 1 and roundIndex <= 5 then
                 -- Delay processing for 15, 10 seconds still showed 0 values
-                C_Timer.After(0.1, ProcessPlayerDeath)
+                C_Timer.After(15, ProcessPlayerDeath)
             else
                 -- For 6th round, process normally without delay, but KB and ratingChange delay within the GetPlayerStats function (1 second too long, 0.25 maybe too short)
                 C_Timer.After(0.1, ProcessPlayerDeath)
