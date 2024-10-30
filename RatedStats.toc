@@ -1,7 +1,7 @@
 ## Title: RatedStats
 ## Version: 1.0
 ## Author: liamp
-## Interface: 110000
+## Interface: 110005
 ## DefaultState: enabled
 ## SavedVariables: RSTATS_Database
 
