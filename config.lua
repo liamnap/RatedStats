@@ -117,29 +117,29 @@ function Config:GetThemeColor()
     return c.r, c.g, c.b, c.hex;
 end
 
-local function ScrollFrame_OnMouseWheel(self, delta)
-    local newValue = self:GetVerticalScroll() - (delta * 20);
-
-    if (newValue < 0) then
-        newValue = 0;
-    elseif (newValue > self:GetVerticalScrollRange()) then
-        newValue = self:GetVerticalScrollRange();
-    end
-
-    self:SetVerticalScroll(newValue);
-end
-
-local function HorizontalScrollFrame_OnMouseWheel(self, delta)
-    local newValue = self:GetHorizontalScroll() - (delta * 20);
-
-    if (newValue < 0) then
-        newValue = 0;
-    elseif (newValue > self:GetHorizontalScrollRange()) then
-        newValue = self:GetHorizontalScrollRange();
-    end
-
-    self:SetHorizontalScroll(newValue);
-end
+----- local function ScrollFrame_OnMouseWheel(self, delta)
+-----     local newValue = self:GetVerticalScroll() - (delta * 20);
+----- 
+-----     if (newValue < 0) then
+-----         newValue = 0;
+-----     elseif (newValue > self:GetVerticalScrollRange()) then
+-----         newValue = self:GetVerticalScrollRange();
+-----     end
+----- 
+-----     self:SetVerticalScroll(newValue);
+----- end
+----- 
+----- local function HorizontalScrollFrame_OnMouseWheel(self, delta)
+-----     local newValue = self:GetHorizontalScroll() - (delta * 20);
+----- 
+-----     if (newValue < 0) then
+-----         newValue = 0;
+-----     elseif (newValue > self:GetHorizontalScrollRange()) then
+-----         newValue = self:GetHorizontalScrollRange();
+-----     end
+----- 
+-----     self:SetHorizontalScroll(newValue);
+----- end
 
 local function Tab_OnClick(self)
     PanelTemplates_SetTab(self:GetParent(), self:GetID());
@@ -2429,7 +2429,13 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
     mmrLabel:SetPoint("TOPLEFT", crLabel, "BOTTOMLEFT", 0, -5)
     mmrLabel:SetText("Current MMR: " .. currentMMR)
 
-    -- Return mmrLabel for further positioning
+    -- Instructional text
+    local instructionLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    instructionLabel:SetFont("Fonts\\FRIZQT__.TTF", 12)
+    instructionLabel:SetPoint("TOP", contentFrame, "TOP", 0, -10)
+    instructionLabel:SetText("Click on rows to expand.\nClick on player name to copy.\nShift+MouseWheel to scroll left and right.")
+    
+    -- Return the last label for potential further positioning
     return mmrLabel
 end
 
@@ -2440,88 +2446,87 @@ end
 function Config:CreateMenu()
     local offsetY = 200
 
-    -- Create the main frame
     UIConfig = CreateFrame("Frame", "RatedStatsConfig", UIParent, "UIPanelDialogTemplate")
-    UIConfig:SetSize(1050, 540)
+    UIConfig:SetSize(1050, 540) -- Resize the window here
     UIConfig:SetPoint("CENTER", UIParent, "CENTER", 0, offsetY)
-    UIConfig:SetResizable(true)  -- Enable resizing
-    UIConfig:SetMinResize(525, 250)  -- Set minimum resize limits
 
-    -- Make the frame resizable with a drag handle
-    local resizeHandle = CreateFrame("Button", nil, UIConfig)
-    resizeHandle:SetSize(16, 16)
-    resizeHandle:SetPoint("BOTTOMRIGHT")
-    resizeHandle:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
-    resizeHandle:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
-    resizeHandle:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
-    resizeHandle:SetScript("OnMouseDown", function() UIConfig:StartSizing("BOTTOMRIGHT") end)
-    resizeHandle:SetScript("OnMouseUp", function() UIConfig:StopMovingOrSizing() end)
-
-    -- Set the title
     UIConfig.Title:ClearAllPoints()
     UIConfig.Title:SetFontObject("GameFontHighlight")
     UIConfig.Title:SetPoint("LEFT", RatedStatsConfigTitleBG, "LEFT", 8, 1)
     UIConfig.Title:SetText("Rated Stats Ratings")
 
-    -- Create the ScrollFrame
+    -- Create Scroll Frame with vertical scroll
     UIConfig.ScrollFrame = CreateFrame("ScrollFrame", nil, UIConfig, "UIPanelScrollFrameTemplate")
     UIConfig.ScrollFrame:SetPoint("TOPLEFT", RatedStatsConfigDialogBG, "TOPLEFT", 4, -8)
-    UIConfig.ScrollFrame:SetPoint("BOTTOMRIGHT", RatedStatsConfigDialogBG, "BOTTOMRIGHT", -3, 4)
+    UIConfig.ScrollFrame:SetPoint("BOTTOMRIGHT", RatedStatsConfigDialogBG, "BOTTOMRIGHT", -3, 24) -- Leave space for horizontal scroll
     UIConfig.ScrollFrame:SetClipsChildren(true)
-    UIConfig.ScrollFrame:SetScript("OnMouseWheel", ScrollFrame_OnMouseWheel)
 
-    -- Add horizontal scroll
+    -- Content Frame within the Scroll Frame for scrollable content
+    local content = CreateFrame("Frame", nil, UIConfig.ScrollFrame)
+    content:SetSize(1600, 2000) -- Adjust size as needed
+    UIConfig.ScrollFrame:SetScrollChild(content)
+
+    -- Positioning Vertical Scroll Bar
     UIConfig.ScrollFrame.ScrollBar:ClearAllPoints()
-    UIConfig.ScrollFrame.ScrollBar:SetPoint("TOPLEFT", UIConfig.ScrollFrame, "TOPRIGHT", -12, -18)
+    UIConfig.ScrollFrame.ScrollBar:SetPoint("TOPRIGHT", UIConfig.ScrollFrame, "TOPRIGHT", 0, -18)
     UIConfig.ScrollFrame.ScrollBar:SetPoint("BOTTOMRIGHT", UIConfig.ScrollFrame, "BOTTOMRIGHT", -7, 18)
 
-    -- Create a content frame inside ScrollFrame for horizontal scrolling
-    UIConfig.ScrollFrame.ContentFrame = CreateFrame("Frame", nil, UIConfig.ScrollFrame)
-    UIConfig.ScrollFrame.ContentFrame:SetSize(2000, 500)  -- Set a large width to enable horizontal scroll
-    UIConfig.ScrollFrame:SetScrollChild(UIConfig.ScrollFrame.ContentFrame)
+    -- Horizontal Scroll Bar at bottom
+    local horizontalScrollBar = CreateFrame("Slider", nil, UIConfig, "UIPanelScrollBarTemplate")
+    horizontalScrollBar:SetOrientation("HORIZONTAL")
+    horizontalScrollBar:SetPoint("BOTTOMLEFT", UIConfig.ScrollFrame, "BOTTOMLEFT", 16, 0)
+    horizontalScrollBar:SetPoint("BOTTOMRIGHT", UIConfig.ScrollFrame, "BOTTOMRIGHT", -16, 0)
+    horizontalScrollBar:SetMinMaxValues(0, content:GetWidth() - UIConfig.ScrollFrame:GetWidth())
+    horizontalScrollBar:SetValueStep(1)
+    horizontalScrollBar:SetValue(0)
+	horizontalScrollBar:Show()  -- Ensure it is shown
 
-    -- Position and layout tabs within ContentFrame
-    local content1, content2, content3, content4, content5 = SetTabs(UIConfig.ScrollFrame.ContentFrame, 5, "Solo Shuffle", "2v2", "3v3", "RBG", "Solo RBG")
+    -- Hook horizontal scroll to ScrollFrame
+    horizontalScrollBar:SetScript("OnValueChanged", function(self, value)
+        UIConfig.ScrollFrame:SetHorizontalScroll(value)
+    end)
 
-    -- Function to adjust content positioning
+    -- Enable mouse wheel scrolling for both directions
+    UIConfig.ScrollFrame:EnableMouseWheel(true)
+    UIConfig.ScrollFrame:SetScript("OnMouseWheel", function(_, delta)
+        if IsShiftKeyDown() then
+            local currentValue = horizontalScrollBar:GetValue()
+            horizontalScrollBar:SetValue(currentValue - delta * 20)
+        else
+            local currentValue = UIConfig.ScrollFrame.ScrollBar:GetValue()
+            UIConfig.ScrollFrame.ScrollBar:SetValue(currentValue - delta * 20)
+        end
+    end)
+
+    -- Define SetTabs function and positioning for content frames
+    local content1, content2, content3, content4, content5 = SetTabs(UIConfig, 5, "Solo Shuffle", "2v2", "3v3", "RBG", "Solo RBG")
     local function AdjustContentPositioning(content)
-        content:SetPoint("TOPLEFT", UIConfig.ScrollFrame.ContentFrame, "TOPLEFT", 10, -40)
-        content:SetPoint("BOTTOMRIGHT", UIConfig.ScrollFrame.ContentFrame, "BOTTOMRIGHT", -10, 10)
+        content:SetPoint("TOPLEFT", UIConfig.ScrollFrame, "TOPLEFT", 10, -40)
+        content:SetPoint("BOTTOMRIGHT", UIConfig.ScrollFrame, "BOTTOMRIGHT", -10, 10)
     end
 
-    -- Adjust each tab's content position
+    -- Position content frames
     AdjustContentPositioning(content1)
     AdjustContentPositioning(content2)
     AdjustContentPositioning(content3)
     AdjustContentPositioning(content4)
     AdjustContentPositioning(content5)
 
-    -- Set up data display functions for each tab
-    local mmrLabel1 = DisplayCurrentCRMMR(content1, 7)
+    -- Sample call to DisplayCurrentCRMMR and DisplayHistory for each tab
+    local mmrLabel1 = DisplayCurrentCRMMR(content1, 7)  -- Solo Shuffle
     local headerTexts1, matchFrames1 = DisplayHistory(content1, Database.SoloShuffleHistory, mmrLabel1, 1)
-
-    local mmrLabel2 = DisplayCurrentCRMMR(content2, 1)
+    local mmrLabel2 = DisplayCurrentCRMMR(content2, 1)  -- 2v2
     local headerTexts2, matchFrames2 = DisplayHistory(content2, Database.v2History, mmrLabel2, 2)
-
-    local mmrLabel3 = DisplayCurrentCRMMR(content3, 2)
+    local mmrLabel3 = DisplayCurrentCRMMR(content3, 2)  -- 3v3
     local headerTexts3, matchFrames3 = DisplayHistory(content3, Database.v3History, mmrLabel3, 3)
-
-    local mmrLabel4 = DisplayCurrentCRMMR(content4, 4)
+    local mmrLabel4 = DisplayCurrentCRMMR(content4, 4)  -- RBG
     local headerTexts4, matchFrames4 = DisplayHistory(content4, Database.RBGHistory, mmrLabel4, 4)
-
-    local mmrLabel5 = DisplayCurrentCRMMR(content5, 9)
+    local mmrLabel5 = DisplayCurrentCRMMR(content5, 9)  -- Solo RBG
     local headerTexts5, matchFrames5 = DisplayHistory(content5, Database.SoloRBGHistory, mmrLabel5, 5)
-
-    -- Adjust layout on resize
-    UIConfig:SetScript("OnSizeChanged", function(self, width, height)
-        UIConfig.ScrollFrame.ContentFrame:SetWidth(width - 40)
-        UIConfig.ScrollFrame.ContentFrame:SetHeight(height - 80)
-    end)
 
     UIConfig:Hide()
     return UIConfig
 end
-
 
 ----------------------------------
 -- PvP Match State Change Handling
