@@ -2438,61 +2438,90 @@ end
 ----------------------------------
 
 function Config:CreateMenu()
-
     local offsetY = 200
 
+    -- Create the main frame
     UIConfig = CreateFrame("Frame", "RatedStatsConfig", UIParent, "UIPanelDialogTemplate")
-    UIConfig:SetSize(1575, 540) -- Resize the window here
+    UIConfig:SetSize(1050, 540)
     UIConfig:SetPoint("CENTER", UIParent, "CENTER", 0, offsetY)
+    UIConfig:SetResizable(true)  -- Enable resizing
+    UIConfig:SetMinResize(525, 250)  -- Set minimum resize limits
 
+    -- Make the frame resizable with a drag handle
+    local resizeHandle = CreateFrame("Button", nil, UIConfig)
+    resizeHandle:SetSize(16, 16)
+    resizeHandle:SetPoint("BOTTOMRIGHT")
+    resizeHandle:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+    resizeHandle:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
+    resizeHandle:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
+    resizeHandle:SetScript("OnMouseDown", function() UIConfig:StartSizing("BOTTOMRIGHT") end)
+    resizeHandle:SetScript("OnMouseUp", function() UIConfig:StopMovingOrSizing() end)
+
+    -- Set the title
     UIConfig.Title:ClearAllPoints()
     UIConfig.Title:SetFontObject("GameFontHighlight")
     UIConfig.Title:SetPoint("LEFT", RatedStatsConfigTitleBG, "LEFT", 8, 1)
     UIConfig.Title:SetText("Rated Stats Ratings")
 
+    -- Create the ScrollFrame
     UIConfig.ScrollFrame = CreateFrame("ScrollFrame", nil, UIConfig, "UIPanelScrollFrameTemplate")
     UIConfig.ScrollFrame:SetPoint("TOPLEFT", RatedStatsConfigDialogBG, "TOPLEFT", 4, -8)
     UIConfig.ScrollFrame:SetPoint("BOTTOMRIGHT", RatedStatsConfigDialogBG, "BOTTOMRIGHT", -3, 4)
     UIConfig.ScrollFrame:SetClipsChildren(true)
     UIConfig.ScrollFrame:SetScript("OnMouseWheel", ScrollFrame_OnMouseWheel)
 
+    -- Add horizontal scroll
     UIConfig.ScrollFrame.ScrollBar:ClearAllPoints()
     UIConfig.ScrollFrame.ScrollBar:SetPoint("TOPLEFT", UIConfig.ScrollFrame, "TOPRIGHT", -12, -18)
     UIConfig.ScrollFrame.ScrollBar:SetPoint("BOTTOMRIGHT", UIConfig.ScrollFrame, "BOTTOMRIGHT", -7, 18)
 
-    local content1, content2, content3, content4, content5 = SetTabs(UIConfig, 5, "Solo Shuffle", "2v2", "3v3", "RBG", "Solo RBG")
+    -- Create a content frame inside ScrollFrame for horizontal scrolling
+    UIConfig.ScrollFrame.ContentFrame = CreateFrame("Frame", nil, UIConfig.ScrollFrame)
+    UIConfig.ScrollFrame.ContentFrame:SetSize(2000, 500)  -- Set a large width to enable horizontal scroll
+    UIConfig.ScrollFrame:SetScrollChild(UIConfig.ScrollFrame.ContentFrame)
 
-    -- Adjusted positioning for content frames to ensure correct layout
+    -- Position and layout tabs within ContentFrame
+    local content1, content2, content3, content4, content5 = SetTabs(UIConfig.ScrollFrame.ContentFrame, 5, "Solo Shuffle", "2v2", "3v3", "RBG", "Solo RBG")
+
+    -- Function to adjust content positioning
     local function AdjustContentPositioning(content)
-        content:SetPoint("TOPLEFT", UIConfig.ScrollFrame, "TOPLEFT", 10, -40)
-        content:SetPoint("BOTTOMRIGHT", UIConfig.ScrollFrame, "BOTTOMRIGHT", -10, 10)
+        content:SetPoint("TOPLEFT", UIConfig.ScrollFrame.ContentFrame, "TOPLEFT", 10, -40)
+        content:SetPoint("BOTTOMRIGHT", UIConfig.ScrollFrame.ContentFrame, "BOTTOMRIGHT", -10, 10)
     end
 
+    -- Adjust each tab's content position
     AdjustContentPositioning(content1)
     AdjustContentPositioning(content2)
     AdjustContentPositioning(content3)
     AdjustContentPositioning(content4)
     AdjustContentPositioning(content5)
 
-    -- Call DisplayCurrentCRMMR with appropriate categoryID
-    local mmrLabel1 = DisplayCurrentCRMMR(content1, 7)  -- Solo Shuffle
+    -- Set up data display functions for each tab
+    local mmrLabel1 = DisplayCurrentCRMMR(content1, 7)
     local headerTexts1, matchFrames1 = DisplayHistory(content1, Database.SoloShuffleHistory, mmrLabel1, 1)
 
-    local mmrLabel2 = DisplayCurrentCRMMR(content2, 1)  -- 2v2
+    local mmrLabel2 = DisplayCurrentCRMMR(content2, 1)
     local headerTexts2, matchFrames2 = DisplayHistory(content2, Database.v2History, mmrLabel2, 2)
 
-    local mmrLabel3 = DisplayCurrentCRMMR(content3, 2)  -- 3v3
+    local mmrLabel3 = DisplayCurrentCRMMR(content3, 2)
     local headerTexts3, matchFrames3 = DisplayHistory(content3, Database.v3History, mmrLabel3, 3)
 
-    local mmrLabel4 = DisplayCurrentCRMMR(content4, 4)  -- RBG
+    local mmrLabel4 = DisplayCurrentCRMMR(content4, 4)
     local headerTexts4, matchFrames4 = DisplayHistory(content4, Database.RBGHistory, mmrLabel4, 4)
 
-    local mmrLabel5 = DisplayCurrentCRMMR(content5, 9)  -- Solo RBG
+    local mmrLabel5 = DisplayCurrentCRMMR(content5, 9)
     local headerTexts5, matchFrames5 = DisplayHistory(content5, Database.SoloRBGHistory, mmrLabel5, 5)
+
+    -- Adjust layout on resize
+    UIConfig:SetScript("OnSizeChanged", function(self, width, height)
+        UIConfig.ScrollFrame.ContentFrame:SetWidth(width - 40)
+        UIConfig.ScrollFrame.ContentFrame:SetHeight(height - 80)
+    end)
 
     UIConfig:Hide()
     return UIConfig
 end
+
 
 ----------------------------------
 -- PvP Match State Change Handling
