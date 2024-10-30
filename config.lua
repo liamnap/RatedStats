@@ -105,7 +105,7 @@ local rowSpacing = {
 --------------------------------------
 
 function Config:Toggle()
-	LoadData()
+	Config:CreateMenu()
     local menu = UIConfig or Config:CreateMenu();
     menu:SetShown(not menu:IsShown());
 end
