@@ -199,7 +199,6 @@ end
 
 function LoadData()
     -- Check if the global RSTATS_Database exists
-	print("Data Loaded")
     if not RSTATS_Database then
         RSTATS_Database = {}  -- Initialize an empty global table if it's nil
         return false
