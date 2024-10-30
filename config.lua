@@ -2449,6 +2449,16 @@ function Config:CreateMenu()
     UIConfig = CreateFrame("Frame", "RatedStatsConfig", UIParent, "UIPanelDialogTemplate")
     UIConfig:SetSize(1050, 540) -- Resize the window here
     UIConfig:SetPoint("CENTER", UIParent, "CENTER", 0, offsetY)
+	
+	-- Enable dragging of the frame
+	UIConfig:SetMovable(true)
+	UIConfig:EnableMouse(true)
+	UIConfig:RegisterForDrag("LeftButton")
+	UIConfig:SetScript("OnDragStart", UIConfig.StartMoving)
+	UIConfig:SetScript("OnDragStop", function(self)
+		self:StopMovingOrSizing()
+		-- Optionally save the new position here
+	end)
 
     UIConfig.Title:ClearAllPoints()
     UIConfig.Title:SetFontObject("GameFontHighlight")
