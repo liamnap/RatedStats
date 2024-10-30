@@ -638,8 +638,6 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex)
     UnregisterRaidLeaderEvents()
 
     AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, friendlyTeamScore, enemyTeamScore)
-    -- Refresh the UI menu after updating history
-    Config:CreateMenu()
 
     SaveData() -- Updated to call SaveData function
 end
@@ -723,8 +721,8 @@ function RefreshDataEvent(self, event, ...)
         if combatEvent == "UNIT_DIED" and (overkill == nil or overkill <= 0) then
             
             if roundIndex >= 1 and roundIndex <= 5 then
-                -- Delay processing for 15, 10 seconds still showed 0 values
-                C_Timer.After(15, ProcessPlayerDeath)
+                -- Delay processing for 15, 10 seconds still showed 0 values (currently set to 0.1 with delay within GetPlayerStatsEndOfMatch)
+                C_Timer.After(0.1, ProcessPlayerDeath)
             else
                 -- For 6th round, process normally without delay, but KB and ratingChange delay within the GetPlayerStats function (1 second too long, 0.25 maybe too short)
                 C_Timer.After(0.1, ProcessPlayerDeath)
@@ -1857,7 +1855,6 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     
             -- Save the updated data
             SaveData()
-            Config:CreateMenu()
         end)
     end
 end
@@ -2440,6 +2437,8 @@ end
 ----------------------------------
 
 function Config:CreateMenu()
+	LoadData()
+
     local offsetY = 200
 
     UIConfig = CreateFrame("Frame", "RatedStatsConfig", UIParent, "UIPanelDialogTemplate")
