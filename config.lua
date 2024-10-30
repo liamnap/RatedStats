@@ -2444,6 +2444,11 @@ end
 ----------------------------------
 
 function Config:CreateMenu()
+    -- Check if UIConfig already exists and return it if so
+    if UIConfig then
+        return UIConfig
+    end
+	
     local offsetY = 200
 
     UIConfig = CreateFrame("Frame", "RatedStatsConfig", UIParent, "UIPanelDialogTemplate")
