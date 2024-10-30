@@ -1765,7 +1765,6 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     
             -- Save the updated data
             SaveData()
-            Config:CreateMenu()
         end)
     end
 
