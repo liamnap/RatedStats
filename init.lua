@@ -8,11 +8,6 @@ local Database = RSTATS.Database
 RSTATS.Config = RSTATS.Config or {}
 local Config = RSTATS.Config
 
--- Check if RSTATS.MinimapIcon is already initialized
-if not RSTATS.MinimapIcon then
-    RSTATS:InitializeMinimapIcon()
-end
-
 --------------------------------------
 -- Custom Slash Command
 --------------------------------------
