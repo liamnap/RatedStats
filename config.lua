@@ -718,11 +718,8 @@ function RefreshDataEvent(self, event, ...)
             end
         end
     
-	local unitToken = UnitTokenFromGUID(unitGUID)
-	local isReallyDead = UnitIsDeadOrGhost(unitToken)
-	
         -- Check if the event is UNIT_DIED and the player is truly dead (overkill <= 0)
-        if combatEvent == "UNIT_DIED" and isReallyDead then
+        if combatEvent == "UNIT_DIED" and (overkill == nil or overkill <= 0) and bit.band(destFlags, COMBATLOG_OBJECT_TYPE_PLAYER) > 0 then
             
             if roundIndex >= 1 and roundIndex <= 5 then
                 -- Delay processing for 15, 10 seconds still showed 0 values (currently set to 0.1 with delay within GetPlayerStatsEndOfMatch)
@@ -741,6 +738,7 @@ function RefreshDataEvent(self, event, ...)
             if self.isSoloShuffle then
                 self.isSoloShuffle = nil
                 GetInitialCRandMMR()
+				roundIndex = nil
             elseif C_PvP.IsRatedArena() then
                 local matchBracket = C_PvP.GetActiveMatchBracket()
                 if matchBracket == 0 then
