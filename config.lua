@@ -589,10 +589,15 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex)
     local friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing = 0, 0, 0, 0
     local battlefieldWinner = GetBattlefieldWinner() == 0 and "Horde" or "Alliance"  -- Convert to "Horde" or "Alliance"
     local friendlyWinLoss = battlefieldWinner == teamFaction and "+   W" or "+   L"  -- Determine win/loss status
+	local previousRoundsWon = previousRoundsWon or 0
     local roundsWon = roundsWon or 0
 
     if C_PvP.IsRatedSoloShuffle() then
-        friendlyWinLoss = battlefieldWinner == teamFaction and "RND " .. roundIndex .. "  +   W" or "RND " .. roundIndex .. "  +   L"
+		if roundsWon > previousRoundsWon then
+			friendlyWinLoss = "RND " .. roundIndex .. "  +   W"
+        else
+			friendlyWinLoss = "RND " .. roundIndex .. "  +   L"
+		end
 	end
 
     -- Calculate total damage and healing for friendly and enemy teams
@@ -697,6 +702,7 @@ function RefreshDataEvent(self, event, ...)
 		-- Check if the event is PARTY_KILL
 		if combatEvent == "PARTY_KILL" and bit.band(destFlags, COMBATLOG_OBJECT_TYPE_PLAYER) > 0 then
 			-- Increment friendly team score
+			previousRoundsWon = (roundsWon or 0)
 			roundsWon = (roundsWon or 0) + 1
 			print("|cff00ff00[DEBUG]|r PARTY_KILL detected! Rounds Won: " .. roundsWon)
 		end
