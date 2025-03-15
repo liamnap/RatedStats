@@ -540,6 +540,7 @@ end
 local RSTATS_ScoreHistory = {}
 local friendlyTeamScore = 0
 local enemyTeamScore = 0
+local roundsWon = 0
 
 -- Function to get scores for resource-based maps
 function GetResourceScores(widgetInfo)
@@ -588,6 +589,7 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex)
     local friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing = 0, 0, 0, 0
     local battlefieldWinner = GetBattlefieldWinner() == 0 and "Horde" or "Alliance"  -- Convert to "Horde" or "Alliance"
     local friendlyWinLoss = battlefieldWinner == teamFaction and "+   W" or "+   L"  -- Determine win/loss status
+    local roundsWon = roundsWon or 0
 
     if C_PvP.IsRatedSoloShuffle() then
         friendlyWinLoss = battlefieldWinner == teamFaction and "RND " .. roundIndex .. "  +   W" or "RND " .. roundIndex .. "  +   L"
@@ -616,7 +618,6 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex)
             local talentSpec = scoreInfo.talentSpec
             local honorLevel = scoreInfo.honorLevel
             local roleAssigned = scoreInfo.roleAssigned
-            local roundsWon = scoreInfo.roundsWon
             local stats = scoreInfo.stats
 
             -- Ensure damageDone and healingDone are numbers
@@ -638,7 +639,7 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex)
     -- Unregister the events after obtaining the raid leader information
     UnregisterRaidLeaderEvents()
 
-    AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, friendlyTeamScore, enemyTeamScore)
+    AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, friendlyTeamScore, enemyTeamScore, roundsWon)
 
     SaveData() -- Updated to call SaveData function
 end
@@ -687,12 +688,19 @@ function RefreshDataEvent(self, event, ...)
                 self.isSoloShuffle = nil
             end
         end)
-
+	
     -- Event handling for Solo Shuffle UNIT_DIED events
     elseif self.isSoloShuffle and event == "COMBAT_LOG_EVENT_UNFILTERED" then
         -- Capture the current combat log event information
         local timestamp, combatEvent, _, sourceGUID, sourceName, sourceFlags, _, destGUID, destName, destFlags, _, spellId, spellName, overkill = CombatLogGetCurrentEventInfo()
-    
+		
+		-- Check if the event is PARTY_KILL
+		if combatEvent == "PARTY_KILL" and bit.band(destFlags, COMBATLOG_OBJECT_TYPE_PLAYER) > 0 then
+			-- Increment friendly team score
+			roundsWon = (roundsWon or 0) + 1
+			print("|cff00ff00[DEBUG]|r PARTY_KILL detected! Rounds Won: " .. roundsWon)
+		end
+
         -- Define a function to process player death and fetch stats
         local function ProcessPlayerDeath()
             -- Remove realm name from player name
@@ -1478,7 +1486,7 @@ function DetermineOriginalFaction(playerData, playerCombatLogEvents)
     return playerData.faction, "Default"
 end
 
-function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, friendlyTeamScore, enemyTeamScore)
+function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, friendlyTeamScore, enemyTeamScore, roundsWon)
 
     local appendHistoryMatchID = #historyTable + 1  -- Unique match ID
     local playerFullName = GetPlayerFullName() -- Get the player's full name
@@ -1502,7 +1510,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     local friendlyRatingTotal, enemyRatingTotal = 0, 0
     local friendlyPlayerCount, enemyPlayerCount = 0, 0
     local friendlyRatingChangeTotal, enemyRatingChangeTotal = 0, 0
-
+	
     for i = 1, GetNumBattlefieldScores() do
         local scoreInfo = C_PvP.GetScoreInfo(i)
         if scoreInfo then
@@ -1532,7 +1540,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             local roleAssigned = scoreInfo.roleAssigned
             local stats = scoreInfo.stats
             local guid = scoreInfo.guid
-            local roundsWon = C_PvP.GetMatchPVPStatColumn(i, "PVP_ROUNDS_WON") or 0  -- Capture rounds won
+---            local roundsWon = roundsWon or 0  -- Capture rounds won
          
             -- Display additional stats
             if stats then
@@ -1567,9 +1575,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                 honorLevel = honorLevel,
                 newrating = newrating,  -- New field for adjusted rating
                 originalFaction = nil,
-                roundsWon = roundsWon,
+---                roundsWon = roundsWon or 0,
             }
-
 
             -- Get combat log events
             local playerCombatLogEvents = GetCombatLogEventsForPlayer(playerData.name)
@@ -1643,6 +1650,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     UpdateFriendlyRaidLeader()
     local enemyRaidLeader = GetEnemyRaidLeaderName(enemyFaction, enemyPlayers)
 
+	print("|cff00ff00[DEBUG]|r AppendHistory roundsWon: " .. roundsWon)
+
     local entry = {
         matchID = appendHistoryMatchID,
         timestamp = endTime,
@@ -1669,6 +1678,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
         enemyTotalHealing = enemyTotalHealing,
         enemyRatingChange = enemyAvgRatingChange,
         enemyTeamScore = enemyTeamScore,
+		roundsWon = roundsWon or 0,
         playerStats = playerStats -- Nested table with player-specific details
     }
 
@@ -1715,7 +1725,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                             playerData.mmrChange = tonumber(scoreInfo.mmrChange) or 0
                             playerData.postmatchMMR = tonumber(scoreInfo.postmatchMMR) or 0
                             playerData.honorLevel = tonumber(scoreInfo.honorLevel) or 0
-                            playerData.roundsWon = C_PvP.GetMatchPVPStatColumn(i, "PVP_ROUNDS_WON") or 0
+---                            playerData.roundsWon = roundsWon or 0
     
                             -- Calculate totals based on player's faction
                             if playerData.faction == teamFaction then
@@ -1807,7 +1817,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                             playerData.mmrChange = tonumber(scoreInfo.mmrChange) or 0
                             playerData.postmatchMMR = tonumber(scoreInfo.postmatchMMR) or 0
                             playerData.honorLevel = tonumber(scoreInfo.honorLevel) or 0
-                            playerData.roundsWon = C_PvP.GetMatchPVPStatColumn(i, "PVP_ROUNDS_WON") or 0
+---                            playerData.roundsWon = roundsWon or 0
     
                             -- Calculate totals based on player's faction
                             if playerData.faction == teamFaction then
@@ -1907,14 +1917,13 @@ function DisplayHistory(content, historyTable, mmrLabel, tabID)
         return matchIDA < matchIDB
     end)
 
-    local roundsWon = 0
-    for _, playerData in ipairs(historyTable) do
-        if playerData.name == playerName then
-            roundsWon = playerData.roundsWon or 0
-            break
-        end
-    end
-
+---    for _, playerData in ipairs(historyTable) do
+---	    if playerData.name == playerFullName then  -- Ensure we are getting the correct player's data
+---            roundsWon = scoreInfo.roundsWon or 0
+------			print("|cff00ff00[DEBUG]|r DisplayHistory2 roundsWon: " .. roundsWon)
+---            break
+---        end
+---    end
 
     local scoreHeaderText = "Score"
 	if tabID == 2 or tabID == 3 then  -- Solo Shuffle, 2v2, 3v3 tab IDs
@@ -1977,7 +1986,7 @@ function DisplayHistory(content, historyTable, mmrLabel, tabID)
 
         -- Hide the score text if the current content is Solo Shuffle
         if tabID == 1 then
-			scoreText = roundsWon .. " / 6"
+			scoreText = (match.roundsWon or 0) .. " / 6"
 		elseif tabID == 2 or tabID == 3 then  -- 2v2, 3v3 tab IDs
             scoreText = ""
         end
