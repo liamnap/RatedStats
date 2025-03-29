@@ -575,12 +575,6 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
 	local previousRoundsWon = previousRoundsWon or 0
     local roundsWon = roundsWon or 0
 
-<<<<<<< HEAD
-    if C_PvP.IsRatedSoloShuffle() then
-		if roundsWon > previousRoundsWon then
-			friendlyWinLoss = "RND " .. roundIndex .. "  +   W"
-        else
-=======
     local categoryMappings = {
         SoloShuffle = { id = 7, historyTable = "SoloShuffleHistory", displayName = "SoloShuffle" },
         ["2v2"] = { id = 1, historyTable = "v2History", displayName = "2v2" },
@@ -613,7 +607,6 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
 			roundIndex = 1
 			friendlyWinLoss = "RND " .. roundIndex .. "  +   L"
 		else
->>>>>>> dev
 			friendlyWinLoss = "RND " .. roundIndex .. "  +   L"
 		end
 	end
@@ -662,11 +655,7 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
     -- Unregister the events after obtaining the raid leader information
     UnregisterRaidLeaderEvents()
 
-<<<<<<< HEAD
-    AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, friendlyTeamScore, enemyTeamScore, roundsWon)
-=======
     AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, friendlyTeamScore, enemyTeamScore, roundsWon, categoryName, categoryID)
->>>>>>> dev
 
     SaveData() -- Updated to call SaveData function
 end
@@ -722,53 +711,14 @@ function RefreshDataEvent(self, event, ...)
                 self.isSoloShuffle = nil
             end
         end)
-<<<<<<< HEAD
-	
-    -- Event handling for Solo Shuffle UNIT_DIED events
-    elseif self.isSoloShuffle and event == "COMBAT_LOG_EVENT_UNFILTERED" then
-        -- Capture the current combat log event information
-        local timestamp, combatEvent, _, sourceGUID, sourceName, sourceFlags, _, destGUID, destName, destFlags, _, spellId, spellName, overkill = CombatLogGetCurrentEventInfo()
-		
-		-- Check if the event is PARTY_KILL
-		if combatEvent == "PARTY_KILL" and bit.band(destFlags, COMBATLOG_OBJECT_TYPE_PLAYER) > 0 then
-			-- Increment friendly team score
-			previousRoundsWon = (roundsWon or 0)
-			roundsWon = (roundsWon or 0) + 1
-			print("|cff00ff00[DEBUG]|r PARTY_KILL detected! Rounds Won: " .. roundsWon)
-		end
-
-        -- Define a function to process player death and fetch stats
-        local function ProcessPlayerDeath()
-            -- Remove realm name from player name
-            local playerName = destName:match("([^%-]+)")  -- Extracts the name before the hyphen
-    
-            -- Check if the destGUID is a player GUID
-            if destGUID:match("^Player") then
-=======
 
     elseif self.isSoloShuffle and (event == "UNIT_HEALTH" or event == "UNIT_AURA" or event == "COMBAT_LOG_EVENT_UNFILTERED") then
->>>>>>> dev
 
         confirmedDeaths = confirmedDeaths or {}
 
         local function IsRecentlyConfirmed(player)
             return confirmedDeaths[player] and GetTime() < confirmedDeaths[player]
         end
-<<<<<<< HEAD
-    
-        -- Check if the event is UNIT_DIED and the player is truly dead (overkill <= 0)
-        if combatEvent == "UNIT_DIED" and (overkill == nil or overkill <= 0) and bit.band(destFlags, COMBATLOG_OBJECT_TYPE_PLAYER) > 0 then
-            
-            if roundIndex >= 1 and roundIndex <= 5 then
-                -- Delay processing for 15, 10 seconds still showed 0 values (currently set to 0.1 with delay within GetPlayerStatsEndOfMatch)
-                C_Timer.After(0.1, ProcessPlayerDeath)
-            else
-                -- For 6th round, process normally without delay, but KB and ratingChange delay within the GetPlayerStats function (1 second too long, 0.25 maybe too short)
-                C_Timer.After(0.1, ProcessPlayerDeath)
-            end
-        else
-        end
-=======
 
 		local function IsFeignDeath(unit)
 			if UnitIsFeignDeath(unit) then return true end
@@ -827,7 +777,6 @@ function RefreshDataEvent(self, event, ...)
 				roundsWon = (roundsWon or 0) + 1
 			end
 		end
->>>>>>> dev
 
     elseif event == "PVP_MATCH_COMPLETE" then
         C_Timer.After(1, function()
@@ -843,15 +792,10 @@ function RefreshDataEvent(self, event, ...)
 
                 -- Cleanup
                 self.isSoloShuffle = nil
-<<<<<<< HEAD
-                GetInitialCRandMMR()
-				roundIndex = nil
-=======
                 roundIndex = nil
                 roundsWon = nil
                 previousRoundsWon = nil
                 playerDeathSeen = false
->>>>>>> dev
             elseif C_PvP.IsRatedArena() then
                 local matchBracket = C_PvP.GetActiveMatchBracket()
                 if matchBracket == 0 then
@@ -1638,12 +1582,7 @@ function DetermineOriginalFaction(playerData, playerCombatLogEvents)
     return playerData.faction, "Default"
 end
 
-<<<<<<< HEAD
-function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, friendlyTeamScore, enemyTeamScore, roundsWon)
-
-=======
 function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, friendlyTeamScore, enemyTeamScore, roundsWon, categoryName, categoryID)
->>>>>>> dev
     local appendHistoryMatchID = #historyTable + 1  -- Unique match ID
     local playerFullName = GetPlayerFullName() -- Get the player's full name
 
@@ -1810,13 +1749,9 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     UpdateFriendlyRaidLeader()
     local enemyRaidLeader = GetEnemyRaidLeaderName(enemyFaction, enemyPlayers)
 
-<<<<<<< HEAD
-	print("|cff00ff00[DEBUG]|r AppendHistory roundsWon: " .. roundsWon)
-=======
 	if C_PvP.IsRatedBattleground() or C_PvP.IsSoloRBG() and (friendlyTeamScore == enemyTeamScore) then
 		friendlyWinLoss = "~   D"
 	end
->>>>>>> dev
 
     local entry = {
         matchID = appendHistoryMatchID,
@@ -2083,17 +2018,6 @@ function DisplayHistory(content, historyTable, mmrLabel, tabID)
         return matchIDA < matchIDB
     end)
 
-<<<<<<< HEAD
----    for _, playerData in ipairs(historyTable) do
----	    if playerData.name == playerFullName then  -- Ensure we are getting the correct player's data
----            roundsWon = scoreInfo.roundsWon or 0
-------			print("|cff00ff00[DEBUG]|r DisplayHistory2 roundsWon: " .. roundsWon)
----            break
----        end
----    end
-
-=======
->>>>>>> dev
     local scoreHeaderText = "Score"
 	if tabID == 2 or tabID == 3 then  -- Solo Shuffle, 2v2, 3v3 tab IDs
         scoreHeaderText = ""  -- Hide the "Score" header
