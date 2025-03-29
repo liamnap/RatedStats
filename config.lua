@@ -263,65 +263,48 @@ function GetCRandMMR(categoryID)
 end
 
 function IsDataValid()
+
     -- Check if Database is a table
     if not Database or type(Database) ~= "table" then
         return false
     end
 
-    -- Check each history table and CR/MMR fields
-    if not Database.SoloShuffleHistory or type(Database.SoloShuffleHistory) ~= "table" then
+    -- Check that at least one history table is **not empty**
+    local function hasHistoryEntries(historyTable)
+        return type(historyTable) == "table" and #historyTable > 0
+    end
+
+    if not hasHistoryEntries(Database.SoloShuffleHistory) and
+       not hasHistoryEntries(Database.v2History) and
+       not hasHistoryEntries(Database.v3History) and
+       not hasHistoryEntries(Database.RBGHistory) and
+       not hasHistoryEntries(Database.SoloRBGHistory) then
+        return false  -- Data is NOT valid if there's no match history
+    end
+
+    -- Check CR/MMR values
+    if type(Database.CurrentCRforSoloShuffle) ~= "number" or
+       type(Database.CurrentMMRforSoloShuffle) ~= "number" then
         return false
     end
 
-    if not Database.v2History or type(Database.v2History) ~= "table" then
+    if type(Database.CurrentCRfor2v2) ~= "number" or
+       type(Database.CurrentMMRfor2v2) ~= "number" then
         return false
     end
 
-    if not Database.v3History or type(Database.v3History) ~= "table" then
+    if type(Database.CurrentCRfor3v3) ~= "number" or
+       type(Database.CurrentMMRfor3v3) ~= "number" then
         return false
     end
 
-    if not Database.RBGHistory or type(Database.RBGHistory) ~= "table" then
+    if type(Database.CurrentCRforRBG) ~= "number" or
+       type(Database.CurrentMMRforRBG) ~= "number" then
         return false
     end
 
-    if not Database.SoloRBGHistory or type(Database.SoloRBGHistory) ~= "table" then
-        return false
-    end
-
-    -- Debug CR/MMR/played values
-    if type(Database.CurrentCRforSoloShuffle) ~= "number" then
-        return false
-    end
-    if type(Database.CurrentMMRforSoloShuffle) ~= "number" then
-        return false
-    end
-
-    if type(Database.CurrentCRfor2v2) ~= "number" then
-        return false
-    end
-    if type(Database.CurrentMMRfor2v2) ~= "number" then
-        return false
-    end
-
-    if type(Database.CurrentCRfor3v3) ~= "number" then
-        return false
-    end
-    if type(Database.CurrentMMRfor3v3) ~= "number" then
-        return false
-    end
-
-    if type(Database.CurrentCRforRBG) ~= "number" then
-        return false
-    end
-    if type(Database.CurrentMMRforRBG) ~= "number" then
-        return false
-    end
-
-    if type(Database.CurrentCRforSoloRBG) ~= "number" then
-        return false
-    end
-    if type(Database.CurrentMMRforSoloRBG) ~= "number" then
+    if type(Database.CurrentCRforSoloRBG) ~= "number" or
+       type(Database.CurrentMMRforSoloRBG) ~= "number" then
         return false
     end
 
@@ -579,7 +562,7 @@ frame:RegisterEvent("PVP_MATCH_COMPLETE")
 frame:RegisterEvent("UPDATE_UI_WIDGET")
 frame:SetScript("OnEvent", OnWidgetUpdate)
 
-local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex)
+local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categoryName, categoryID)
     local mapID = GetCurrentMapID()
     local mapName = GetMapName(mapID) or "Unknown"
     local endTime = GetTimestamp()
@@ -592,10 +575,45 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex)
 	local previousRoundsWon = previousRoundsWon or 0
     local roundsWon = roundsWon or 0
 
+<<<<<<< HEAD
     if C_PvP.IsRatedSoloShuffle() then
 		if roundsWon > previousRoundsWon then
 			friendlyWinLoss = "RND " .. roundIndex .. "  +   W"
         else
+=======
+    local categoryMappings = {
+        SoloShuffle = { id = 7, historyTable = "SoloShuffleHistory", displayName = "SoloShuffle" },
+        ["2v2"] = { id = 1, historyTable = "v2History", displayName = "2v2" },
+        ["3v3"] = { id = 2, historyTable = "v3History", displayName = "3v3" },
+        RBG = { id = 4, historyTable = "RBGHistory", displayName = "RBG" },
+        SoloRBG = { id = 9, historyTable = "SoloRBGHistory", displayName = "SoloRBG" }
+    }
+	
+	-- Delay storing played games by 5 seconds to give the API time to update
+	C_Timer.After(5, function()
+		local function GetPlayedGames(categoryID)
+			return select(4, GetPersonalRatedInfo(categoryID))
+		end
+	
+		local played = GetPlayedGames(categoryID)
+	
+		-- Store played games per bracket
+		local playedField = "Playedfor" .. categoryName
+		Database[playedField] = played
+
+		SaveData() -- Optional: Save again to lock in the new count
+	end)
+	
+	if C_PvP.IsRatedSoloShuffle() then
+		if roundIndex == 6 and roundsWon == 3 then
+			friendlyWinLoss = "RND " .. roundIndex .. "  ~   D"
+		elseif roundsWon > previousRoundsWon then
+			friendlyWinLoss = "RND " .. roundIndex .. "  +   W"
+		elseif roundIndex == nil then
+			roundIndex = 1
+			friendlyWinLoss = "RND " .. roundIndex .. "  +   L"
+		else
+>>>>>>> dev
 			friendlyWinLoss = "RND " .. roundIndex .. "  +   L"
 		end
 	end
@@ -644,7 +662,11 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex)
     -- Unregister the events after obtaining the raid leader information
     UnregisterRaidLeaderEvents()
 
+<<<<<<< HEAD
     AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, friendlyTeamScore, enemyTeamScore, roundsWon)
+=======
+    AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, friendlyTeamScore, enemyTeamScore, roundsWon, categoryName, categoryID)
+>>>>>>> dev
 
     SaveData() -- Updated to call SaveData function
 end
@@ -662,37 +684,45 @@ end
 
 function RefreshDataEvent(self, event, ...)
 
+	local roundWasWon = false
+
     if event == "PLAYER_ENTERING_WORLD" then
-        local isInitialLogin, isReloadingUi = ...
+        C_Timer.After(1, function()
+            local dataExists = LoadData()
+            local isValidData = IsDataValid()
 
-        if isInitialLogin or isReloadingUi then
-            C_Timer.After(1, function()
-                local dataExists = LoadData()
-                local isValidData = IsDataValid()
-
-                if not dataExists or not isValidData then
-                    GetInitialCRandMMR()
-                else
-                    CheckForMissedGames()
-                end
-
-                self:UnregisterEvent("PLAYER_ENTERING_WORLD")
-            end)
-        end
+            if not dataExists or not isValidData then
+                GetInitialCRandMMR()
+			else
+				CheckForMissedGames()
+            end
+        end)
 
     elseif event == "PVP_MATCH_ACTIVE" then
         C_Timer.After(1, function()
-            -- Check if the match is a Solo Shuffle
             if C_PvP.IsRatedSoloShuffle() then
                 self.isSoloShuffle = true
-                -- Initialize roundIndex at the start of the match, but do not reset it every round
+					if self.isSoloShuffle and roundIndex and not playerDeathSeen then		
+						local cr, mmr = GetCRandMMR(7)
+						local historyTable = Database.SoloShuffleHistory
+						Database.CurrentCRforSoloShuffle = cr
+						Database.CurrentMMRforSoloShuffle = mmr
+						GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, "SoloShuffle", 7)
+					
+						if roundIndex < 6 then roundIndex = roundIndex + 1 end
+					end
+
+                previousRoundsWon = roundsWon or 0
                 if roundIndex == nil then
                     roundIndex = 1
                 end
+                lastLoggedRound = {}
+                playerDeathSeen = false
             else
                 self.isSoloShuffle = nil
             end
         end)
+<<<<<<< HEAD
 	
     -- Event handling for Solo Shuffle UNIT_DIED events
     elseif self.isSoloShuffle and event == "COMBAT_LOG_EVENT_UNFILTERED" then
@@ -714,23 +744,17 @@ function RefreshDataEvent(self, event, ...)
     
             -- Check if the destGUID is a player GUID
             if destGUID:match("^Player") then
+=======
 
-                -- Get current CR and MMR
-                local cr, mmr = GetCRandMMR(7)
-                local historyTable = Database.SoloShuffleHistory
-                Database.CurrentCRforSoloShuffle = cr
-                Database.CurrentMMRforSoloShuffle = mmr
-    
-                -- Save the current match data
-                GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex)
+    elseif self.isSoloShuffle and (event == "UNIT_HEALTH" or event == "UNIT_AURA" or event == "COMBAT_LOG_EVENT_UNFILTERED") then
+>>>>>>> dev
 
-                -- Increment roundIndex after processing the death
-                if roundIndex < 6 then
-		            roundIndex = roundIndex + 1
-                else
-                end
-            end
+        confirmedDeaths = confirmedDeaths or {}
+
+        local function IsRecentlyConfirmed(player)
+            return confirmedDeaths[player] and GetTime() < confirmedDeaths[player]
         end
+<<<<<<< HEAD
     
         -- Check if the event is UNIT_DIED and the player is truly dead (overkill <= 0)
         if combatEvent == "UNIT_DIED" and (overkill == nil or overkill <= 0) and bit.band(destFlags, COMBATLOG_OBJECT_TYPE_PLAYER) > 0 then
@@ -744,46 +768,117 @@ function RefreshDataEvent(self, event, ...)
             end
         else
         end
+=======
+
+		local function IsFeignDeath(unit)
+			if UnitIsFeignDeath(unit) then return true end
+			for i = 1, 40 do
+				local name, _, _, _, _, _, _, _, _, spellId = UnitAura(unit, i, "HELPFUL")
+				if not name then break end
+				if spellId == 5384 then
+					return true
+				end
+			end
+			return false
+		end
+
+        local function ProcessPlayerDeath(name)
+            playerDeathSeen = true
+
+            local cr, mmr = GetCRandMMR(7)
+            local historyTable = Database.SoloShuffleHistory
+            Database.CurrentCRforSoloShuffle = cr
+            Database.CurrentMMRforSoloShuffle = mmr
+            GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, "SoloShuffle", 7)
+
+            if roundIndex < 6 then roundIndex = roundIndex + 1 end
+        end
+
+		if event == "UNIT_HEALTH" then
+			local unit = ...
+			if not unit or not UnitExists(unit) then return end
+			if not (unit == "player" or unit:match("^party[1-3]$") or unit:match("^arena[1-3]$")) then return end
+		
+			if UnitIsPlayer(unit) and UnitIsDeadOrGhost(unit) then
+				C_Timer.After(0.05, function()
+					local isFeign = IsFeignDeath(unit)
+		
+					local unitName = UnitName(unit)
+					local player = unitName and unitName:match("([^%-]+)")
+		
+					if not isFeign and unitName then
+						if not IsRecentlyConfirmed(player) and lastLoggedRound[player] ~= roundIndex then
+							lastLoggedRound[player] = roundIndex
+							confirmedDeaths[player] = GetTime() + 3
+							ProcessPlayerDeath(player)
+						end
+					elseif isFeign then
+					end
+				end)
+			end
+		end
+
+		if event == "COMBAT_LOG_EVENT_UNFILTERED" then
+			local _, subEvent, _, _, sourceName, _, _, destGUID, destName, destFlags, _, _, _, overkill = CombatLogGetCurrentEventInfo()
+	
+			-- ✅ WIN: Party kill against a real player
+			if subEvent == "PARTY_KILL" and bit.band(destFlags or 0, COMBATLOG_OBJECT_TYPE_PLAYER) > 0 then
+				previousRoundsWon = roundsWon or 0
+				roundsWon = (roundsWon or 0) + 1
+			end
+		end
+>>>>>>> dev
 
     elseif event == "PVP_MATCH_COMPLETE" then
         C_Timer.After(1, function()
-
-            local cr, mmr
             if self.isSoloShuffle then
+                if roundIndex and not playerDeathSeen then
+                    local cr, mmr = GetCRandMMR(7)
+                    local historyTable = Database.SoloShuffleHistory
+                    Database.CurrentCRforSoloShuffle = cr
+                    Database.CurrentMMRforSoloShuffle = mmr
+                    GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex or 6, "SoloShuffle", 7)
+                else
+                end
+
+                -- Cleanup
                 self.isSoloShuffle = nil
+<<<<<<< HEAD
                 GetInitialCRandMMR()
 				roundIndex = nil
+=======
+                roundIndex = nil
+                roundsWon = nil
+                previousRoundsWon = nil
+                playerDeathSeen = false
+>>>>>>> dev
             elseif C_PvP.IsRatedArena() then
                 local matchBracket = C_PvP.GetActiveMatchBracket()
                 if matchBracket == 0 then
-                    cr, mmr = GetCRandMMR(1)
-                    historyTable = Database.v2History
+                    local cr, mmr = GetCRandMMR(1)
+                    local historyTable = Database.v2History
                     Database.CurrentCRfor2v2 = cr
                     Database.CurrentMMRfor2v2 = mmr
-                    GetPlayerStatsEndOfMatch(cr, mmr, historyTable)
-                    GetInitialCRandMMR()
+                    GetPlayerStatsEndOfMatch(cr, mmr, historyTable, nil, "2v2", 1)
                 elseif matchBracket == 1 then
-                    cr, mmr = GetCRandMMR(2)
-                    historyTable = Database.v3History
+                    local cr, mmr = GetCRandMMR(2)
+                    local historyTable = Database.v3History
                     Database.CurrentCRfor3v3 = cr
                     Database.CurrentMMRfor3v3 = mmr
-                    GetPlayerStatsEndOfMatch(cr, mmr, historyTable)
-                    GetInitialCRandMMR()
+                    GetPlayerStatsEndOfMatch(cr, mmr, historyTable, nil, "3v3", 2)
                 end
             elseif C_PvP.IsRatedBattleground() then
-                cr, mmr = GetCRandMMR(4)
-                historyTable = Database.RBGHistory
+                local cr, mmr = GetCRandMMR(4)
+                local historyTable = Database.RBGHistory
                 Database.CurrentCRforRBG = cr
                 Database.CurrentMMRforRBG = mmr
-                GetPlayerStatsEndOfMatch(cr, mmr, historyTable)
-                GetInitialCRandMMR()
+                GetPlayerStatsEndOfMatch(cr, mmr, historyTable, nil, "RBG", 4)
             elseif C_PvP.IsSoloRBG() then
-                cr, mmr = GetCRandMMR(9)
-                historyTable = Database.SoloRBGHistory
+                local cr, mmr = GetCRandMMR(9)
+                local historyTable = Database.SoloRBGHistory
                 Database.CurrentCRforSoloRBG = cr
                 Database.CurrentMMRforSoloRBG = mmr
-                GetPlayerStatsEndOfMatch(cr, mmr, historyTable)
-                GetInitialCRandMMR()
+                GetPlayerStatsEndOfMatch(cr, mmr, historyTable, nil, "Solo RBG", 9)
             end
         end)
     end
@@ -840,67 +935,67 @@ local function GetPlayerRole()
         local specRoleMap = {
             -- Death Knight
             [250] = 2,       -- Blood Death Knight (TANK)
-            [251] = 8,       -- Frost Death Knight (DAMAGER)
-            [252] = 8,       -- Unholy Death Knight (DAMAGER)
+            [251] = 8,       -- Frost Death Knight (DPS)
+            [252] = 8,       -- Unholy Death Knight (DPS)
         
             -- Demon Hunter
-            [577] = 8,       -- Havoc Demon Hunter (DAMAGER)
+            [577] = 8,       -- Havoc Demon Hunter (DPS)
             [581] = 2,       -- Vengeance Demon Hunter (TANK)
         
             -- Druid
-            [102] = 8,       -- Balance Druid (DAMAGER)
-            [103] = 8,       -- Feral Druid (DAMAGER)
+            [102] = 8,       -- Balance Druid (DPS)
+            [103] = 8,       -- Feral Druid (DPS)
             [104] = 2,       -- Guardian Druid (TANK)
             [105] = 4,       -- Restoration Druid (HEALER)
         
             -- Evoker
-            [1467] = 8,      -- Devastation Evoker (DAMAGER)
+            [1467] = 8,      -- Devastation Evoker (DPS)
             [1468] = 4,      -- Preservation Evoker (HEALER)
             [1473] = 2,      -- Augmentation Evoker (TANK)
         
             -- Hunter
-            [253] = 8,       -- Beast Mastery Hunter (DAMAGER)
-            [254] = 8,       -- Marksmanship Hunter (DAMAGER)
-            [255] = 8,       -- Survival Hunter (DAMAGER)
+            [253] = 8,       -- Beast Mastery Hunter (DPS)
+            [254] = 8,       -- Marksmanship Hunter (DPS)
+            [255] = 8,       -- Survival Hunter (DPS)
         
             -- Mage
-            [62] = 8,        -- Arcane Mage (DAMAGER)
-            [63] = 8,        -- Fire Mage (DAMAGER)
-            [64] = 8,        -- Frost Mage (DAMAGER)
+            [62] = 8,        -- Arcane Mage (DPS)
+            [63] = 8,        -- Fire Mage (DPS)
+            [64] = 8,        -- Frost Mage (DPS)
         
             -- Monk
             [268] = 2,       -- Brewmaster Monk (TANK)
             [270] = 4,       -- Mistweaver Monk (HEALER)
-            [269] = 8,       -- Windwalker Monk (DAMAGER)
+            [269] = 8,       -- Windwalker Monk (DPS)
         
             -- Paladin
             [65] = 4,        -- Holy Paladin (HEALER)
             [66] = 2,        -- Protection Paladin (TANK)
-            [70] = 8,        -- Retribution Paladin (DAMAGER)
+            [70] = 8,        -- Retribution Paladin (DPS)
         
             -- Priest
             [256] = 4,       -- Discipline Priest (HEALER)
             [257] = 4,       -- Holy Priest (HEALER)
-            [258] = 8,       -- Shadow Priest (DAMAGER)
+            [258] = 8,       -- Shadow Priest (DPS)
         
             -- Rogue
-            [259] = 8,       -- Assassination Rogue (DAMAGER)
-            [260] = 8,       -- Outlaw Rogue (DAMAGER)
-            [261] = 8,       -- Subtlety Rogue (DAMAGER)
+            [259] = 8,       -- Assassination Rogue (DPS)
+            [260] = 8,       -- Outlaw Rogue (DPS)
+            [261] = 8,       -- Subtlety Rogue (DPS)
         
             -- Shaman
-            [262] = 8,       -- Elemental Shaman (DAMAGER)
-            [263] = 8,       -- Enhancement Shaman (DAMAGER)
+            [262] = 8,       -- Elemental Shaman (DPS)
+            [263] = 8,       -- Enhancement Shaman (DPS)
             [264] = 4,       -- Restoration Shaman (HEALER)
         
             -- Warlock
-            [265] = 8,       -- Affliction Warlock (DAMAGER)
-            [266] = 8,       -- Demonology Warlock (DAMAGER)
-            [267] = 8,       -- Destruction Warlock (DAMAGER)
+            [265] = 8,       -- Affliction Warlock (DPS)
+            [266] = 8,       -- Demonology Warlock (DPS)
+            [267] = 8,       -- Destruction Warlock (DPS)
         
             -- Warrior
-            [71] = 8,        -- Arms Warrior (DAMAGER)
-            [72] = 8,        -- Fury Warrior (DAMAGER)
+            [71] = 8,        -- Arms Warrior (DPS)
+            [72] = 8,        -- Fury Warrior (DPS)
             [73] = 2         -- Protection Warrior (TANK)
         }
 
@@ -956,9 +1051,9 @@ function GetInitialCRandMMR()
         local mmr = GetInitialMMR(categoryID)
         local played = GetPlayedGames(categoryID)
 
-        -- Store the played games in the database
-        local playedField = "Playedfor" .. categoryName
-        Database[playedField] = played
+		-- Store played games per bracket
+		local playedField = "Playedfor" .. categoryName
+		Database[playedField] = played
 
         -- Create an entry with the current timestamp
         local entry = {
@@ -967,6 +1062,7 @@ function GetInitialCRandMMR()
             mmr = mmr,
             isInitial = true,
             winLoss = "I",  -- Initial
+			friendlyWinLoss = "I",
             mapName = "N/A",
             endTime = GetTimestamp(),
             duration = "N/A",
@@ -1019,7 +1115,7 @@ function GetInitialCRandMMR()
         
         -- Repeat the enemy placeholder for the second half of the row
         for i = 1, 1 do
-            table.insert(entry.playerStats, enemyPlaceholder)
+            table.insert(entry.playerStats)
         end
 
         -- Insert the entry into the history table
@@ -1043,8 +1139,11 @@ function GetPlayerFullName()
 end
 
 function CheckForMissedGames()
+    local function Log(msg)
+    end
 
-    -- Define category mappings with history table names and display names (matching the previous function)
+    Log("CheckForMissedGames triggered.")
+
     local categoryMappings = {
         SoloShuffle = { id = 7, historyTable = "SoloShuffleHistory", displayName = "SoloShuffle" },
         ["2v2"] = { id = 1, historyTable = "v2History", displayName = "2v2" },
@@ -1053,67 +1152,114 @@ function CheckForMissedGames()
         SoloRBG = { id = 9, historyTable = "SoloRBGHistory", displayName = "SoloRBG" }
     }
 
-    -- Define a helper function to get the last recorded games for the category
-    local function GetLastRecordedGames(categoryID)
-        for categoryName, data in pairs(categoryMappings) do
-            if data.id == categoryID then
-                local playedField = "Playedfor" .. data.displayName
-                return Database[playedField] or 0 -- Return 0 if the field isn't set
-            end
-        end
-        return 0 -- Default to 0 if categoryID is not found
-    end
+	C_Timer.After(30, function()
+		local function StoreMissedGame(categoryName, category)
+			local _, _, _, totalGames = GetPersonalRatedInfo(category.id)
+			if not totalGames then
+				Log("Skipped category ID " .. category.id .. " — totalGames is nil.")
+				return
+			end
+	
+			local playedField = "Playedfor" .. categoryName
+	
+			local lastRecorded = Database[playedField]
+			local historyTable = Database[category.historyTable]
+	
+			Log(string.format("Checking category ID %d | Last Recorded: %d | Total Games: %d", category.id, lastRecorded, totalGames))
+	
+			if totalGames > lastRecorded then
+				local currentCR, currentMMR = GetCRandMMR(category.id)
+				local previousCR = historyTable[1].cr
+				local crChange = currentCR - previousCR
+	
+				Log(string.format("Missed game detected in category ID %d | Previous CR: %d | Current CR: %d | Change: %+d",
+					category.id, previousCR, currentCR, crChange))
+	
+				local lastEntry = historyTable[1]
+				local lastMatchID = lastEntry and tonumber(lastEntry.matchID) or 0
+				local matchID = lastMatchID + 1
+	
+				local entry = {
+					matchID = matchID,
+					winLoss = "Missed Game",
+					friendlyWinLoss = "Missed Game",  -- ✅ Add this
+					timestamp = GetTimestamp(),
+					rating = currentCR,
+					postMatchMMR = currentMMR,
+					ratingChange = crChange,
+					note = "Disconnected or Crashed, Missing Data",
+				
+					mapName = "N/A",
+					endTime = GetTimestamp(),
+					duration = "N/A",
+					teamFaction = UnitFactionGroup("player"),
+					friendlyRaidLeader = GetPlayerFullName(),
+					friendlyAvgCR = currentCR,
+					friendlyMMR = currentMMR,
+					friendlyTotalDamage = "-",
+					friendlyTotalHealing = "-",
+					friendlyRatingChange = crChange,
+					enemyFaction = "-",
+					enemyRaidLeader = "-",
+					enemyAvgCR = "-",
+					enemyMMR = "-",
+					enemyTotalDamage = "-",
+					enemyTotalHealing = "-",
+					enemyRatingChange = "-",
+					playerStats = {
+						{
+							name = GetPlayerFullName(),
+							originalFaction = UnitFactionGroup("player"),
+							race = UnitRace("player"),
+							class = UnitClass("player"),
+							spec = GetSpecialization() and select(2, GetSpecializationInfo(GetSpecialization())) or "N/A",
+							role = GetPlayerRole(),
+							newrating = currentCR,
+							killingBlows = "-",
+							honorableKills = "-",
+							damage = "-",
+							healing = "-",
+							ratingChange = crChange
+						},
+						{
+							name = "-",
+							originalFaction = "-",
+							race = "-",
+							class = "-",
+							spec = "-",
+							role = "-",
+							newrating = "-",
+							killingBlows = "-",
+							honorableKills = "-",
+							damage = "-",
+							healing = "-",
+							ratingChange = "-"
+						}
+					}
+				}
+				
+				-- Repeat the enemy placeholder for the second half of the row
+				for i = 1, 1 do
+					table.insert(entry.playerStats)
+				end
+	
+				table.insert(historyTable, 1, entry)
+				Log("Inserted missed match entry for category ID " .. category.id)
+			else
+				Log("No missed game in category ID " .. category.id .. ". Syncing played count.")
+			end
+	
+			-- Sync played count
+			Database[playedField] = totalGames
+		end
 
-    -- Define a helper function to check and record missed games
-    local function StoreMissedGame(historyTable, categoryID)
-        local totalGames = select(4, GetPersonalRatedInfo(categoryID))
-
-        -- Retrieve the last recorded games for the category, default to 0 if not found
-        local lastRecordedGames = GetLastRecordedGames(categoryID)
-
-        -- Print the content of totalGames vs lastRecordedGames for debugging
-
-        -- If totalGames has increased, even if the player was offline, record the missed game
-        if lastRecordedGames < totalGames then
-            -- Fetch the CR and MMR directly from the WoW API
-            local cr, mmr = GetCRandMMR(categoryID)
-            
-            -- Record the missed game with a "DC or Crashed, Missing Data" note
-            local entry = {
-                matchID = appendHistoryMatchID,
-                timestamp = GetTimestamp(),
-                cr = cr,
-                mmr = mmr,
-                note = "Disconnected or Crashed, Missing Data"
-            }
-            table.insert(historyTable, 1, entry) -- Insert at the beginning to keep the latest at the top
-
-            -- Update the last recorded games in the database to reflect the new total games
-            for categoryName, data in pairs(categoryMappings) do
-                if data.id == categoryID then
-                    local playedField = "Playedfor" .. data.displayName
-                    Database[playedField] = totalGames -- Update the field with totalGames
-                end
-            end
-        else
-            -- If no games were missed, ensure last recorded games are still in sync with total games
-            for categoryName, data in pairs(categoryMappings) do
-                if data.id == categoryID then
-                    local playedField = "Playedfor" .. data.displayName
-                    Database[playedField] = totalGames -- Ensure synchronization
-                end
-            end
-        end
-    end
-
-    -- Check for each category with the correct references
-    StoreMissedGame(Database.SoloShuffleHistory, 7)
-    StoreMissedGame(Database.v2History, 1)
-    StoreMissedGame(Database.v3History, 2)
-    StoreMissedGame(Database.RBGHistory, 4)
-    StoreMissedGame(Database.SoloRBGHistory, 9)
-
-    SaveData()
+		for categoryName, category in pairs(categoryMappings) do
+			StoreMissedGame(categoryName, category)
+		end
+	
+		SaveData()
+		Log("CheckForMissedGames completed.")
+	end)
 end
 
 -- Initialize the Roles table
@@ -1492,18 +1638,18 @@ function DetermineOriginalFaction(playerData, playerCombatLogEvents)
     return playerData.faction, "Default"
 end
 
+<<<<<<< HEAD
 function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, friendlyTeamScore, enemyTeamScore, roundsWon)
 
+=======
+function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, friendlyTeamScore, enemyTeamScore, roundsWon, categoryName, categoryID)
+>>>>>>> dev
     local appendHistoryMatchID = #historyTable + 1  -- Unique match ID
     local playerFullName = GetPlayerFullName() -- Get the player's full name
 
     -- Fetch team information
     local friendlyTeamInfo = C_PvP.GetTeamInfo(0)  -- Assuming 0 is the index for friendly team
     local enemyTeamInfo = C_PvP.GetTeamInfo(1)  -- Assuming 1 is the index for enemy team
-
-    -- Debug: Check if team info is retrieved correctly
-    if not friendlyTeamInfo then print("Error: friendlyTeamInfo is nil") end
-    if not enemyTeamInfo then print("Error: enemyTeamInfo is nil") end
 
     -- Extract postmatch MMR for friendly and enemy teams
     local friendlyPostMatchMMR = friendlyTeamInfo and friendlyTeamInfo.ratingMMR or "N/A"
@@ -1629,6 +1775,14 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
         end
     end
 
+    local function GetPlayedGames(categoryID)
+        return select(4, GetPersonalRatedInfo(categoryID))
+    end
+
+    local played = GetPlayedGames(categoryID)
+
+    local playedField = "Playedfor" .. categoryName
+    Database[playedField] = played
 
     for _, player in ipairs(friendlyPlayers) do
     end
@@ -1656,7 +1810,13 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     UpdateFriendlyRaidLeader()
     local enemyRaidLeader = GetEnemyRaidLeaderName(enemyFaction, enemyPlayers)
 
+<<<<<<< HEAD
 	print("|cff00ff00[DEBUG]|r AppendHistory roundsWon: " .. roundsWon)
+=======
+	if C_PvP.IsRatedBattleground() or C_PvP.IsSoloRBG() and (friendlyTeamScore == enemyTeamScore) then
+		friendlyWinLoss = "~   D"
+	end
+>>>>>>> dev
 
     local entry = {
         matchID = appendHistoryMatchID,
@@ -1923,6 +2083,7 @@ function DisplayHistory(content, historyTable, mmrLabel, tabID)
         return matchIDA < matchIDB
     end)
 
+<<<<<<< HEAD
 ---    for _, playerData in ipairs(historyTable) do
 ---	    if playerData.name == playerFullName then  -- Ensure we are getting the correct player's data
 ---            roundsWon = scoreInfo.roundsWon or 0
@@ -1931,6 +2092,8 @@ function DisplayHistory(content, historyTable, mmrLabel, tabID)
 ---        end
 ---    end
 
+=======
+>>>>>>> dev
     local scoreHeaderText = "Score"
 	if tabID == 2 or tabID == 3 then  -- Solo Shuffle, 2v2, 3v3 tab IDs
         scoreHeaderText = ""  -- Hide the "Score" header
@@ -1987,7 +2150,7 @@ function DisplayHistory(content, historyTable, mmrLabel, tabID)
 
     -- Function to format match entry
     local function formatMatchEntry(match)
-        local winLoss = match.isInitial and "I" or (match.friendlyWinLoss or "-")
+---        local winLoss = match.isInitial and "I" or (match.friendlyWinLoss or "-")
         local scoreText = (match.friendlyTeamScore or "-") .. "  : " .. (match.enemyTeamScore or "-")
 
         -- Hide the score text if the current content is Solo Shuffle
@@ -1998,7 +2161,7 @@ function DisplayHistory(content, historyTable, mmrLabel, tabID)
         end
 
         return {
-            winLoss or "-",
+            match.friendlyWinLoss or "-",
             match.mapName or "N/A",
             date("%a %d %b %Y - %H:%M:%S", match.endTime) or "N/A",
             match.duration or "N/A",
@@ -2062,6 +2225,8 @@ function DisplayHistory(content, historyTable, mmrLabel, tabID)
                     text:SetTextColor(0, 1, 0)  -- Green for win
                 elseif column == "+   L" or column == "RND 1  +   L" or column == "RND 2  +   L" or column == "RND 3  +   L" or column == "RND 4  +   L" or column == "RND 5  +   L" or column == "RND 6  +   L" then
                     text:SetTextColor(1, 0, 0)  -- Red for loss
+				elseif column =="~   D" or column == "RND 1  ~   D" or column == "RND 2  ~   D" or column == "RND 3  ~   D" or column == "RND 4  ~   D" or column == "RND 5  ~   D" or column == "RND 6  ~   D" then
+					text:SetTextColor(0.5, 0.5, 0.5)
                 else
                     text:SetTextColor(1, 1, 1)  -- Default color for other cases
                 end
@@ -2544,17 +2709,23 @@ function Config:CreateMenu()
     AdjustContentPositioning(content4)
     AdjustContentPositioning(content5)
 
-    -- Sample call to DisplayCurrentCRMMR and DisplayHistory for each tab
-    local mmrLabel1 = DisplayCurrentCRMMR(content1, 7)  -- Solo Shuffle
-    local headerTexts1, matchFrames1 = DisplayHistory(content1, Database.SoloShuffleHistory, mmrLabel1, 1)
-    local mmrLabel2 = DisplayCurrentCRMMR(content2, 1)  -- 2v2
-    local headerTexts2, matchFrames2 = DisplayHistory(content2, Database.v2History, mmrLabel2, 2)
-    local mmrLabel3 = DisplayCurrentCRMMR(content3, 2)  -- 3v3
-    local headerTexts3, matchFrames3 = DisplayHistory(content3, Database.v3History, mmrLabel3, 3)
-    local mmrLabel4 = DisplayCurrentCRMMR(content4, 4)  -- RBG
-    local headerTexts4, matchFrames4 = DisplayHistory(content4, Database.RBGHistory, mmrLabel4, 4)
-    local mmrLabel5 = DisplayCurrentCRMMR(content5, 9)  -- Solo RBG
-    local headerTexts5, matchFrames5 = DisplayHistory(content5, Database.SoloRBGHistory, mmrLabel5, 5)
+    local function RefreshDisplay()
+        local mmrLabel1 = DisplayCurrentCRMMR(content1, 7)
+        local headerTexts1, matchFrames1 = DisplayHistory(content1, Database.SoloShuffleHistory, mmrLabel1, 1)
+        local mmrLabel2 = DisplayCurrentCRMMR(content2, 1)
+        local headerTexts2, matchFrames2 = DisplayHistory(content2, Database.v2History, mmrLabel2, 2)
+        local mmrLabel3 = DisplayCurrentCRMMR(content3, 2)
+        local headerTexts3, matchFrames3 = DisplayHistory(content3, Database.v3History, mmrLabel3, 3)
+        local mmrLabel4 = DisplayCurrentCRMMR(content4, 4)
+        local headerTexts4, matchFrames4 = DisplayHistory(content4, Database.RBGHistory, mmrLabel4, 4)
+        local mmrLabel5 = DisplayCurrentCRMMR(content5, 9)
+        local headerTexts5, matchFrames5 = DisplayHistory(content5, Database.SoloRBGHistory, mmrLabel5, 5)
+    end
+
+    -- Refresh UI when the frame is shown
+    UIConfig:SetScript("OnShow", function()
+        RefreshDisplay()
+    end)
 
     UIConfig:Hide()
     return UIConfig
@@ -2621,9 +2792,11 @@ function Initialize()
     frame:RegisterEvent("PVP_MATCH_ACTIVE")           -- Register for the PVP_MATCH_ACTIVE event
     frame:RegisterEvent("UPDATE_UI_WIDGET")
     frame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+	frame:RegisterEvent("UNIT_HEALTH")
+	frame:RegisterEvent("UNIT_AURA")
     
     frame:SetScript("OnEvent", function(self, event, ...)
-        if event == "PLAYER_ENTERING_WORLD" or event == "PVP_MATCH_COMPLETE" or event == "PVP_MATCH_ACTIVE" or event == "COMBAT_LOG_EVENT_UNFILTERED" then
+        if event == "PLAYER_ENTERING_WORLD" or event == "PVP_MATCH_COMPLETE" or event == "PVP_MATCH_ACTIVE" or event == "COMBAT_LOG_EVENT_UNFILTERED" or event == "UNIT_HEALTH" or event == "UNIT_AURA" then
             RefreshDataEvent(self, event, ...)
         end
     end)
