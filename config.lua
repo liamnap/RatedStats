@@ -1056,11 +1056,23 @@ function GetInitialCRandMMR()
             }
         }
 
-        
         -- Repeat the enemy placeholder for the second half of the row
         for i = 1, 1 do
-            table.insert(entry.playerStats)
-        end
+            table.insert(entry.playerStats, {
+				name = "-",
+				originalFaction = "-",
+				race = "-",
+				class = "-",
+				spec = "-",
+				role = "-",
+				newrating = "-",
+				killingBlows = "-",
+				honorableKills = "-",
+				damage = "-",
+				healing = "-",
+				ratingChange = "-"
+			})
+		end
 
         -- Insert the entry into the history table
         table.insert(Database[historyTableName], 1, entry)
@@ -1184,7 +1196,20 @@ function CheckForMissedGames()
 				
 				-- Repeat the enemy placeholder for the second half of the row
 				for i = 1, 1 do
-					table.insert(entry.playerStats)
+					table.insert(entry.playerStats, {
+						name = "-",
+						originalFaction = "-",
+						race = "-",
+						class = "-",
+						spec = "-",
+						role = "-",
+						newrating = "-",
+						killingBlows = "-",
+						honorableKills = "-",
+						damage = "-",
+						healing = "-",
+						ratingChange = "-"
+					})
 				end
 	
 				table.insert(historyTable, 1, entry)
