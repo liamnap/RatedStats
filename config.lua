@@ -1083,12 +1083,12 @@ function GetPlayerFullName()
 end
 
 function CheckForMissedGames()
-    local function Log(msg)
-        -- Green [Debug] label, yellow message
-        print("|cff00ff00[Debug]|r " .. "|cffffff00" .. msg .. "|r")
-    end
+---    local function Log(msg)
+---        -- Green [Debug] label, yellow message
+---        print("|cff00ff00[Debug]|r " .. "|cffffff00" .. msg .. "|r")
+---    end
 
-    Log("CheckForMissedGames triggered.")
+---    Log("CheckForMissedGames triggered.")
 
     local categoryMappings = {
         SoloShuffle = { id = 7, historyTable = "SoloShuffleHistory", displayName = "SoloShuffle" },
@@ -1110,12 +1110,12 @@ function CheckForMissedGames()
 		local lastRecorded = Database[playedField]
 		local historyTable = Database[category.historyTable]
 	
-		Log(string.format("Checking category ID %d | Last Recorded: %d | Total Games: %d", category.id, lastRecorded, totalGames))
+---		Log(string.format("Checking category ID %d | Last Recorded: %d | Total Games: %d", category.id, lastRecorded, totalGames))
 	
 		if totalGames > lastRecorded then
 			local currentCR, currentMMR = GetCRandMMR(category.id)
 	
-			Log(string.format("Missed game detected in category ID %d | Previous CR: %d | Current CR: %d | Change: %+d", category.id, previousCR, currentCR, crChange))
+---			Log(string.format("Missed game detected in category ID %d | Previous CR: %d | Current CR: %d | Change: %+d", category.id, previousCR, currentCR, crChange))
 	
 			local highestMatchID = 0
 			for _, entry in ipairs(historyTable) do
@@ -1193,9 +1193,9 @@ function CheckForMissedGames()
 			end
 	
 			table.insert(historyTable, 1, entry)
-			Log("Inserted missed match entry for category ID " .. category.id)
+---			Log("Inserted missed match entry for category ID " .. category.id)
 		else
-			Log("No missed game in category ID " .. category.id .. ". Syncing played count.")
+---			Log("No missed game in category ID " .. category.id .. ". Syncing played count.")
 		end
 	
 		-- Sync played count
@@ -1207,7 +1207,7 @@ function CheckForMissedGames()
 	end
 	
 	SaveData()
-	Log("CheckForMissedGames completed.")
+---	Log("CheckForMissedGames completed.")
 end
 
 -- Initialize the Roles table
