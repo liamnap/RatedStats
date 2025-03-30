@@ -1751,7 +1751,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     UpdateFriendlyRaidLeader()
     local enemyRaidLeader = GetEnemyRaidLeaderName(enemyFaction, enemyPlayers)
 
-	if C_PvP.IsRatedBattleground() or C_PvP.IsSoloRBG() and (friendlyTeamScore == enemyTeamScore) then
+	if C_PvP.IsRatedBattleground() and (friendlyTeamScore == enemyTeamScore) then
+	--- Insert or C_PvP.SoloRBG above when we get scores from RBGB.
 		friendlyWinLoss = "~   D"
 	end
 
