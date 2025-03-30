@@ -1184,7 +1184,7 @@ function CheckForMissedGames()
 					})
 				end
 	
-				table.insert(Database[historyTable], entry)
+				table.insert(historyTable, entry)
 				Log("Inserted missed match entry for category ID " .. category.id)
 			else
 				Log("No missed game in category ID " .. category.id .. ". Syncing played count.")
