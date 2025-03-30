@@ -584,7 +584,7 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
     }
 	
 	-- Delay storing played games by 5 seconds to give the API time to update
-	C_Timer.After(5, function()
+	C_Timer.After(1, function()
 		local function GetPlayedGames(categoryID)
 			return select(4, GetPersonalRatedInfo(categoryID))
 		end
@@ -1083,12 +1083,12 @@ function GetPlayerFullName()
 end
 
 function CheckForMissedGames()
----    local function Log(msg)
----        -- Green [Debug] label, yellow message
----        print("|cff00ff00[Debug]|r " .. "|cffffff00" .. msg .. "|r")
----    end
+    local function Log(msg)
+        -- Green [Debug] label, yellow message
+        print("|cff00ff00[Debug]|r " .. "|cffffff00" .. msg .. "|r")
+    end
 
----    Log("CheckForMissedGames triggered.")
+    Log("CheckForMissedGames triggered.")
 
     local categoryMappings = {
         SoloShuffle = { id = 7, historyTable = "SoloShuffleHistory", displayName = "SoloShuffle" },
@@ -1110,12 +1110,12 @@ function CheckForMissedGames()
 		local lastRecorded = Database[playedField]
 		local historyTable = Database[category.historyTable]
 	
----		Log(string.format("Checking category ID %d | Last Recorded: %d | Total Games: %d", category.id, lastRecorded, totalGames))
+		Log(string.format("Checking category ID %d | Last Recorded: %d | Total Games: %d", category.id, lastRecorded, totalGames))
 	
 		if totalGames > lastRecorded then
 			local currentCR, currentMMR = GetCRandMMR(category.id)
 	
----			Log(string.format("Missed game detected in category ID %d | Previous CR: %d | Current CR: %d | Change: %+d", category.id, previousCR, currentCR, crChange))
+			Log(string.format("Missed game detected in category ID %d | Previous CR: %d | Current CR: %d | Change: %+d", category.id, previousCR, currentCR, crChange))
 	
 			local highestMatchID = 0
 			for _, entry in ipairs(historyTable) do
@@ -1130,6 +1130,7 @@ function CheckForMissedGames()
 	
 			local entry = {
 				matchID = matchID,
+				isMissedGame = true,
 				winLoss = "Missed Game",
 				friendlyWinLoss = "Missed Game",  -- ✅ Add this
 				timestamp = GetTimestamp(),
@@ -1192,9 +1193,9 @@ function CheckForMissedGames()
 			end
 	
 			table.insert(historyTable, 1, entry)
----			Log("Inserted missed match entry for category ID " .. category.id)
+			Log("Inserted missed match entry for category ID " .. category.id)
 		else
----			Log("No missed game in category ID " .. category.id .. ". Syncing played count.")
+			Log("No missed game in category ID " .. category.id .. ". Syncing played count.")
 		end
 	
 		-- Sync played count
@@ -1206,7 +1207,7 @@ function CheckForMissedGames()
 	end
 	
 	SaveData()
----	Log("CheckForMissedGames completed.")
+	Log("CheckForMissedGames completed.")
 end
 
 -- Initialize the Roles table
@@ -2163,7 +2164,7 @@ function DisplayHistory(content, historyTable, mmrLabel, tabID)
 
         -- Get player stats and create nested table
         local playerStats = match.playerStats or {}
-        local nestedTable = CreateNestedTable(matchFrame, playerStats, match.teamFaction, match.isInitial)
+        local nestedTable = CreateNestedTable(matchFrame, playerStats, match.teamFaction, match.isInitial, match.isMissedGame)
         matchFrame.nestedTable = nestedTable  -- Assign the nested table to the matchFrame
 
         -- Make matchFrame interactive to toggle nested table
@@ -2257,7 +2258,7 @@ local function CreateClickableName(parent, playerName, x, y)
     return nameText
 end
 
-function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial)
+function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMissedGame)
     local nestedTable = CreateFrame("Frame", nil, parent, "BackdropTemplate")
 
     -- Determine the match type using the correct function
@@ -2339,7 +2340,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial)
     local friendlyPlayers = {}
     local enemyPlayers = {}
 
-    if isInitial then
+    if isInitial or isMissedGame then
         -- For initial entries, the player's stats are on the left and placeholders on the right
         table.insert(friendlyPlayers, playerStats[1])  -- Assume the player is the first entry
         for i = 1, playersPerTeam do
@@ -2351,7 +2352,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial)
     else
         -- Separate players by faction
         for _, player in ipairs(playerStats) do
-            if player.originalFaction == friendlyFaction then
+            if player.faction == friendlyFaction then
                 table.insert(friendlyPlayers, player)
             else
                 table.insert(enemyPlayers, player)
@@ -2441,7 +2442,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial)
     end  -- This 'end' closes the outer 'for' loop
 
     -- Add placeholders for missing friendly players if necessary
-    if not isInitial and #friendlyPlayers < numberOfRows then
+    if not (isInitial or isMissedGame) and #friendlyPlayers < numberOfRows then
         for index = #friendlyPlayers + 1, numberOfRows do
             local rowOffset = -15 * index
             for i = 1, #headers do
@@ -2455,7 +2456,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial)
     end
     
     -- Add placeholders for missing enemy players if necessary
-    if not isInitial and #enemyPlayers < numberOfRows then
+    if not (isInitial or isMissedGame) and #enemyPlayers < numberOfRows then
         for index = #enemyPlayers + 1, numberOfRows do
             local rowOffset = -15 * index
             for i = 1, #headers do
