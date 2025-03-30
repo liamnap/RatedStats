@@ -824,7 +824,7 @@ function RefreshDataEvent(self, event, ...)
                 local historyTable = Database.SoloRBGHistory
                 Database.CurrentCRforSoloRBG = cr
                 Database.CurrentMMRforSoloRBG = mmr
-                GetPlayerStatsEndOfMatch(cr, mmr, historyTable, nil, "Solo RBG", 9)
+                GetPlayerStatsEndOfMatch(cr, mmr, historyTable, nil, "SoloRBG", 9)
             end
         end)
     end
