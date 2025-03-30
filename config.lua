@@ -595,6 +595,8 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
 		local playedField = "Playedfor" .. categoryName
 		Database[playedField] = played
 
+---		print("|cff00ff00[Debug]|r Played games for |cffadd8e6" .. categoryName .. "|r on this update: |cffffff00" .. played .. "|r")
+
 		SaveData() -- Optional: Save again to lock in the new count
 	end)
 	
@@ -1081,8 +1083,10 @@ function GetPlayerFullName()
 end
 
 function CheckForMissedGames()
-    local function Log(msg)
-    end
+---    local function Log(msg)
+---        -- Green [Debug] label, yellow message
+---        print("|cff00ff00[Debug]|r " .. "|cffffff00" .. msg .. "|r")
+---    end
 
     Log("CheckForMissedGames triggered.")
 
@@ -1094,113 +1098,114 @@ function CheckForMissedGames()
         SoloRBG = { id = 9, historyTable = "SoloRBGHistory", displayName = "SoloRBG" }
     }
 
-	C_Timer.After(30, function()
-		local function StoreMissedGame(categoryName, category)
-			local _, _, _, totalGames = GetPersonalRatedInfo(category.id)
-			if not totalGames then
-				Log("Skipped category ID " .. category.id .. " — totalGames is nil.")
-				return
+	local function StoreMissedGame(categoryName, category)
+		local _, _, _, totalGames = GetPersonalRatedInfo(category.id)
+		if not totalGames then
+			Log("Skipped category ID " .. category.id .. " — totalGames is nil.")
+			return
+		end
+	
+		local playedField = "Playedfor" .. categoryName
+	
+		local lastRecorded = Database[playedField]
+		local historyTable = Database[category.historyTable]
+	
+		Log(string.format("Checking category ID %d | Last Recorded: %d | Total Games: %d", category.id, lastRecorded, totalGames))
+	
+		if totalGames > lastRecorded then
+			local currentCR, currentMMR = GetCRandMMR(category.id)
+	
+			Log(string.format("Missed game detected in category ID %d | Previous CR: %d | Current CR: %d | Change: %+d", category.id, previousCR, currentCR, crChange))
+	
+			local highestMatchID = 0
+			for _, entry in ipairs(historyTable) do
+				if entry.matchID and tonumber(entry.matchID) > highestMatchID then
+					highestMatchID = tonumber(entry.matchID)
+				end
 			end
+
+			local crChange = currentCR - previousCR
+			local matchID = highestMatchID + 1
 	
-			local playedField = "Playedfor" .. categoryName
-	
-			local lastRecorded = Database[playedField]
-			local historyTable = Database[category.historyTable]
-	
-			Log(string.format("Checking category ID %d | Last Recorded: %d | Total Games: %d", category.id, lastRecorded, totalGames))
-	
-			if totalGames > lastRecorded then
-				local currentCR, currentMMR = GetCRandMMR(category.id)
-				local previousCR = historyTable[1].cr
-				local crChange = currentCR - previousCR
-	
-				Log(string.format("Missed game detected in category ID %d | Previous CR: %d | Current CR: %d | Change: %+d",
-					category.id, previousCR, currentCR, crChange))
-	
-				local lastEntry = historyTable[1]
-				local lastMatchID = lastEntry and tonumber(lastEntry.matchID) or 0
-				local matchID = lastMatchID + 1
-	
-				local entry = {
-					matchID = matchID,
-					winLoss = "Missed Game",
-					friendlyWinLoss = "Missed Game",  -- ✅ Add this
-					timestamp = GetTimestamp(),
-					rating = currentCR,
-					postMatchMMR = currentMMR,
-					ratingChange = crChange,
-					note = "Disconnected or Crashed, Missing Data",
-				
-					mapName = "N/A",
-					endTime = GetTimestamp(),
-					duration = "N/A",
-					teamFaction = UnitFactionGroup("player"),
-					friendlyRaidLeader = GetPlayerFullName(),
-					friendlyAvgCR = currentCR,
-					friendlyMMR = currentMMR,
-					friendlyTotalDamage = "-",
-					friendlyTotalHealing = "-",
-					friendlyRatingChange = crChange,
-					enemyFaction = "-",
-					enemyRaidLeader = "-",
-					enemyAvgCR = "-",
-					enemyMMR = "-",
-					enemyTotalDamage = "-",
-					enemyTotalHealing = "-",
-					enemyRatingChange = "-",
-					playerStats = {
-						{
-							name = GetPlayerFullName(),
-							originalFaction = UnitFactionGroup("player"),
-							race = UnitRace("player"),
-							class = UnitClass("player"),
-							spec = GetSpecialization() and select(2, GetSpecializationInfo(GetSpecialization())) or "N/A",
-							role = GetPlayerRole(),
-							newrating = currentCR,
-							killingBlows = "-",
-							honorableKills = "-",
-							damage = "-",
-							healing = "-",
-							ratingChange = crChange
-						},
-					}
-				}
-				
-				-- Repeat the enemy placeholder for the second half of the row
-				for i = 1, 1 do
-					table.insert(entry.playerStats, {
-						name = "-",
-						originalFaction = "-",
-						race = "-",
-						class = "-",
-						spec = "-",
-						role = "-",
-						newrating = "-",
+			local entry = {
+				matchID = matchID,
+				winLoss = "Missed Game",
+				friendlyWinLoss = "Missed Game",  -- ✅ Add this
+				timestamp = GetTimestamp(),
+				rating = currentCR,
+				postMatchMMR = currentMMR,
+				ratingChange = crChange,
+				note = "Disconnected or Crashed, Missing Data",
+			
+				mapName = "N/A",
+				endTime = GetTimestamp(),
+				duration = "N/A",
+				teamFaction = UnitFactionGroup("player"),
+				friendlyRaidLeader = GetPlayerFullName(),
+				friendlyAvgCR = currentCR,
+				friendlyMMR = currentMMR,
+				friendlyTotalDamage = "-",
+				friendlyTotalHealing = "-",
+				friendlyRatingChange = crChange,
+				enemyFaction = "-",
+				enemyRaidLeader = "-",
+				enemyAvgCR = "-",
+				enemyMMR = "-",
+				enemyTotalDamage = "-",
+				enemyTotalHealing = "-",
+				enemyRatingChange = "-",
+				playerStats = {
+					{
+						name = GetPlayerFullName(),
+						originalFaction = UnitFactionGroup("player"),
+						race = UnitRace("player"),
+						class = UnitClass("player"),
+						spec = GetSpecialization() and select(2, GetSpecializationInfo(GetSpecialization())) or "N/A",
+						role = GetPlayerRole(),
+						newrating = currentCR,
 						killingBlows = "-",
 						honorableKills = "-",
 						damage = "-",
 						healing = "-",
-						ratingChange = "-"
-					})
-				end
-	
-				table.insert(historyTable, entry)
-				Log("Inserted missed match entry for category ID " .. category.id)
-			else
-				Log("No missed game in category ID " .. category.id .. ". Syncing played count.")
+						ratingChange = crChange
+					},
+				}
+			}
+			
+			-- Repeat the enemy placeholder for the second half of the row
+			for i = 1, 1 do
+				table.insert(entry.playerStats, {
+					name = "-",
+					originalFaction = "-",
+					race = "-",
+					class = "-",
+					spec = "-",
+					role = "-",
+					newrating = "-",
+					killingBlows = "-",
+					honorableKills = "-",
+					damage = "-",
+					healing = "-",
+					ratingChange = "-"
+				})
 			end
 	
-			-- Sync played count
-			Database[playedField] = totalGames
-		end
-
-		for categoryName, category in pairs(categoryMappings) do
-			StoreMissedGame(categoryName, category)
+			table.insert(historyTable, 1, entry)
+			Log("Inserted missed match entry for category ID " .. category.id)
+		else
+			Log("No missed game in category ID " .. category.id .. ". Syncing played count.")
 		end
 	
-		SaveData()
-		Log("CheckForMissedGames completed.")
-	end)
+		-- Sync played count
+		Database[playedField] = totalGames
+	end
+
+	for categoryName, category in pairs(categoryMappings) do
+		StoreMissedGame(categoryName, category)
+	end
+	
+	SaveData()
+	Log("CheckForMissedGames completed.")
 end
 
 -- Initialize the Roles table
@@ -2344,7 +2349,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial)
     else
         -- Separate players by faction
         for _, player in ipairs(playerStats) do
-            if player.faction == friendlyFaction then
+            if player.originalFaction == friendlyFaction then
                 table.insert(friendlyPlayers, player)
             else
                 table.insert(enemyPlayers, player)
