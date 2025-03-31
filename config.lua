@@ -1003,6 +1003,7 @@ function GetInitialCRandMMR()
 
         -- Create an entry with the current timestamp
         local entry = {
+			matchID = 1,
             timestamp = GetTimestamp(),
             cr = cr,
             mmr = mmr,
@@ -1101,13 +1102,14 @@ function CheckForMissedGames()
 	local function StoreMissedGame(categoryName, category)
 		local _, _, _, totalGames = GetPersonalRatedInfo(category.id)
 		if not totalGames then
-			Log("Skipped category ID " .. category.id .. " — totalGames is nil.")
+---			Log("Skipped category ID " .. category.id .. " — totalGames is nil.")
 			return
 		end
 	
 		local playedField = "Playedfor" .. categoryName
 	
 		local lastRecorded = Database[playedField]
+---		print("[DEBUG] totalGames", totalGames, "lastRecorded", lastRecorded, "for", categoryName)
 		local historyTable = Database[category.historyTable]
 	
 ---		Log(string.format("Checking category ID %d | Last Recorded: %d | Total Games: %d", category.id, lastRecorded, totalGames))
