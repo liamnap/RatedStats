@@ -2258,7 +2258,7 @@ function DisplayHistory(content, historyTable, mmrLabel, tabID)
             end
 			
 			    -- If this is the Duration column (j == 4) and we have match.damp, show a tooltip
-			if j == 4 and match.damp then
+			if j == 4 and match.damp and tabID == (1 or 2 or 3) then
 				-- Make sure our text can handle mouse events
 				text:EnableMouse(true)
 		
