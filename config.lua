@@ -516,33 +516,59 @@ frame:RegisterEvent("PLAYER_ENTERING_BATTLEGROUND")
 frame:SetScript("OnEvent", StartPrintingWidgets)
 
 local function IsInPvPMatch()
-    return C_PvP.IsRatedBattleground() or C_PvP.IsBattleground()
+    return C_PvP.IsRatedBattleground() or C_PvP.IsBattleground() or C_PvP.IsSoloRBG()
 end
 
 -- Table to store scores
 local RSTATS_ScoreHistory = {}
-local friendlyTeamScore = 0
-local enemyTeamScore = 0
+local allianceTeamScore = 0
+local hordeTeamScore = 0
 local roundsWon = 0
 
+local RBGScoreWidgets = {
+    [529]  = 1671, -- Arathi Basin
+    [275]  = 1671, -- Battle for Gilneas
+    [566]  = 1671, -- Eye of the Storm
+    [998]  = 2929, -- Temple of Kotmogu
+    [837]  = 2,    -- Warsong Gulch
+    [626]  = 2,    -- Twin Peaks
+    [856]  = 2074, -- Deepwind Gorge
+    [2345] = 5153, -- Deephaul Ravine
+    [643]  = 2928, -- Silvershard Mines
+}
+
+local SoloRBGScoreWidgets = {
+    [2107]  = 1671, -- Arathi Basin
+    [761]  = 1671, -- Battle for Gilneas
+    [968]  = 1671, -- Eye of the Storm
+    [998]  = 1689, -- Temple of Kotmogu
+    [2106]  = 2,    -- Warsong Gulch
+    [726]  = 2,    -- Twin Peaks
+    [2245]  = 2074, -- Deepwind Gorge
+    [2656] = 5153, -- Deephaul Ravine
+    [727]  = 1687, -- Silvershard Mines
+}
+
 -- Function to get scores for resource-based maps
-function GetResourceScores(widgetInfo)
-    if widgetInfo and (widgetInfo.widgetID == 1671 or widgetInfo.widgetID == 2074) then -- The 1671 widget is used for all BGs with score predictors, DG uses 2074
+function GetScores(widgetInfo)
+    if not widgetInfo or not widgetInfo.widgetID then return end
+
+    local mapID = GetCurrentMapID()
+    if not mapID then return end
+
+    -- Get expected widgetID based on mode
+    local widgetID
+    if C_PvP.IsSoloRBG then
+        widgetID = SoloRBGScoreWidgets[mapID]
+    elseif C_PvP.IsRatedBattleground() then
+        widgetID = RBGScoreWidgets[mapID]
+    end
+
+    if widgetID and widgetInfo.widgetID == widgetID then
         local dataTbl = C_UIWidgetManager.GetDoubleStatusBarWidgetVisualizationInfo(widgetInfo.widgetID)
         if dataTbl and dataTbl.leftBarMax then
-            friendlyTeamScore = dataTbl.leftBarValue
-            enemyTeamScore = dataTbl.rightBarValue
-        end
-    end
-end
-
--- Function to get scores for flag-based maps
-function GetFlagScores(widgetInfo)
-    if widgetInfo and widgetInfo.widgetID == 1681 then  -- Specific widget ID for flag maps like Warsong Gulch
-        local dataTbl = C_UIWidgetManager.GetDoubleStatusBarWidgetVisualizationInfo(widgetInfo.widgetID)
-        if dataTbl then
-            friendlyTeamScore = dataTbl.leftBarValue
-            enemyTeamScore = dataTbl.rightBarValue
+            allianceTeamScore = dataTbl.leftBarValue
+            hordeTeamScore = dataTbl.rightBarValue
         end
     end
 end
@@ -550,8 +576,7 @@ end
 -- Event handler for capturing widget updates
 local function OnWidgetUpdate(_, event, widgetInfo)
     if event == "UPDATE_UI_WIDGET" and IsInPvPMatch() then
-        GetResourceScores(widgetInfo)
-        GetFlagScores(widgetInfo)
+        GetScores(widgetInfo)
     end
 end
 
@@ -562,11 +587,10 @@ frame:RegisterEvent("PVP_MATCH_COMPLETE")
 frame:RegisterEvent("UPDATE_UI_WIDGET")
 frame:SetScript("OnEvent", OnWidgetUpdate)
 
-local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categoryName, categoryID)
+local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categoryName, categoryID, startTime)
     local mapID = GetCurrentMapID()
     local mapName = GetMapName(mapID) or "Unknown"
     local endTime = GetTimestamp()
-    local duration = GetBattlefieldInstanceRunTime() / 1000  -- duration in seconds
     local teamFaction = GetPlayerFactionGroup()  -- Returns "Horde" or "Alliance"
     local enemyFaction = teamFaction == "Horde" and "Alliance" or "Horde"  -- Opposite faction
     local friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing = 0, 0, 0, 0
@@ -574,6 +598,26 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
     local friendlyWinLoss = battlefieldWinner == teamFaction and "+   W" or "+   L"  -- Determine win/loss status
 	local previousRoundsWon = previousRoundsWon or 0
     local roundsWon = roundsWon or 0
+	local duration = GetBattlefieldInstanceRunTime() / 1000  -- duration in seconds
+	local damp = C_Commentator.GetDampeningPercent()
+	
+	if C_PvP.IsRatedSoloShuffle() and roundIndex then
+		local totalPreviousDuration = 0
+		local totalRoundsToLookBack = roundIndex - 1
+
+		-- Sum durations of previous rounds
+		for i = #historyTable, 1, -1 do
+			local entry = historyTable[i]
+			if entry and entry.duration and totalRoundsToLookBack > 0 and type(entry.duration) == "number" then
+				totalPreviousDuration = totalPreviousDuration + entry.duration
+				totalRoundsToLookBack = totalRoundsToLookBack - 1
+			end
+		end
+	
+		duration = endTime - startTime - totalPreviousDuration
+	end
+
+	print("[DEBUG]: duration:", duration)
 
     local categoryMappings = {
         SoloShuffle = { id = 7, historyTable = "SoloShuffleHistory", displayName = "SoloShuffle" },
@@ -584,7 +628,7 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
     }
 	
 	-- Delay storing played games by 5 seconds to give the API time to update
-	C_Timer.After(1, function()
+	C_Timer.After(5, function()
 		local function GetPlayedGames(categoryID)
 			return select(4, GetPersonalRatedInfo(categoryID))
 		end
@@ -657,7 +701,7 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
     -- Unregister the events after obtaining the raid leader information
     UnregisterRaidLeaderEvents()
 
-    AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, friendlyTeamScore, enemyTeamScore, roundsWon, categoryName, categoryID)
+    AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, allianceTeamScore, hordeTeamScore, roundsWon, categoryName, categoryID, damp)
 
     SaveData() -- Updated to call SaveData function
 end
@@ -678,7 +722,7 @@ function RefreshDataEvent(self, event, ...)
 	local roundWasWon = false
 
     if event == "PLAYER_ENTERING_WORLD" then
-        C_Timer.After(1, function()
+        C_Timer.After(3, function()
             local dataExists = LoadData()
             local isValidData = IsDataValid()
 
@@ -687,8 +731,13 @@ function RefreshDataEvent(self, event, ...)
 			else
 				CheckForMissedGames()
             end
+			
+            -- SAFELY detect Solo Shuffle and set startTime
+            if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() then
+                startTime = GetTimestamp()
+            end
         end)
-
+				
     elseif event == "PVP_MATCH_ACTIVE" then
         C_Timer.After(1, function()
             if C_PvP.IsRatedSoloShuffle() then
@@ -698,7 +747,7 @@ function RefreshDataEvent(self, event, ...)
 						local historyTable = Database.SoloShuffleHistory
 						Database.CurrentCRforSoloShuffle = cr
 						Database.CurrentMMRforSoloShuffle = mmr
-						GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, "SoloShuffle", 7)
+						GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, "SoloShuffle", 7, startTime)
 					
 						if roundIndex < 6 then roundIndex = roundIndex + 1 end
 					end
@@ -741,7 +790,7 @@ function RefreshDataEvent(self, event, ...)
             local historyTable = Database.SoloShuffleHistory
             Database.CurrentCRforSoloShuffle = cr
             Database.CurrentMMRforSoloShuffle = mmr
-            GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, "SoloShuffle", 7)
+            GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, "SoloShuffle", 7, startTime)
 
             if roundIndex < 6 then roundIndex = roundIndex + 1 end
         end
@@ -788,7 +837,7 @@ function RefreshDataEvent(self, event, ...)
                     local historyTable = Database.SoloShuffleHistory
                     Database.CurrentCRforSoloShuffle = cr
                     Database.CurrentMMRforSoloShuffle = mmr
-                    GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex or 6, "SoloShuffle", 7)
+                    GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex or 6, "SoloShuffle", 7, startTime)
                 else
                 end
 
@@ -1099,17 +1148,24 @@ function CheckForMissedGames()
         SoloRBG = { id = 9, historyTable = "SoloRBGHistory", displayName = "SoloRBG" }
     }
 
-	local function StoreMissedGame(categoryName, category)
+	local function StoreMissedGame(categoryName, category, attempts)
 		local _, _, _, totalGames = GetPersonalRatedInfo(category.id)
-		if not totalGames then
+		attempts = attempts or 0
+		
+		if not totalGames or totalGames == 0 then
+			if attempts < 10 then
 ---			Log("Skipped category ID " .. category.id .. " — totalGames is nil.")
+				C_Timer.After(3, function()
+					StoreMissedGame(categoryName, category, attempts + 1)
+				end)
+			end
 			return
 		end
 	
 		local playedField = "Playedfor" .. categoryName
 	
 		local lastRecorded = Database[playedField]
----		print("[DEBUG] totalGames", totalGames, "lastRecorded", lastRecorded, "for", categoryName)
+		print("[DEBUG] totalGames", totalGames, "lastRecorded", lastRecorded, "for", categoryName)
 		local historyTable = Database[category.historyTable]
 	
 ---		Log(string.format("Checking category ID %d | Last Recorded: %d | Total Games: %d", category.id, lastRecorded, totalGames))
@@ -1588,7 +1644,7 @@ function DetermineOriginalFaction(playerData, playerCombatLogEvents)
     return playerData.faction, "Default"
 end
 
-function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, friendlyTeamScore, enemyTeamScore, roundsWon, categoryName, categoryID)
+function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, allianceTeamScore, hordeTeamScore, roundsWon, categoryName, categoryID, damp)
     local appendHistoryMatchID = #historyTable + 1  -- Unique match ID
     local playerFullName = GetPlayerFullName() -- Get the player's full name
 
@@ -1755,7 +1811,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     UpdateFriendlyRaidLeader()
     local enemyRaidLeader = GetEnemyRaidLeaderName(enemyFaction, enemyPlayers)
 
-	if C_PvP.IsRatedBattleground() and (friendlyTeamScore == enemyTeamScore) then
+	if C_PvP.IsRatedBattleground() and (allianceTeamScore == hordeTeamScore) then
 	--- Insert or C_PvP.SoloRBG above when we get scores from RBGB.
 		friendlyWinLoss = "~   D"
 	end
@@ -1769,7 +1825,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
         friendlyWinLoss = friendlyWinLoss,  -- Win/Loss status
         mapName = mapName,
         endTime = endTime,
-        duration = SecondsToTime(duration),
+        duration = duration,
+		damp = damp,
         teamFaction = teamFaction,
         friendlyRaidLeader = friendlyRaidLeader,
         friendlyAvgCR = friendlyAvgCR,  -- Average newrating for friendly team
@@ -1777,7 +1834,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
         friendlyTotalDamage = friendlyTotalDamage,
         friendlyTotalHealing = friendlyTotalHealing,
         friendlyRatingChange = friendlyAvgRatingChange,
-        friendlyTeamScore = friendlyTeamScore,
+        allianceTeamScore = allianceTeamScore,
         enemyFaction = enemyFaction,
         enemyRaidLeader = enemyRaidLeader,
         enemyAvgCR = enemyAvgCR,  -- Average newrating for enemy team
@@ -1785,10 +1842,12 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
         enemyTotalDamage = enemyTotalDamage,
         enemyTotalHealing = enemyTotalHealing,
         enemyRatingChange = enemyAvgRatingChange,
-        enemyTeamScore = enemyTeamScore,
+        hordeTeamScore = hordeTeamScore,
 		roundsWon = roundsWon or 0,
         playerStats = playerStats -- Nested table with player-specific details
     }
+
+	print("[DEBUG] dampening:", damp)
 
     table.insert(historyTable, 1, entry) -- Insert at the beginning to keep the latest at the top
     SaveData() -- Updated to call SaveData function
@@ -2082,7 +2141,20 @@ function DisplayHistory(content, historyTable, mmrLabel, tabID)
     -- Function to format match entry
     local function formatMatchEntry(match)
 ---        local winLoss = match.isInitial and "I" or (match.friendlyWinLoss or "-")
-        local scoreText = (match.friendlyTeamScore or "-") .. "  : " .. (match.enemyTeamScore or "-")
+
+		local scoreText = "-"
+
+		if match.friendlyTeamScore then
+			if match.teamFaction == "Alliance" then
+				scoreText = (match.friendlyTeamScore or "-") .. "  : " .. (match.enemyTeamScore or "-")
+			else
+				scoreText = (match.enemyTeamScore or "-") .. "  : " .. (match.friendlyTeamScore or "-")
+			end
+		elseif match.allianceTeamScore and match.teamFaction == "Alliance" then
+			scoreText = (match.allianceTeamScore or "-") .. " : " .. (match.hordeTeamScore or "-")
+		else
+			scoreText = (match.hordeTeamScore or "-") .. "  : " .. (match.allianceTeamScore or "-")
+		end
 
         -- Hide the score text if the current content is Solo Shuffle
         if tabID == 1 then
@@ -2090,12 +2162,16 @@ function DisplayHistory(content, historyTable, mmrLabel, tabID)
 		elseif tabID == 2 or tabID == 3 then  -- 2v2, 3v3 tab IDs
             scoreText = ""
         end
+		
+		if type(match.duration) == "number" then
+			match.duration = SecondsToTime(match.duration)
+		end
 
         return {
             match.friendlyWinLoss or "-",
             match.mapName or "N/A",
             date("%a %d %b %Y - %H:%M:%S", match.endTime) or "N/A",
-            match.duration or "N/A",
+			match.duration or "N/A",
             "",
             "", 
             match.teamFaction or "N/A",
@@ -2117,7 +2193,7 @@ function DisplayHistory(content, historyTable, mmrLabel, tabID)
             match.enemyRatingChange or "N/A",
         }
     end
-
+	
     -- Remove previous match frames
     for _, child in ipairs({content:GetChildren()}) do
         if child ~= mmrLabel then
@@ -2135,14 +2211,32 @@ function DisplayHistory(content, historyTable, mmrLabel, tabID)
         matchFrame:SetSize(1920, 5) -- Change the size of the match data row here
         matchFrame:SetPoint("TOPLEFT", previousFrame, "BOTTOMLEFT", 0, -5)
 
-        -- Set the background color based on faction
-        if match.teamFaction == "Horde" then
-            matchFrame:SetBackdrop({bgFile = "Interface/Tooltips/UI-Tooltip-Background"})
-            matchFrame:SetBackdropColor(1, 0, 0, 0.7)  -- Faint red
-        elseif match.teamFaction == "Alliance" then
-            matchFrame:SetBackdrop({bgFile = "Interface/Tooltips/UI-Tooltip-Background"})
-            matchFrame:SetBackdropColor(0, 0, 1, 0.7)  -- Faint blue
-        end
+		-- Always set the backdrop file once
+		matchFrame:SetBackdrop({bgFile = "Interface/Tooltips/UI-Tooltip-Background"})
+		
+		-- Then choose color based on damp or faction
+		if match.damp then
+			local dampVal = match.damp
+			if dampVal <= 10 then
+				matchFrame:SetBackdropColor(0.5, 0.5, 0.5, 0.7)  -- Grey
+			elseif dampVal <= 20 then
+				matchFrame:SetBackdropColor(1, 1, 0, 0.7)        -- Yellow
+			elseif dampVal <= 30 then
+				matchFrame:SetBackdropColor(1, 0.55, 0, 0.7)     -- Amber
+			elseif dampVal <= 39 then
+				matchFrame:SetBackdropColor(1, 0.4, 0, 0.7)      -- Orange
+			else
+				matchFrame:SetBackdropColor(1, 0, 0, 0.7)        -- Red
+			end
+		
+		else
+			-- No dampening: color by faction
+			if match.teamFaction == "Horde" then
+				matchFrame:SetBackdropColor(1, 0, 0, 0.7)  -- Horde = red
+			elseif match.teamFaction == "Alliance" then
+				matchFrame:SetBackdropColor(0, 0, 1, 0.7)  -- Alliance = blue
+			end
+		end
 
         for j, column in ipairs(formattedEntry) do
             local text = matchFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -2160,8 +2254,25 @@ function DisplayHistory(content, historyTable, mmrLabel, tabID)
 					text:SetTextColor(0.5, 0.5, 0.5)
                 else
                     text:SetTextColor(1, 1, 1)  -- Default color for other cases
-                end
+                end		
             end
+			
+			    -- If this is the Duration column (j == 4) and we have match.damp, show a tooltip
+			if j == 4 and match.damp then
+				-- Make sure our text can handle mouse events
+				text:EnableMouse(true)
+		
+				text:SetScript("OnEnter", function()
+					GameTooltip:SetOwner(text, "ANCHOR_RIGHT")
+					GameTooltip:ClearLines()
+					GameTooltip:AddLine(string.format("%d%% Dampening", match.damp), 1, 1, 1)
+					GameTooltip:Show()
+				end)
+		
+				text:SetScript("OnLeave", function()
+					GameTooltip:Hide()
+				end)
+			end		
         end
 
         -- Get player stats and create nested table
@@ -2725,6 +2836,7 @@ function Initialize()
     frame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 	frame:RegisterEvent("UNIT_HEALTH")
 	frame:RegisterEvent("UNIT_AURA")
+	frame:RegisterEvent("PVP_RATED_STATS_UPDATE")
     
     frame:SetScript("OnEvent", function(self, event, ...)
         if event == "PLAYER_ENTERING_WORLD" or event == "PVP_MATCH_COMPLETE" or event == "PVP_MATCH_ACTIVE" or event == "COMBAT_LOG_EVENT_UNFILTERED" or event == "UNIT_HEALTH" or event == "UNIT_AURA" then
