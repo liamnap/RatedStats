@@ -2678,6 +2678,8 @@ function Config:CreateMenu()
     UIConfig = CreateFrame("Frame", "RatedStatsConfig", UIParent, "UIPanelDialogTemplate")
     UIConfig:SetSize(1050, 540) -- Resize the window here
     UIConfig:SetPoint("CENTER", UIParent, "CENTER", 0, offsetY)
+	UIConfig:SetResizable(true)
+	UIConfig:SetClampedToScreen(true) -- so it doesn’t get dragged or resized offscreen
 	
 	-- Enable dragging of the frame
 	UIConfig:SetMovable(true)
@@ -2687,6 +2689,29 @@ function Config:CreateMenu()
 	UIConfig:SetScript("OnDragStop", function(self)
 		self:StopMovingOrSizing()
 		-- Optionally save the new position here
+	end)
+	
+	-- Create a resize button (the "grip") in the bottom-right corner
+	local resizeGrip = CreateFrame("Button", nil, UIConfig)
+	resizeGrip:SetPoint("BOTTOMRIGHT", UIConfig, "BOTTOMRIGHT", -6, 7)  -- Adjust offsets as needed
+	resizeGrip:SetSize(16, 16)
+	
+	-- Give it a texture that looks like a resizer (the default "SizeGrabber" is a good choice)
+	local resizeTexture = resizeGrip:CreateTexture(nil, "BACKGROUND")
+	resizeTexture:SetAllPoints()
+	resizeTexture:SetTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+	
+	-- Start resizing on left-click
+	resizeGrip:SetScript("OnMouseDown", function(self, button)
+		if button == "LeftButton" then
+			UIConfig:StartSizing("BOTTOMRIGHT")
+		end
+	end)
+	
+	-- Stop resizing on mouse up
+	resizeGrip:SetScript("OnMouseUp", function(self, button)
+		UIConfig:StopMovingOrSizing()
+		-- If you want to do anything after the size changes (e.g. re-anchor stuff), do it here.
 	end)
 
     UIConfig.Title:ClearAllPoints()
