@@ -617,13 +617,7 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
 		duration = endTime - startTime - totalPreviousDuration
 	end
 
-    local categoryMappings = {
-        SoloShuffle = { id = 7, historyTable = "SoloShuffleHistory", displayName = "SoloShuffle" },
-        ["2v2"] = { id = 1, historyTable = "v2History", displayName = "2v2" },
-        ["3v3"] = { id = 2, historyTable = "v3History", displayName = "3v3" },
-        RBG = { id = 4, historyTable = "RBGHistory", displayName = "RBG" },
-        SoloRBG = { id = 9, historyTable = "SoloRBGHistory", displayName = "SoloRBG" }
-    }
+
 	
 	-- Delay storing played games by 5 seconds to give the API time to update
 	C_Timer.After(5, function()
@@ -2226,7 +2220,7 @@ function DisplayHistory(content, historyTable, mmrLabel, tabID)
 		matchFrame:SetBackdrop({bgFile = "Interface/Tooltips/UI-Tooltip-Background"})
 		
 		-- Then choose color based on damp or faction
-		if match.damp then
+		if match.damp and tabID == (1 or 2 or 3) then
 			local dampVal = match.damp
 			if dampVal <= 10 then
 				matchFrame:SetBackdropColor(0.5, 0.5, 0.5, 0.7)  -- Grey
@@ -2627,8 +2621,33 @@ end
 function DisplayCurrentCRMMR(contentFrame, categoryID)
     -- Retrieve CR and MMR using GetPersonalRatedInfo for the specified categoryID
     local currentCR = select(1, GetPersonalRatedInfo(categoryID)) or "N/A"
-    local currentMMR = select(10, GetPersonalRatedInfo(categoryID)) or "N/A"
-    
+	local currentMMR = 0
+	
+    local categoryMappings = {
+        SoloShuffle = { id = 7, historyTable = "SoloShuffleHistory", displayName = "SoloShuffle" },
+        ["2v2"] = { id = 1, historyTable = "v2History", displayName = "2v2" },
+        ["3v3"] = { id = 2, historyTable = "v3History", displayName = "3v3" },
+        RBG = { id = 4, historyTable = "RBGHistory", displayName = "RBG" },
+        SoloRBG = { id = 9, historyTable = "SoloRBGHistory", displayName = "SoloRBG" }
+    }	
+
+	-- Find the correct history table name from categoryID
+	local selectedHistoryTable
+	for _, info in pairs(categoryMappings) do
+		if info.id == categoryID then
+			selectedHistoryTable = Database[info.historyTable]
+			break
+		end
+	end
+	
+	-- Look up this player's most recent postmatchMMR
+	if selectedHistoryTable and #selectedHistoryTable > 0 then
+		local lastEntry = selectedHistoryTable[#selectedHistoryTable]
+		if lastEntry and lastEntry.playerStats and lastEntry.playerStats[playerName] then
+			currentMMR = lastEntry.playerStats[playerName].postmatchMMR or "N/A"
+		end
+	end
+   
     -- Save these values to the Database
     if categoryID == 7 then
         Database.CurrentCRforSoloShuffle = currentCR
@@ -2647,25 +2666,30 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
         Database.CurrentMMRforSoloRBG = currentMMR
     end
     
-    -- Create and display CR and MMR labels
-    local crLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    crLabel:SetFont("Fonts\\FRIZQT__.TTF", 14)
-    crLabel:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 10, -10)
-    crLabel:SetText("Current CR: " .. currentCR)
-    
-    local mmrLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    mmrLabel:SetFont("Fonts\\FRIZQT__.TTF", 14)
-    mmrLabel:SetPoint("TOPLEFT", crLabel, "BOTTOMLEFT", 0, -5)
-    mmrLabel:SetText("Current MMR: " .. currentMMR)
-
-    -- Instructional text
-    local instructionLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    instructionLabel:SetFont("Fonts\\FRIZQT__.TTF", 12)
-    instructionLabel:SetPoint("TOP", contentFrame, "TOP", 0, -10)
-    instructionLabel:SetText("Click on rows to expand.\nClick on player name to copy.\nShift+MouseWheel to scroll left and right.")
+	if not contentFrame.crLabel then
+		contentFrame.crLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		contentFrame.crLabel:SetFont("Fonts\\FRIZQT__.TTF", 14)
+		contentFrame.crLabel:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 10, -10)
+	end
+	contentFrame.crLabel:SetText("Current CR: " .. currentCR)
+	
+	if not contentFrame.mmrLabel then
+		contentFrame.mmrLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		contentFrame.mmrLabel:SetFont("Fonts\\FRIZQT__.TTF", 14)
+		contentFrame.mmrLabel:SetPoint("TOPLEFT", contentFrame.crLabel, "BOTTOMLEFT", 0, -5)
+	end
+	contentFrame.mmrLabel:SetText("Current MMR: " .. currentMMR)
+	
+	if not contentFrame.instructionLabel then
+		contentFrame.instructionLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+		contentFrame.instructionLabel:SetFont("Fonts\\FRIZQT__.TTF", 12)
+		contentFrame.instructionLabel:SetPoint("TOP", contentFrame, "TOP", 0, -10)
+		contentFrame.instructionLabel:SetJustifyH("RIGHT")
+	end
+	contentFrame.instructionLabel:SetText("Click on rows to expand.\nClick on player name to copy.\nShift+MouseWheel to scroll left and right.")
     
     -- Return the last label for potential further positioning
-    return mmrLabel
+    return contentFrame.mmrLabel
 end
 
 ----------------------------------
@@ -2679,11 +2703,16 @@ function Config:CreateMenu()
     end
 	
     local offsetY = 200
+	local parentWidth = UIParent:GetWidth()
+	local parentHeight = UIParent:GetHeight()
 
     UIConfig = CreateFrame("Frame", "RatedStatsConfig", UIParent, "UIPanelDialogTemplate")
-    UIConfig:SetSize(1050, 540) -- Resize the window here
+	UIConfig:SetSize(parentWidth * 0.9, parentHeight * 0.8)
     UIConfig:SetPoint("CENTER", UIParent, "CENTER", 0, offsetY)
 	UIConfig:SetResizable(true)
+	-- Bring RatedStats to front of spell buttons
+	UIConfig:SetFrameStrata("DIALOG")
+	UIConfig:SetFrameLevel(20)
 	UIConfig:SetClampedToScreen(true) -- so it doesn’t get dragged or resized offscreen
 	
 	-- Enable dragging of the frame
