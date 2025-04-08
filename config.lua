@@ -726,7 +726,7 @@ function RefreshDataEvent(self, event, ...)
             local dataExists = LoadData()
             local isValidData = IsDataValid()
 
-            if not dataExists or not isValidData then
+            if not dataExists or not isValidData and (select(1, GetPersonalRatedInfo(7))) ~= 0 then
                 GetInitialCRandMMR()
 			else
 				CheckForMissedGames()
@@ -2137,6 +2137,22 @@ function DisplayHistory(content, historyTable, mmrLabel, tabID)
         headerText:SetText(header)
         table.insert(headerTexts, headerText)
     end
+	
+	local dataNotReady = not historyTable or #historyTable == 0
+
+	if dataNotReady then
+		local placeholder = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+		placeholder:SetFont("Fonts\\FRIZQT__.TTF", 10)
+		placeholder:SetPoint("TOPLEFT", headerTexts[1], "BOTTOMLEFT", 0, -20)
+		placeholder:SetText("|cff00ccffWaiting for game data to initialise. Once PvP data is available within the API rows will appear!|r")
+		placeholder:SetJustifyH("LEFT")
+		placeholder:SetJustifyV("TOP")
+		placeholder:SetWidth(900)
+		placeholder:SetHeight(50)
+		placeholder:SetWordWrap(true)
+		
+		return headerTexts, {}  -- Return early to skip match drawing
+	end
 
     -- Function to format match entry
     local function formatMatchEntry(match)
@@ -2634,12 +2650,6 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
     elseif categoryID == 9 then
         Database.CurrentCRforSoloRBG = currentCR
         Database.CurrentMMRforSoloRBG = currentMMR
-    end
-
-    -- Clear previous contents
-    for i = contentFrame:GetNumChildren(), 1, -1 do
-        local child = select(i, contentFrame:GetChildren())
-        child:Hide()
     end
     
     -- Create and display CR and MMR labels
