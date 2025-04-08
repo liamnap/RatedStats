@@ -617,8 +617,6 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
 		duration = endTime - startTime - totalPreviousDuration
 	end
 
-	print("[DEBUG]: duration:", duration)
-
     local categoryMappings = {
         SoloShuffle = { id = 7, historyTable = "SoloShuffleHistory", displayName = "SoloShuffle" },
         ["2v2"] = { id = 1, historyTable = "v2History", displayName = "2v2" },
@@ -1165,7 +1163,6 @@ function CheckForMissedGames()
 		local playedField = "Playedfor" .. categoryName
 	
 		local lastRecorded = Database[playedField]
-		print("[DEBUG] totalGames", totalGames, "lastRecorded", lastRecorded, "for", categoryName)
 		local historyTable = Database[category.historyTable]
 	
 ---		Log(string.format("Checking category ID %d | Last Recorded: %d | Total Games: %d", category.id, lastRecorded, totalGames))
@@ -1846,8 +1843,6 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 		roundsWon = roundsWon or 0,
         playerStats = playerStats -- Nested table with player-specific details
     }
-
-	print("[DEBUG] dampening:", damp)
 
     table.insert(historyTable, 1, entry) -- Insert at the beginning to keep the latest at the top
     SaveData() -- Updated to call SaveData function
