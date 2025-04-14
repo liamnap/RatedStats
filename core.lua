@@ -1,0 +1,3 @@
+local _, RSTATS = ...
+_G.RSTATS = RSTATS or {}
+_G.RSTATS.Config = RSTATS.Config or {}

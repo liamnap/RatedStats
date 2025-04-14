@@ -1,15 +1,3 @@
--- Define the InitializeTrace function
-local function InitializeTrace()
-    -- Simulate typing the /etrace command in the chat
-    ChatFrame1EditBox:SetText("/etrace")
-    -- Simulate pressing Enter to send the command
-    ChatEdit_SendText(ChatFrame1EditBox, 0)
-    -- Optionally print a message to confirm the trace command was issued
-    DEFAULT_CHAT_FRAME:AddMessage("Running /etrace for event tracing.")
-end
-
--- InitializeTrace()
-
 -- Function to print only match entries from SoloShuffleHistory
 function PrintSoloRBGMatchEntries(historyTable)
     if not historyTable or #historyTable == 0 then
@@ -26,6 +14,53 @@ function PrintSoloRBGMatchEntries(historyTable)
     end
 end
 
+SLASH_RATEDSTATSDEBUG1 = "/rsdebug"
+SlashCmdList["RATEDSTATSDEBUG"] = function()
+    local playerName = UnitName("player") .. "-" .. GetRealmName()
+
+    local categoryMappings = {
+        { id = 7, name = "SoloShuffle", tableKey = "SoloShuffleHistory" },
+        { id = 1, name = "2v2", tableKey = "v2History" },
+        { id = 2, name = "3v3", tableKey = "v3History" },
+        { id = 4, name = "RBG", tableKey = "RBGHistory" },
+        { id = 9, name = "SoloRBG", tableKey = "SoloRBGHistory" },
+    }
+
+    for _, info in ipairs(categoryMappings) do
+        local historyTable = Database[info.tableKey]
+
+        local foundStats = nil
+
+        if historyTable and #historyTable > 0 then
+            print("Total entries:", #historyTable)
+            print("Player Name:", playerName)
+
+            for _, entry in ipairs(historyTable) do
+                for _, stats in ipairs(entry.playerStats or {}) do
+                    if stats.name == playerName and stats.postmatchMMR and stats.postmatchMMR > 0 then
+                        foundStats = stats
+                        break
+                    end
+                end
+                if foundStats then break end
+            end
+
+            if foundStats then
+                print("✅ Found latest valid match with player data")
+                print("postmatchMMR:", foundStats.postmatchMMR or "nil")
+                print("cr:", foundStats.cr or "nil")
+                print("damage:", foundStats.damage or "nil")
+                print("healing:", foundStats.healing or "nil")
+                print("ratingChange:", foundStats.ratingChange or "nil")
+            else
+                print("❌ No valid stats found for this player in any entry.")
+            end
+        else
+            print("No history data for " .. info.name)
+        end
+    end
+end
+
 --------------------------------------
 -- Namespaces
 --------------------------------------
@@ -36,12 +71,13 @@ RSTATS.Database = RSTATS_Database or {} -- adds Database table to RSTATS namespa
 RSTATS.Database[playerName] = RSTATS.Database[playerName] or {} -- Ensure the character-specific table exists within RSTATS_Database
 Database = RSTATS.Database[playerName]
 
--- Initialize the Config table
-RSTATS.Config = RSTATS.Config or {}; -- adds Config table to RSTATS namespace
 -- The Config table will store configuration settings and functions related to the addon's configuration.
 local Config = RSTATS.Config
 -- Initialize the UIConfig variable, which will hold the main configuration UI frame.
 local UIConfig
+local contentFrames = {}
+local scrollFrames = {}
+local scrollContents = {}
 
 Database.combatLogEvents = Database.combatLogEvents or {}
 combatLogEvents = Database.combatLogEvents
@@ -117,39 +153,8 @@ function Config:GetThemeColor()
     return c.r, c.g, c.b, c.hex;
 end
 
------ local function ScrollFrame_OnMouseWheel(self, delta)
------     local newValue = self:GetVerticalScroll() - (delta * 20);
------ 
------     if (newValue < 0) then
------         newValue = 0;
------     elseif (newValue > self:GetVerticalScrollRange()) then
------         newValue = self:GetVerticalScrollRange();
------     end
------ 
------     self:SetVerticalScroll(newValue);
------ end
------ 
------ local function HorizontalScrollFrame_OnMouseWheel(self, delta)
------     local newValue = self:GetHorizontalScroll() - (delta * 20);
------ 
------     if (newValue < 0) then
------         newValue = 0;
------     elseif (newValue > self:GetHorizontalScrollRange()) then
------         newValue = self:GetHorizontalScrollRange();
------     end
------ 
------     self:SetHorizontalScroll(newValue);
------ end
-
 local function Tab_OnClick(self)
     PanelTemplates_SetTab(self:GetParent(), self:GetID());
-
-    local scrollChild = UIConfig.ScrollFrame:GetScrollChild();
-    if (scrollChild) then
-        scrollChild:Hide();
-    end
-
-    UIConfig.ScrollFrame:SetScrollChild(self.content);
     self.content:Show();
 end
 
@@ -161,12 +166,14 @@ local function SetTabs(frame, numTabs, ...)
 
     for i = 1, numTabs do
         local tab = CreateFrame("Button", frameName.."Tab"..i, frame, "PanelTabButtonTemplate");
+		local parentWidth  = RatedStatsConfig:GetWidth()
+		local parentHeight = RatedStatsConfig:GetHeight()
         tab:SetID(i);
         tab:SetText(select(i, ...));
         tab:SetScript("OnClick", Tab_OnClick);
 
         tab.content = CreateFrame("Frame", nil, UIConfig.ScrollFrame, "BackdropTemplate"); -- Ensure BackdropTemplate is used
-        tab.content:SetSize(1800, 500);
+        tab.content:SetSize(parentWidth * 0.5, parentHeight);
         tab.content:Hide();
 
         table.insert(contents, tab.content);
@@ -340,6 +347,9 @@ local function GetShortMapName(mapName)
     for i=1, #mapNameTemp do
         mapShortName = mapShortName..strsub(mapNameTemp[i],1,1)
     end
+	if mapShortName == "Cage of Carnage" then
+		mapShortName = "COC"
+	end
     return mapShortName
 end
 
@@ -709,6 +719,29 @@ local function IsSoloShuffleMatch()
     end
 end
 
+function InitialCRMMRExists()
+    local historyTables = {
+        "SoloShuffleHistory",
+        "v2History",
+        "v3History",
+        "RBGHistory",
+        "SoloRBGHistory"
+    }
+
+    for _, tableName in ipairs(historyTables) do
+        local history = Database[tableName]
+        if history then
+            for _, match in ipairs(history) do
+                if match.isInitial then
+                    return true
+                end
+            end
+        end
+    end
+
+    return false
+end
+
 function RefreshDataEvent(self, event, ...)
 
 	local roundWasWon = false
@@ -718,17 +751,20 @@ function RefreshDataEvent(self, event, ...)
             local dataExists = LoadData()
             local isValidData = IsDataValid()
 
-            if not dataExists or not isValidData and (select(1, GetPersonalRatedInfo(7))) ~= 0 then
-                GetInitialCRandMMR()
+			if not dataExists or not isValidData then
+				if not InitialCRMMRExists() then
+					GetInitialCRandMMR()
+				else
+				end
 			else
 				CheckForMissedGames()
-            end
-			
-            -- SAFELY detect Solo Shuffle and set startTime
-            if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() then
-                startTime = GetTimestamp()
-            end
-        end)
+			end
+
+			-- SAFELY detect Solo Shuffle and set startTime
+			if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() then
+				startTime = GetTimestamp()
+			end
+		end)
 				
     elseif event == "PVP_MATCH_ACTIVE" then
         C_Timer.After(1, function()
@@ -1047,7 +1083,7 @@ function GetInitialCRandMMR()
 			matchID = 1,
             timestamp = GetTimestamp(),
             cr = cr,
-            mmr = mmr,
+            mmr = "-",
             isInitial = true,
             winLoss = "I",  -- Initial
 			friendlyWinLoss = "I",
@@ -2061,243 +2097,444 @@ local function convertToTimestamp(dateString)
     })
 end
 
--- Update DisplayHistory to include initial entries
-function DisplayHistory(content, historyTable, mmrLabel, tabID)
+-- Use this helper function to calculate the maximum height of a set of font strings
+local function CalculateRowHeight(fontStrings, padding)
+    local maxHeight = 0
+    for _, fs in pairs(fontStrings) do
+        local h = fs:GetStringHeight() or 0
+        if h > maxHeight then
+            maxHeight = h
+        end
+    end
+    return maxHeight + (padding or 4)  -- add a little padding
+end
 
-    -- Sort historyTable by `matchID` in descending order (most recent first)
-    table.sort(historyTable, function(matchA, matchB)
-        -- Compare the matchID of each entry
-        local matchIDA = matchA.matchID or 0  -- Default to 0 if matchID is nil, although all should have a matchID
-        local matchIDB = matchB.matchID or 0  -- Same for matchIDB
+-- AdjustContentHeight reflows the scroll child based on total height of match rows.
+function AdjustContentHeight(content)
+    local matchFrames = content.matchFrames
+    if not matchFrames or #matchFrames == 0 then
+        content:SetHeight(400)
+        return
+    end
 
-        return matchIDA < matchIDB
+    local totalHeight = 0
+    for _, row in ipairs(matchFrames) do
+        local h = row:GetHeight() or 0
+        totalHeight = totalHeight + h + 5  -- include spacing between rows
+    end
+
+    -- Add buffer to avoid scrollbar "snapping"
+    totalHeight = totalHeight + 20
+
+    -- Cap it, but allow scrolling
+    local scrollFrame = content:GetParent()
+    local maxAllowed = RatedStatsConfig:GetHeight() * 3
+    content:SetHeight(math.min(totalHeight, maxAllowed))
+
+    -- Debug
+end
+
+--------------------------------------------------
+-- New Helper Functions for Localized Reflowing
+--------------------------------------------------
+
+-- Returns the index of the given targetFrame in content.matchFrames.
+local function GetRowIndex(content, targetFrame)
+    local matchFrames = content.matchFrames
+    for i, row in ipairs(matchFrames) do
+        if row == targetFrame then
+            return i
+        end
+    end
+    return nil
+end
+
+-- Modified ToggleNestedTable function that uses localized reflow.
+function ToggleNestedTable(matchFrame, nestedTable, content)
+    local matchID = matchFrame.matchData and matchFrame.matchData.matchID or "??"
+    if nestedTable:IsShown() then
+        nestedTable:Hide()
+        matchFrame:SetHeight(matchFrame.baseHeight)
+		matchFrame:SetFrameStrata("HIGH")
+		matchFrame:SetFrameLevel(22)
+    else
+        nestedTable:Show()
+        nestedTable:SetParent(matchFrame)
+        nestedTable:ClearAllPoints()
+        nestedTable:SetPoint("TOPLEFT", matchFrame, "TOPLEFT", 0, -14)
+		nestedTable:SetFrameStrata("HIGH")
+		nestedTable:SetFrameLevel(22)
+        local ntHeight = nestedTable:GetHeight() or 0
+        matchFrame:SetHeight(matchFrame.baseHeight + ntHeight + 10)
+		matchFrame:SetFrameStrata("HIGH")
+		matchFrame:SetFrameLevel(22)
+    end
+
+---    if ACTIVE_TAB_ID == 1 then
+---        DebugSelectedMatchFrame(matchFrame, "ToggleNestedTable - matchFrame after toggle")
+---        DebugSelectedMatchFrame(nestedTable, "ToggleNestedTable - nestedTable after toggle")
+---    end
+
+    local index = GetRowIndex(content, matchFrame)
+    if index then
+        ReflowRows(content)  -- fallback in case index wasn't found
+    end
+end
+
+------------------------------------------------------------------------------
+-- ReflowRows: Anchor each matchFrame one under the other, accounting for height.
+------------------------------------------------------------------------------
+function ReflowRows(content)
+    local matchFrames = content.matchFrames
+    if not matchFrames or #matchFrames == 0 then 
+        return 
+    end
+
+    local seenMatchIDs = {}  -- Table to record which matchIDs we’ve seen
+
+    -- Loop through each matchFrame in the array.
+    for i, row in ipairs(matchFrames) do
+        row:ClearAllPoints() -- Clear any existing anchor points
+
+        -- Check for duplicate matchIDs: warn if the same matchID appears more than once.
+        local matchID = (row.matchData and row.matchData.matchID) or "??"
+		-- Get the current height of the row (this may have changed if expanded)
+        local rowHeight = row:GetHeight() or 0
+        if seenMatchIDs[matchID] then
+        else
+            seenMatchIDs[matchID] = true
+        end
+
+        if i == 1 then
+            -- Anchor the first row relative to the fixed base anchor
+            row:SetPoint("TOPLEFT", content.rowsAnchor, "BOTTOMLEFT", 0, 0)
+        else
+            -- Anchor this row relative to the above row's "BOTTOMLEFT"
+            local prevRow = matchFrames[i - 1]
+			local prevHeight = prevRow:GetHeight() or 0
+            local dynamicOffset = -(prevHeight + 5)
+            row:SetPoint("TOPLEFT", prevRow, "BOTTOMLEFT", 0, -5)
+        end
+		
+		row:SetFrameStrata("HIGH")
+		row:SetFrameLevel(22)
+
+    end
+
+    AdjustContentHeight(content)
+end
+
+-- Cleanup helper for ToggleNestedTable to fully remove hidden ghost rows
+function ClearStaleMatchFrames(content)
+    if not content or not content.matchFrames then return end
+
+    for _, frame in ipairs(content.matchFrames) do
+        if frame.nestedTable then
+            if frame.nestedTable.headerTexts then
+                for _, h in ipairs(frame.nestedTable.headerTexts) do
+                    h:SetText("")
+                    h:Hide()
+                    h:SetParent(nil)
+                end
+                wipe(frame.nestedTable.headerTexts)
+            end
+            frame.nestedTable:Hide()
+            frame.nestedTable:SetParent(nil)
+            frame.nestedTable:ClearAllPoints()
+            frame.nestedTable = nil
+        end
+
+        if frame.fontStrings then
+            for _, fs in ipairs(frame.fontStrings) do
+                fs:SetText("")
+                fs:Hide()
+                fs:SetParent(nil)
+            end
+            wipe(frame.fontStrings)
+        end
+
+        frame:Hide()
+        frame:SetParent(nil)
+        frame:ClearAllPoints()
+		
+        -- Only attempt to remove from _G if it's really global
+        local frameName = frame:GetName()
+        if frameName and _G[frameName] == frame then
+            _G[frameName] = nil
+        end
+    end
+
+    wipe(content.matchFrames)
+	content.matchFrameByID = {}
+end
+
+function SafeTabClick(tab)
+    local id = tab:GetID()
+    if ACTIVE_TAB_ID == id then return end
+    ACTIVE_TAB_ID = id
+
+    PanelTemplates_SetTab(RatedStatsConfig, id)
+
+    for i, frame in ipairs(RSTATS.ContentFrames) do
+        frame:SetShown(i == id)
+    end
+
+    -- ✅ Trigger filter update when tab changes
+    if RSTATS.ScrollContents and RSTATS.ScrollContents[id] then
+        local content = RSTATS.ScrollContents[id]
+        if not content._initialized then
+            content._initialized = true
+        end
+
+        -- Run filter to show results for this tab
+        C_Timer.After(0.1, function()
+            FilterAndSearchMatches(RatedStatsSearchBox and RatedStatsSearchBox:GetText() or "")
+        end)
+    end
+end
+
+------------------------------------------------------------------------------
+-- DisplayHistory: Builds the header and creates each match row. Every row
+-- is parented to the main content frame (not the previous row) so that we
+-- can reposition all rows by calling ReflowRows.
+------------------------------------------------------------------------------
+function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltered)
+    ClearStaleMatchFrames(content)
+
+    -- 1) Sort history by matchID ascending
+    table.sort(historyTable, function(a, b)
+        return (a.matchID or 0) < (b.matchID or 0)
     end)
 
-    local scoreHeaderText = "Score"
-	if tabID == 2 or tabID == 3 then  -- Solo Shuffle, 2v2, 3v3 tab IDs
-        scoreHeaderText = ""  -- Hide the "Score" header
-    end
+    content.matchFrames = {}
+    content.headerTexts = {}
+	content.matchFrameByID = {}
 
-    -- Define main table headers
+    -- 3) Create headers
+    local scoreHeaderText = (tabID == 2 or tabID == 3) and "" or "Score"
     local headers = {
-        "Win/Loss", "Map", "Match End Time", "Duration", "", "", "Faction", "Raid Leader", "Avg CR", "Team MMR",
-        "Damage", "Healing", "Avg Rat Chg", "", scoreHeaderText, "", "Faction", "Raid Leader", "Avg CR", "Team MMR", "Damage",
-        "Healing", "Avg Rat Chg"
+        "Win/Loss","Map","Match End Time","Duration","","",
+        "Faction","Raid Leader","Avg CR","Team MMR","Damage","Healing","Avg Rat Chg","",
+        scoreHeaderText,"","Faction","Raid Leader","Avg CR","Team MMR","Damage","Healing","Avg Rat Chg"
     }
-   
-    local columnOffsets = {
-        0,      -- 0: Starting offset
-        60,     -- 1: Win/Loss
-        150,    -- 2: Map
-        270,    -- 3: Match End Time
-        330,    -- 4: Duration
-        350,    -- 5: Empty column
-        370,    -- 6: Empty column
-        430,    -- 7: Faction
-        580,    -- 8: Raid Leader
-        640,    -- 9: Avg CR
-        700,    -- 10: Team MMR
-        760,    -- 11: Damage
-        810,    -- 12: Healing
-        860,    -- 13: Avg Rat Chg
-        900,    -- 14: Empty column
-        960,    -- 15: Score
-        1000,   -- 16: Empty column
-        1060,   -- 17: Faction
-        1210,   -- 18: Raid Leader
-        1270,   -- 19: Avg CR
-        1330,   -- 20: Team MMR
-        1390,   -- 21: Damage
-        1450,   -- 22: Healing
-        1510    -- 23: Avg Rat Chg
-    }
+    local columnOffsets = {0,60,150,270,330,350,370,430,580,640,700,760,810,860,900,960,1000,1060,1210,1270,1330,1390,1450,1510}
+    local headerFontSize = 10
+    local entryFontSize  = 8
 
-    local headerFontSize = 10  -- Font size for headers
-    local entryFontSize = 8    -- Font size for entries
-
-    -- Create main table header row
-    local headerTexts = {}
-    local headerYPosition = -25
-    for i, header in ipairs(headers) do
-        local headerText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        headerText:SetFont("Fonts\\FRIZQT__.TTF", headerFontSize)  -- Set font size
-        headerText:SetJustifyH("CENTER")  -- Center text
-        headerText:SetPoint("TOPLEFT", mmrLabel, "BOTTOMLEFT", columnOffsets[i], headerYPosition)  -- Adjust position
-        headerText:SetText(header)
-        table.insert(headerTexts, headerText)
-    end
+	-- Create a parent frame just for the headers (anchor to contentFrame, not scrollFrame)
+	local headerFrame = CreateFrame("Frame", nil, RSTATS.ContentFrames[tabID])
+	headerFrame:SetPoint("TOPLEFT", mmrLabel, "BOTTOMLEFT", 0, -30)
+	headerFrame:SetSize(RSTATS.ContentFrames[tabID]:GetWidth() * 0.98, 12)
+	headerFrame:SetFrameStrata("HIGH")
+	headerFrame:SetFrameLevel(24)
+	headerFrame:SetAlpha(1)
+	headerFrame:SetClipsChildren(true)
 	
-	local dataNotReady = not historyTable or #historyTable == 0
+	-- Store reference so you can access it later
+	content.headerFrame = headerFrame
+	
+	-- Create each header label inside this headerFrame
+	local headerTexts = {}
+	
+	for i, name in ipairs(headers) do
+		local h = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		h:SetFont("Fonts\\FRIZQT__.TTF", headerFontSize)
+		h:SetJustifyH("CENTER")
+		h:SetPoint("TOPLEFT", headerFrame, "TOPLEFT", columnOffsets[i], 0)
+		h:SetTextColor(1, 1, 1)
+		h:SetShadowOffset(1, -1)
+		h:SetText(name)
+		table.insert(headerTexts, h)
+	end
+	
+	content.headerTexts = headerTexts
+	content.header = headerTexts[1]  -- First header acts as anchor reference
 
-	if dataNotReady then
-		local placeholder = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+    -- If no history, show a placeholder.
+	if not historyTable or #historyTable == 0 then
+		local placeholder = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
 		placeholder:SetFont("Fonts\\FRIZQT__.TTF", 10)
 		placeholder:SetPoint("TOPLEFT", headerTexts[1], "BOTTOMLEFT", 0, -20)
-		placeholder:SetText("|cff00ccffWaiting for game data to initialise. Once PvP data is available within the API rows will appear!|r")
+	
+		if isFiltered then
+			placeholder:SetText("|cffff5555No data found.|r")
+		else
+			placeholder:SetText("|cff00ccffWaiting for game data to initialise...|r")
+		end
+	
 		placeholder:SetJustifyH("LEFT")
-		placeholder:SetJustifyV("TOP")
 		placeholder:SetWidth(900)
 		placeholder:SetHeight(50)
 		placeholder:SetWordWrap(true)
-		
-		return headerTexts, {}  -- Return early to skip match drawing
+		return headerTexts, {}
 	end
 
-    -- Function to format match entry
-    local function formatMatchEntry(match)
----        local winLoss = match.isInitial and "I" or (match.friendlyWinLoss or "-")
-
-		local scoreText = "-"
-
-		if match.friendlyTeamScore then
-			if match.teamFaction == "Alliance" then
-				scoreText = (match.friendlyTeamScore or "-") .. "  : " .. (match.enemyTeamScore or "-")
-			else
-				scoreText = (match.enemyTeamScore or "-") .. "  : " .. (match.friendlyTeamScore or "-")
-			end
-		elseif match.allianceTeamScore and match.teamFaction == "Alliance" then
-			scoreText = (match.allianceTeamScore or "-") .. " : " .. (match.hordeTeamScore or "-")
-		else
-			scoreText = (match.hordeTeamScore or "-") .. "  : " .. (match.allianceTeamScore or "-")
-		end
-
-        -- Hide the score text if the current content is Solo Shuffle
+    -- 4) Format each match entry's columns.
+    local function formatMatch(match)
+        local scoreText = "-"
+        if match.friendlyTeamScore then
+            if match.teamFaction == "Alliance" then
+                scoreText = (match.friendlyTeamScore or "-").."  : "..(match.enemyTeamScore or "-")
+            else
+                scoreText = (match.enemyTeamScore or "-").."  : "..(match.friendlyTeamScore or "-")
+            end
+        elseif match.allianceTeamScore and match.teamFaction == "Alliance" then
+            scoreText = (match.allianceTeamScore or "-").." : "..(match.hordeTeamScore or "-")
+        else
+            scoreText = (match.hordeTeamScore or "-").."  : "..(match.allianceTeamScore or "-")
+        end
         if tabID == 1 then
-			scoreText = (match.roundsWon or 0) .. " / 6"
-		elseif tabID == 2 or tabID == 3 then  -- 2v2, 3v3 tab IDs
+            scoreText = (match.roundsWon or 0) .. " / 6"
+        elseif tabID == 2 or tabID == 3 then
             scoreText = ""
         end
-		
-		if type(match.duration) == "number" then
-			match.duration = SecondsToTime(match.duration)
-		end
-
+        if type(match.duration) == "number" then
+            match.duration = SecondsToTime(match.duration)
+        end
         return {
-            match.friendlyWinLoss or "-",
-            match.mapName or "N/A",
+            (match.friendlyWinLoss or "-"),
+            (match.mapName or "N/A"),
             date("%a %d %b %Y - %H:%M:%S", match.endTime) or "N/A",
-			match.duration or "N/A",
+            (match.duration or "N/A"),
             "",
-            "", 
-            match.teamFaction or "N/A",
-            match.friendlyRaidLeader or "N/A",
-            match.friendlyAvgCR or "N/A",
-            match.friendlyMMR or "N/A",
+            "",
+            (match.teamFaction or "N/A"),
+            (match.friendlyRaidLeader or "N/A"),
+            (match.friendlyAvgCR or "N/A"),
+            (match.friendlyMMR or "N/A"),
             FormatNumber(match.friendlyTotalDamage) or "N/A",
             FormatNumber(match.friendlyTotalHealing) or "N/A",
-            match.friendlyRatingChange or "N/A",
+            (match.friendlyRatingChange or "N/A"),
             "",
-            scoreText, -- Use the function to conditionally show/hide the score
-            "", 
-            match.enemyFaction or "N/A",
-            match.enemyRaidLeader or "N/A",
-            match.enemyAvgCR or "N/A",
-            match.enemyMMR or "N/A",
+            scoreText,
+            "",
+            (match.enemyFaction or "N/A"),
+            (match.enemyRaidLeader or "N/A"),
+            (match.enemyAvgCR or "N/A"),
+            (match.enemyMMR or "N/A"),
             FormatNumber(match.enemyTotalDamage) or "N/A",
             FormatNumber(match.enemyTotalHealing) or "N/A",
-            match.enemyRatingChange or "N/A",
+            (match.enemyRatingChange or "N/A"),
         }
     end
-	
-    -- Remove previous match frames
-    for _, child in ipairs({content:GetChildren()}) do
-        if child ~= mmrLabel then
-            child:Hide()
-        end
-    end
 
-    -- Display each match entry
-    local previousFrame = headerTexts[1] -- Start with the first header as reference
-    local matchFrames = {}
+	-- After creating your headerTexts, pick the first header as the anchor
+	local anchorForRows = headerTexts[1]
+
+    -- 5) Create a base anchor frame placed immediately below mmrLabel.
+    local baseAnchor = CreateFrame("Frame", nil, content)
+    baseAnchor:SetSize(1, 1)
+    baseAnchor:SetPoint("TOPLEFT", mmrLabel, "BOTTOMLEFT", 0, -35)
+    content.baseAnchor = baseAnchor
+
+    -- 6) Create each match row (all parented to content)
     for i = #historyTable, 1, -1 do
-        local match = historyTable[i]
-        local formattedEntry = formatMatchEntry(match)
-        local matchFrame = CreateFrame("Frame", nil, content, "BackdropTemplate")
-        matchFrame:SetSize(1920, 5) -- Change the size of the match data row here
-        matchFrame:SetPoint("TOPLEFT", previousFrame, "BOTTOMLEFT", 0, -5)
-
-		-- Always set the backdrop file once
-		matchFrame:SetBackdrop({bgFile = "Interface/Tooltips/UI-Tooltip-Background"})
+		local match = historyTable[i]
+		local matchID = match.matchID or i
+		local parentWidth  = RatedStatsConfig:GetWidth()
+		local parentHeight = RatedStatsConfig:GetHeight()
 		
-		-- Then choose color based on damp or faction
-		if match.damp and tabID == (1 or 2 or 3) then
-			local dampVal = match.damp
-			if dampVal <= 10 then
-				matchFrame:SetBackdropColor(0.5, 0.5, 0.5, 0.7)  -- Grey
-			elseif dampVal <= 20 then
-				matchFrame:SetBackdropColor(1, 1, 0, 0.7)        -- Yellow
-			elseif dampVal <= 30 then
-				matchFrame:SetBackdropColor(1, 0.55, 0, 0.7)     -- Amber
-			elseif dampVal <= 39 then
-				matchFrame:SetBackdropColor(1, 0.4, 0, 0.7)      -- Orange
-			else
-				matchFrame:SetBackdropColor(1, 0, 0, 0.7)        -- Red
-			end
-		
-		else
-			-- No dampening: color by faction
-			if match.teamFaction == "Horde" then
-				matchFrame:SetBackdropColor(1, 0, 0, 0.7)  -- Horde = red
-			elseif match.teamFaction == "Alliance" then
-				matchFrame:SetBackdropColor(0, 0, 1, 0.7)  -- Alliance = blue
-			end
-		end
-
-        for j, column in ipairs(formattedEntry) do
-            local text = matchFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-            text:SetFont("Fonts\\FRIZQT__.TTF", entryFontSize)
-            text:SetJustifyH("CENTER")
-            text:SetPoint("TOPLEFT", matchFrame, "TOPLEFT", columnOffsets[j], 0)
-            text:SetText(column)
-            -- Ensure the Win/Loss column has the correct color
-            if j == 1 then
-                if column == "+   W" or column == "RND 1  +   W" or column == "RND 2  +   W" or column == "RND 3  +   W" or column == "RND 4  +   W" or column == "RND 5  +   W" or column == "RND 6  +   W" then
-                    text:SetTextColor(0, 1, 0)  -- Green for win
-                elseif column == "+   L" or column == "RND 1  +   L" or column == "RND 2  +   L" or column == "RND 3  +   L" or column == "RND 4  +   L" or column == "RND 5  +   L" or column == "RND 6  +   L" then
-                    text:SetTextColor(1, 0, 0)  -- Red for loss
-				elseif column =="~   D" or column == "RND 1  ~   D" or column == "RND 2  ~   D" or column == "RND 3  ~   D" or column == "RND 4  ~   D" or column == "RND 5  ~   D" or column == "RND 6  ~   D" then
-					text:SetTextColor(0.5, 0.5, 0.5)
-                else
-                    text:SetTextColor(1, 1, 1)  -- Default color for other cases
-                end		
-            end
+		if content.matchFrameByID[matchID] then
+            table.insert(content.matchFrames, content.matchFrameByID[matchID])
+        else
+			local matchFrame = CreateFrame("Frame", nil, nil, "BackdropTemplate")
+			matchFrame:SetSize(parentWidth * 0.94, parentHeight)  -- Initial minimal height
+			matchFrame:SetFrameStrata("HIGH")
+			matchFrame:SetFrameLevel(22)
+			matchFrame:SetParent(content)
+			matchFrame.matchData = match  -- Store the match data for reference
+			matchFrame.fontStrings = {}
 			
-			    -- If this is the Duration column (j == 4) and we have match.damp, show a tooltip
-			if j == 4 and match.damp and tabID == (1 or 2 or 3) then
-				-- Make sure our text can handle mouse events
-				text:EnableMouse(true)
-		
-				text:SetScript("OnEnter", function()
-					GameTooltip:SetOwner(text, "ANCHOR_RIGHT")
-					GameTooltip:ClearLines()
-					GameTooltip:AddLine(string.format("%d%% Dampening", match.damp), 1, 1, 1)
-					GameTooltip:Show()
-				end)
-		
-				text:SetScript("OnLeave", function()
-					GameTooltip:Hide()
-				end)
-			end		
-        end
-
-        -- Get player stats and create nested table
-        local playerStats = match.playerStats or {}
-        local nestedTable = CreateNestedTable(matchFrame, playerStats, match.teamFaction, match.isInitial, match.isMissedGame)
-        matchFrame.nestedTable = nestedTable  -- Assign the nested table to the matchFrame
-
-        -- Make matchFrame interactive to toggle nested table
-        matchFrame:SetScript("OnMouseUp", function()
-            ToggleNestedTable(nestedTable, content, matchFrames, headerTexts)
-        end)
-
-        table.insert(matchFrames, matchFrame)
-        previousFrame = matchFrame
+			local rowFontStrings = {}
+			local columns = formatMatch(match)
+			for j, colText in ipairs(columns) do
+				local fs = matchFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+				fs:SetFont("Fonts\\FRIZQT__.TTF", entryFontSize)
+				fs:SetJustifyH("CENTER")
+				fs:SetPoint("TOPLEFT", matchFrame, "TOPLEFT", columnOffsets[j], -2)
+				fs:SetText(colText)
+				table.insert(matchFrame.fontStrings, fs)
+				table.insert(rowFontStrings, fs)
+	
+				-- Color code column one if necessary.
+				if j == 1 then
+					if colText:find("%+%s+W") then
+						fs:SetTextColor(0, 1, 0)
+					elseif colText:find("%+%s+L") then
+						fs:SetTextColor(1, 0, 0)
+					elseif colText:find("~%s+D") then
+						fs:SetTextColor(0.5, 0.5, 0.5)
+					else
+						fs:SetTextColor(1, 1, 1)
+					end
+				end
+	
+				-- Add dampening tooltip if applicable.
+				if j == 4 and match.damp and (tabID == 1 or tabID == 2 or tabID == 3) then
+					fs:EnableMouse(true)
+					fs:SetScript("OnEnter", function()
+						GameTooltip:SetOwner(fs, "ANCHOR_RIGHT")
+						GameTooltip:ClearLines()
+						GameTooltip:AddLine(string.format("%d%% Dampening", match.damp), 1, 1, 1)
+						GameTooltip:Show()
+					end)
+					fs:SetScript("OnLeave", function() GameTooltip:Hide() end)
+				end
+			end
+	
+			local rowHeight = CalculateRowHeight(rowFontStrings, 4)
+			matchFrame:SetHeight(rowHeight)
+			matchFrame.baseHeight = rowHeight
+			matchFrame:SetClipsChildren(true)
+	
+			-- Set the background color based on dampening or faction.
+			matchFrame:SetBackdrop({bgFile = "Interface/Tooltips/UI-Tooltip-Background"})
+			if match.damp and (tabID == 1 or tabID == 2 or tabID == 3) then
+				local dv = match.damp
+				if dv <= 10 then
+					matchFrame:SetBackdropColor(0.5, 0.5, 0.5, 0.7)
+				elseif dv <= 20 then
+					matchFrame:SetBackdropColor(1, 1, 0, 0.7)
+				elseif dv <= 30 then
+					matchFrame:SetBackdropColor(1, 0.55, 0, 0.7)
+				elseif dv <= 39 then
+					matchFrame:SetBackdropColor(1, 0.4, 0, 0.7)
+				else
+					matchFrame:SetBackdropColor(1, 0, 0, 0.7)
+				end
+			else
+				if match.teamFaction == "Horde" then
+					matchFrame:SetBackdropColor(1, 0, 0, 0.7)
+				else
+					matchFrame:SetBackdropColor(0, 0, 1, 0.7)
+				end
+			end
+	
+			-- Create the nested table (for match details) and parent it to the row.
+			local nestedTable = CreateNestedTable(matchFrame, match.playerStats or {}, match.teamFaction, match.isInitial, match.isMissedGame)
+			nestedTable:SetParent(matchFrame)
+			nestedTable:SetPoint("TOPLEFT", matchFrame, "TOPLEFT", 0, -14)
+			nestedTable:SetFrameStrata("HIGH")
+			nestedTable:SetFrameLevel(22)
+			nestedTable:Hide()
+			matchFrame.nestedTable = nestedTable
+	
+			-- Set a click handler for the row to toggle its nested table and reflow all rows.
+			matchFrame:SetScript("OnMouseUp", function()
+				ReflowRows(content)
+				ToggleNestedTable(matchFrame, nestedTable, content)
+			end)
+			
+			content.matchFrameByID[matchID] = matchFrame
+			table.insert(content.matchFrames, matchFrame)
+		end
     end
+
+    -- 7) Reflow rows so they are anchored one below the other as desired.
+    ReflowRows(content)
 
     SaveData()
-
-    -- Return headerTexts and matchFrames for further use
-    return headerTexts, matchFrames
+    return headerTexts, content.matchFrames
 end
 
 local rowCounts = {
@@ -2313,8 +2550,8 @@ local function CreateCopyNameFrame(playerName)
     local frame = CreateFrame("Frame", "CopyNameFrame", UIParent, "BackdropTemplate")
     frame:SetSize(300, 100)  -- Adjust size as needed
     frame:SetPoint("CENTER", UIParent, "CENTER")  -- Position in the center of the screen
-    frame:SetFrameStrata("HIGH")
-    frame:SetFrameLevel(10)
+    frame:SetFrameStrata("DIALOG")
+    frame:SetFrameLevel(200)
 
     -- Set the background texture to the image
     local bgTexture = frame:CreateTexture(nil, "BACKGROUND")
@@ -2377,7 +2614,7 @@ local function CreateClickableName(parent, playerName, x, y)
 end
 
 function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMissedGame)
-    local nestedTable = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+	local nestedTable = CreateFrame("Frame", "NestedTable_" .. (parent:GetName() or "unknown"), parent, "BackdropTemplate")
 
     -- Determine the match type using the correct function
     local matchType = IdentifyPvPMatchType()
@@ -2391,10 +2628,12 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     -- Calculate the size of the nested table
     local rowHeight = 15  -- Adjust this value based on your actual row height
     local tableHeight = playersPerTeam * rowHeight + 30  -- Adjust for padding or additional spacing
-    
-    nestedTable:SetSize(1920, tableHeight)
-    nestedTable:SetPoint("TOPLEFT", parent, "BOTTOMLEFT", 0, -25)
-    nestedTable:Hide()
+	local parentWidth  = RatedStatsConfig:GetWidth()
+
+    nestedTable:SetSize(parentWidth * 0.96, tableHeight)
+	nestedTable:SetFrameStrata("HIGH")
+	nestedTable:SetFrameLevel(22)
+	nestedTable:Hide()
 
     local headers = {
         "Character", "Faction", "Race", "Class", "Spec", "Role", "CR", "KBs", "HKs", "Damage", "Healing", "Rating Chg",
@@ -2569,6 +2808,8 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 text:SetJustifyH("CENTER")
                 text:SetPoint("TOPLEFT", nestedTable, "TOPLEFT", columnOffsets[i], rowOffset)
                 text:SetText("-")
+				text:SetFrameStrata("HIGH")
+				text:SetFrameLevel(22)
             end
         end
     end
@@ -2583,6 +2824,8 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 text:SetJustifyH("CENTER")
                 text:SetPoint("TOPLEFT", nestedTable, "TOPLEFT", columnOffsets[i + 12], rowOffset)
                 text:SetText("-")
+				text:SetFrameStrata("HIGH")
+				text:SetFrameLevel(22)
             end
         end
     end
@@ -2593,60 +2836,47 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
 
 end
 
-function ToggleNestedTable(nestedTable, content, matchFrames, headerTexts)
-    if nestedTable:IsShown() then
-        nestedTable:Hide()
-    else
-        nestedTable:Show()
-    end
-    AdjustSiblingFrames(content, matchFrames, headerTexts)
-end
-
-function AdjustSiblingFrames(content, matchFrames, headerTexts)
-    local previousFrame = headerTexts[1] -- Start with the first header as reference
-    for _, matchFrame in ipairs(matchFrames) do
-        local nestedTable = matchFrame.nestedTable
-        matchFrame:ClearAllPoints()
-        matchFrame:SetPoint("TOPLEFT", previousFrame, "BOTTOMLEFT", 0, -5)
-        previousFrame = matchFrame
-        if nestedTable:IsShown() then
-            nestedTable:ClearAllPoints()
-            nestedTable:SetPoint("TOPLEFT", matchFrame, "BOTTOMLEFT", 0, -5)
-            previousFrame = nestedTable
-        end
-    end
-end
-
 -- Define the DisplayCurrentCRMMR function
 function DisplayCurrentCRMMR(contentFrame, categoryID)
     -- Retrieve CR and MMR using GetPersonalRatedInfo for the specified categoryID
-    local currentCR = select(1, GetPersonalRatedInfo(categoryID)) or "N/A"
-	local currentMMR = 0
+    local currentCR = "-"
+	local currentMMR = "-"
 	
     local categoryMappings = {
-        SoloShuffle = { id = 7, historyTable = "SoloShuffleHistory", displayName = "SoloShuffle" },
-        ["2v2"] = { id = 1, historyTable = "v2History", displayName = "2v2" },
-        ["3v3"] = { id = 2, historyTable = "v3History", displayName = "3v3" },
-        RBG = { id = 4, historyTable = "RBGHistory", displayName = "RBG" },
-        SoloRBG = { id = 9, historyTable = "SoloRBGHistory", displayName = "SoloRBG" }
-    }	
-
-	-- Find the correct history table name from categoryID
-	local selectedHistoryTable
-	for _, info in pairs(categoryMappings) do
-		if info.id == categoryID then
-			selectedHistoryTable = Database[info.historyTable]
-			break
-		end
-	end
+        [1] = "v2History",
+        [2] = "v3History",
+        [4] = "RBGHistory",
+        [7] = "SoloShuffleHistory",
+        [9] = "SoloRBGHistory"
+    }
 	
-	-- Look up this player's most recent postmatchMMR
-	if selectedHistoryTable and #selectedHistoryTable > 0 then
-		local lastEntry = selectedHistoryTable[#selectedHistoryTable]
-		if lastEntry and lastEntry.playerStats and lastEntry.playerStats[playerName] then
-			currentMMR = lastEntry.playerStats[playerName].postmatchMMR or "N/A"
-		end
-	end
+    local historyTable = Database[categoryMappings[categoryID]]
+    local highestMatchID = nil
+    local highestMatchEntry = nil
+
+    -- 1) First, find the entry with the highest matchID
+    if historyTable and #historyTable > 0 then
+        for _, entry in ipairs(historyTable) do
+            if entry.matchID and (not highestMatchID or entry.matchID > highestMatchID) then
+                highestMatchID = entry.matchID
+                highestMatchEntry = entry
+            end
+        end
+    end
+
+    -- 2) If we found an entry with the highest matchID, get the stats from that match
+    if highestMatchEntry and highestMatchEntry.playerStats then
+        for _, stats in ipairs(highestMatchEntry.playerStats) do
+            if stats.name == playerName and stats.postmatchMMR and stats.postmatchMMR > 0 then
+                currentCR = stats.newrating or "0"
+                currentMMR = stats.postmatchMMR or "0"
+                break
+            end
+        end
+    end
+    
+    -- Display or return currentCR/currentMMR as desired
+    -- e.g., update your contentFrame here
    
     -- Save these values to the Database
     if categoryID == 7 then
@@ -2686,7 +2916,7 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
 		contentFrame.instructionLabel:SetPoint("TOP", contentFrame, "TOP", 0, -10)
 		contentFrame.instructionLabel:SetJustifyH("RIGHT")
 	end
-	contentFrame.instructionLabel:SetText("Click on rows to expand.\nClick on player name to copy.\nShift+MouseWheel to scroll left and right.")
+	contentFrame.instructionLabel:SetText("Click on rows to expand.    \nClick on player name to copy.")
     
     -- Return the last label for potential further positioning
     return contentFrame.mmrLabel
@@ -2697,138 +2927,248 @@ end
 ----------------------------------
 
 function Config:CreateMenu()
-    -- Check if UIConfig already exists and return it if so
-    if UIConfig then
-        return UIConfig
+    if UIConfig then return UIConfig end
+
+    local scrollFrames  = {}
+    local scrollContents = {}
+    local contentFrames  = {}
+    
+    local parentWidth  = UIParent:GetWidth()
+    local parentHeight = UIParent:GetHeight()
+
+    UIConfig = CreateFrame("Frame", "RatedStatsConfig", UIParent, "PortraitFrameTemplate")
+    UIConfig:SetSize(parentWidth * 0.9, parentHeight * 0.8)
+    UIConfig:SetPoint("CENTER", UIParent, "CENTER", 0, 75)
+    UIConfig:SetResizable(true)
+    UIConfig:SetMovable(true)
+    UIConfig:EnableMouse(true)
+    UIConfig:RegisterForDrag("LeftButton")
+    UIConfig:SetScript("OnDragStart", UIConfig.StartMoving)
+    UIConfig:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
+    UIConfig:SetFrameStrata("HIGH")
+    UIConfig:SetFrameLevel(20)
+    UIConfig:SetClampedToScreen(true)
+    UIConfig:SetTitle("Rated Stats")
+
+    -- Background
+    local faction = UnitFactionGroup("player")
+    local bgPath = (faction == "Alliance")
+       and "Interface\\AddOns\\RatedStats\\images\\alliancebackground"
+        or "Interface\\AddOns\\RatedStats\\images\\hordebackground"
+
+    UIConfig.BG = UIConfig:CreateTexture(nil, "BACKGROUND")
+    UIConfig.BG:SetAllPoints()
+    UIConfig.BG:SetTexture(bgPath)
+    UIConfig.BG:SetAlpha(0.4)
+
+    -- Portrait
+    local portrait = UIConfig.PortraitContainer:CreateTexture(nil, "ARTWORK")
+    portrait:SetTexture("Interface\\AddOns\\RatedStats\\RatedStats")
+    portrait:SetSize(50, 50)
+    portrait:SetPoint("CENTER", UIConfig.PortraitContainer, "BOTTOMRIGHT", 23, -23)
+    portrait:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    portrait:SetDrawLayer("ARTWORK", 1)
+    UIConfig.portrait = portrait
+
+    -- Page Buttons (if you need them later)
+    UIConfig.PrevPage = CreateFrame("Button", nil, UIConfig, "UIPanelButtonTemplate")
+    UIConfig.PrevPage:SetSize(28, 28)
+    UIConfig.PrevPage:SetText("<")
+    UIConfig.PrevPage:SetPoint("BOTTOMRIGHT", UIConfig, "BOTTOMRIGHT", -50, 20)
+    UIConfig.PrevPage:Hide()
+
+    UIConfig.NextPage = CreateFrame("Button", nil, UIConfig, "UIPanelButtonTemplate")
+    UIConfig.NextPage:SetSize(28, 28)
+    UIConfig.NextPage:SetText(">")
+    UIConfig.NextPage:SetPoint("BOTTOMRIGHT", UIConfig, "BOTTOMRIGHT", -20, 20)
+    UIConfig.NextPage:Hide()
+
+    -- Example extra UI
+    Config:CreateSearchBox(UIConfig)
+    Config:CreateFilterMenu(UIConfig)
+
+    -- Create 5 frames + scrollFrames for each tab
+    for i = 1, 5 do
+        local frame = CreateFrame("Frame", nil, UIConfig)
+        frame:SetPoint("TOPLEFT", UIConfig, "TOPLEFT", 20, -100)
+        frame:SetPoint("BOTTOMRIGHT", UIConfig, "BOTTOMRIGHT", -20, 40)
+        frame:Hide()
+        contentFrames[i] = frame
+
+		-- Create scroll frame inside the content frame
+		local scrollFrame = CreateFrame("ScrollFrame", "RatedStatsScrollFrame"..i, frame, "UIPanelScrollFrameTemplate")
+		-- Anchor the scrollFrame statically below the header and give it a fixed height
+---		scrollFrame:SetPoint("TOPLEFT", scrollContent.header, "BOTTOMLEFT", -5, -5)
+		scrollFrame:SetWidth(frame:GetWidth())
+		scrollFrame:SetHeight(350) -- 👈 Fixed height (you can change 300 to your preferred value)
+		scrollFrame:SetClipsChildren(true)
+		scrollFrame:EnableMouseWheel(true)
+
+        scrollFrame:SetScript("OnMouseWheel", function(self,delta)
+            local scrollbar = self.ScrollBar or (self:GetName().."ScrollBar")
+            if not scrollbar then return end
+            local step = scrollbar:GetValueStep() or 20
+            if delta < 0 then
+                scrollbar:SetValue(scrollbar:GetValue() + step)
+            else
+                scrollbar:SetValue(scrollbar:GetValue() - step)
+            end
+        end)
+
+        local content = CreateFrame("Frame", "RatedStatsScrollChild"..i, scrollFrame)
+		content:SetPoint("TOPLEFT", scrollFrame, "TOPLEFT", 0, 0)
+		content:SetSize(scrollFrame:GetWidth() - 20, 0) -- optional if overridden later
+		scrollFrame:SetScrollChild(content)
+
+        local scrollbar = scrollFrame.ScrollBar
+        if scrollbar then
+			scrollbar:ClearAllPoints()
+            scrollbar:SetPoint("TOPRIGHT", scrollFrame, "TOPRIGHT", 0, -20)
+            scrollbar:SetPoint("BOTTOMRIGHT",scrollFrame,"BOTTOMRIGHT",-2,16)
+            scrollbar:Show()
+        end
+
+		local rowsAnchor = CreateFrame("Frame", "RatedStatsRowsAnchor"..i, content)
+		rowsAnchor:SetPoint("TOPLEFT", content, "TOPLEFT", 0, 0)
+		rowsAnchor:SetSize(content:GetWidth() * 0.96, 1)  -- Height is not important
+		content.rowsAnchor = rowsAnchor
+
+        scrollFrames[i]   = scrollFrame
+        scrollContents[i] = content
     end
-	
-    local offsetY = 200
-	local parentWidth = UIParent:GetWidth()
-	local parentHeight = UIParent:GetHeight()
 
-    UIConfig = CreateFrame("Frame", "RatedStatsConfig", UIParent, "UIPanelDialogTemplate")
-	UIConfig:SetSize(parentWidth * 0.9, parentHeight * 0.8)
-    UIConfig:SetPoint("CENTER", UIParent, "CENTER", 0, offsetY)
-	UIConfig:SetResizable(true)
-	-- Bring RatedStats to front of spell buttons
-	UIConfig:SetFrameStrata("DIALOG")
-	UIConfig:SetFrameLevel(20)
-	UIConfig:SetClampedToScreen(true) -- so it doesn’t get dragged or resized offscreen
-	
-	-- Enable dragging of the frame
-	UIConfig:SetMovable(true)
-	UIConfig:EnableMouse(true)
-	UIConfig:RegisterForDrag("LeftButton")
-	UIConfig:SetScript("OnDragStart", UIConfig.StartMoving)
-	UIConfig:SetScript("OnDragStop", function(self)
-		self:StopMovingOrSizing()
-		-- Optionally save the new position here
-	end)
-	
-	-- Create a resize button (the "grip") in the bottom-right corner
-	local resizeGrip = CreateFrame("Button", nil, UIConfig)
-	resizeGrip:SetPoint("BOTTOMRIGHT", UIConfig, "BOTTOMRIGHT", -6, 7)  -- Adjust offsets as needed
-	resizeGrip:SetSize(16, 16)
-	
-	-- Give it a texture that looks like a resizer (the default "SizeGrabber" is a good choice)
-	local resizeTexture = resizeGrip:CreateTexture(nil, "BACKGROUND")
-	resizeTexture:SetAllPoints()
-	resizeTexture:SetTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
-	
-	-- Start resizing on left-click
-	resizeGrip:SetScript("OnMouseDown", function(self, button)
-		if button == "LeftButton" then
-			UIConfig:StartSizing("BOTTOMRIGHT")
-		end
-	end)
-	
-	-- Stop resizing on mouse up
-	resizeGrip:SetScript("OnMouseUp", function(self, button)
-		UIConfig:StopMovingOrSizing()
-		-- If you want to do anything after the size changes (e.g. re-anchor stuff), do it here.
-	end)
+    -- Tab buttons
+    local tabNames = { "Solo Shuffle", "2v2", "3v3", "RBG", "Solo RBG" }
+    local tabs = {}
+    for i, name in ipairs(tabNames) do
+        local tab = CreateFrame("Button","RatedStatsTab"..i,UIConfig,"PanelTabButtonTemplate")
+        tab:SetID(i)
+        tab:SetText(name)
+        PanelTemplates_TabResize(tab,0)
 
-    UIConfig.Title:ClearAllPoints()
-    UIConfig.Title:SetFontObject("GameFontHighlight")
-    UIConfig.Title:SetPoint("LEFT", RatedStatsConfigTitleBG, "LEFT", 8, 1)
-    UIConfig.Title:SetText("Rated Stats Ratings")
-
-    -- Create Scroll Frame with vertical scroll
-    UIConfig.ScrollFrame = CreateFrame("ScrollFrame", nil, UIConfig, "UIPanelScrollFrameTemplate")
-    UIConfig.ScrollFrame:SetPoint("TOPLEFT", RatedStatsConfigDialogBG, "TOPLEFT", 4, -8)
-    UIConfig.ScrollFrame:SetPoint("BOTTOMRIGHT", RatedStatsConfigDialogBG, "BOTTOMRIGHT", -3, 24) -- Leave space for horizontal scroll
-    UIConfig.ScrollFrame:SetClipsChildren(true)
-
-    -- Content Frame within the Scroll Frame for scrollable content
-    local content = CreateFrame("Frame", nil, UIConfig.ScrollFrame)
-    content:SetSize(1600, 2000) -- Adjust size as needed
-    UIConfig.ScrollFrame:SetScrollChild(content)
-
-    -- Positioning Vertical Scroll Bar
-    UIConfig.ScrollFrame.ScrollBar:ClearAllPoints()
-    UIConfig.ScrollFrame.ScrollBar:SetPoint("TOPRIGHT", UIConfig.ScrollFrame, "TOPRIGHT", 0, -18)
-    UIConfig.ScrollFrame.ScrollBar:SetPoint("BOTTOMRIGHT", UIConfig.ScrollFrame, "BOTTOMRIGHT", -7, 18)
-
-    -- Horizontal Scroll Bar at bottom
-    local horizontalScrollBar = CreateFrame("Slider", nil, UIConfig, "UIPanelScrollBarTemplate")
-    horizontalScrollBar:SetOrientation("HORIZONTAL")
-    horizontalScrollBar:SetPoint("BOTTOMLEFT", UIConfig.ScrollFrame, "BOTTOMLEFT", 16, 0)
-    horizontalScrollBar:SetPoint("BOTTOMRIGHT", UIConfig.ScrollFrame, "BOTTOMRIGHT", -16, 0)
-    horizontalScrollBar:SetMinMaxValues(0, content:GetWidth() - UIConfig.ScrollFrame:GetWidth())
-    horizontalScrollBar:SetValueStep(1)
-    horizontalScrollBar:SetValue(0)
-	horizontalScrollBar:Show()  -- Ensure it is shown
-
-    -- Hook horizontal scroll to ScrollFrame
-    horizontalScrollBar:SetScript("OnValueChanged", function(self, value)
-        UIConfig.ScrollFrame:SetHorizontalScroll(value)
-    end)
-
-    -- Enable mouse wheel scrolling for both directions
-    UIConfig.ScrollFrame:EnableMouseWheel(true)
-    UIConfig.ScrollFrame:SetScript("OnMouseWheel", function(_, delta)
-        if IsShiftKeyDown() then
-            local currentValue = horizontalScrollBar:GetValue()
-            horizontalScrollBar:SetValue(currentValue - delta * 20)
+        if i == 1 then
+            tab:SetPoint("TOPLEFT", UIConfig, "BOTTOMLEFT", 10, 2)
         else
-            local currentValue = UIConfig.ScrollFrame.ScrollBar:GetValue()
-            UIConfig.ScrollFrame.ScrollBar:SetValue(currentValue - delta * 20)
+            tab:SetPoint("LEFT", tabs[i - 1], "RIGHT", -8, 0)
+        end
+
+        -- OnClick just shows/hides the frames
+        tab:SetScript("OnClick", function(self)
+            PanelTemplates_SetTab(UIConfig,self:GetID())
+            for j, f in ipairs(contentFrames) do
+               f:SetShown(j == self:GetID())
+            end
+        end)
+
+        tab:Show()
+        tabs[i] = tab
+    end
+    PanelTemplates_SetNumTabs(UIConfig, #tabs)
+    PanelTemplates_SetTab(UIConfig, 1)
+    contentFrames[1]:Show()
+
+    -- A local function that calls your revised DisplayHistory (shown below)
+    local function RefreshDisplay()
+        -- For each bracket
+        local mmrLabel1 = DisplayCurrentCRMMR(contentFrames[1],7)
+        local headers1, frames1 = RSTATS:DisplayHistory(scrollContents[1], Database.SoloShuffleHistory, mmrLabel1, 1)
+        AdjustContentHeight(scrollContents[1])   -- simplified call
+
+        local mmrLabel2 = DisplayCurrentCRMMR(contentFrames[2],1)
+        local headers2, frames2 = RSTATS:DisplayHistory(scrollContents[2], Database.v2History, mmrLabel2, 2)
+        AdjustContentHeight(scrollContents[2])
+
+        local mmrLabel3 = DisplayCurrentCRMMR(contentFrames[3],2)
+        local headers3, frames3 = RSTATS:DisplayHistory(scrollContents[3], Database.v3History, mmrLabel3, 3)
+        AdjustContentHeight(scrollContents[3])
+
+        local mmrLabel4 = DisplayCurrentCRMMR(contentFrames[4],4)
+        local headers4, frames4 = RSTATS:DisplayHistory(scrollContents[4], Database.RBGHistory, mmrLabel4, 4)
+        AdjustContentHeight(scrollContents[4])
+
+        local mmrLabel5 = DisplayCurrentCRMMR(contentFrames[5],9)
+        local headers5, frames5 = RSTATS:DisplayHistory(scrollContents[5], Database.SoloRBGHistory, mmrLabel5, 5)
+        AdjustContentHeight(scrollContents[5])
+
+        UIConfig.PrevPage:Show()
+        UIConfig.NextPage:Show()
+    end
+
+    -- Optional ToggleViewButton
+    UIConfig.ToggleViewButton = CreateFrame("Button",nil,UIConfig)
+    UIConfig.ToggleViewButton:SetSize(24,24)
+    UIConfig.ToggleViewButton:SetPoint("RIGHT",UIConfig.CloseButton,"LEFT",0,0)
+    UIConfig.ToggleViewButton:SetFrameStrata("DIALOG")
+    UIConfig.ToggleViewButton:SetFrameLevel(UIConfig.CloseButton:GetFrameLevel())
+    UIConfig.ToggleViewButton:SetNormalAtlas("RedButton-Condense")
+    UIConfig.ToggleViewButton:SetPushedAtlas("RedButton-Condense-Pressed")
+    UIConfig.ToggleViewButton:SetDisabledAtlas("RedButton-Condense-Disabled")
+    UIConfig.ToggleViewButton:SetHighlightAtlas("RedButton-Highlight")
+
+    local tex = UIConfig.ToggleViewButton:GetNormalTexture()
+    if tex then
+        tex:SetDrawLayer("OVERLAY",7)
+    end
+    UIConfig.ToggleViewButton:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self,"ANCHOR_RIGHT")
+        GameTooltip:SetText("Toggle View",1,1,1)
+        GameTooltip:AddLine("Switch between full and compact layout.", 0.8,0.8,0.8)
+        GameTooltip:Show()
+    end)
+    UIConfig.ToggleViewButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    UIConfig.ToggleViewButton:SetScript("OnClick", function()
+        UIConfig.isCompact = not UIConfig.isCompact
+        if UIConfig.isCompact then
+            UIConfig:SetWidth(parentWidth * 0.5)
+            UIConfig.ToggleViewButton:SetNormalAtlas("RedButton-Expand")
+        else
+            UIConfig:SetWidth(parentWidth * 0.9)
+            UIConfig.ToggleViewButton:SetNormalAtlas("RedButton-Condense")
+        end
+        for _, f in ipairs(contentFrames) do
+            f:SetWidth(UIConfig:GetWidth()-40)
+        end
+        for _, c in ipairs(scrollContents) do
+            c:SetWidth(UIConfig:GetWidth()-40)
         end
     end)
 
-    -- Define SetTabs function and positioning for content frames
-    local content1, content2, content3, content4, content5 = SetTabs(UIConfig, 5, "Solo Shuffle", "2v2", "3v3", "RBG", "Solo RBG")
-    local function AdjustContentPositioning(content)
-        content:SetPoint("TOPLEFT", UIConfig.ScrollFrame, "TOPLEFT", 10, -40)
-        content:SetPoint("BOTTOMRIGHT", UIConfig.ScrollFrame, "BOTTOMRIGHT", -10, 10)
-    end
-
-    -- Position content frames
-    AdjustContentPositioning(content1)
-    AdjustContentPositioning(content2)
-    AdjustContentPositioning(content3)
-    AdjustContentPositioning(content4)
-    AdjustContentPositioning(content5)
-
-    local function RefreshDisplay()
-        local mmrLabel1 = DisplayCurrentCRMMR(content1, 7)
-        local headerTexts1, matchFrames1 = DisplayHistory(content1, Database.SoloShuffleHistory, mmrLabel1, 1)
-        local mmrLabel2 = DisplayCurrentCRMMR(content2, 1)
-        local headerTexts2, matchFrames2 = DisplayHistory(content2, Database.v2History, mmrLabel2, 2)
-        local mmrLabel3 = DisplayCurrentCRMMR(content3, 2)
-        local headerTexts3, matchFrames3 = DisplayHistory(content3, Database.v3History, mmrLabel3, 3)
-        local mmrLabel4 = DisplayCurrentCRMMR(content4, 4)
-        local headerTexts4, matchFrames4 = DisplayHistory(content4, Database.RBGHistory, mmrLabel4, 4)
-        local mmrLabel5 = DisplayCurrentCRMMR(content5, 9)
-        local headerTexts5, matchFrames5 = DisplayHistory(content5, Database.SoloRBGHistory, mmrLabel5, 5)
-    end
-
-    -- Refresh UI when the frame is shown
-    UIConfig:SetScript("OnShow", function()
-        RefreshDisplay()
-    end)
-
     UIConfig:Hide()
+
+    -- Expose to your namespace if needed
+    RSTATS.UIConfig       = UIConfig
+    RSTATS.ContentFrames  = contentFrames
+    RSTATS.ScrollFrames   = scrollFrames
+    RSTATS.ScrollContents = scrollContents
+	
+	-- In Config:CreateMenu, after all frames and tabs are set up:
+
+	local DEFAULT_TAB_ID = 1
+	for i, name in ipairs(tabNames) do
+		local frame = contentFrames[i]
+		local content = scrollContents[i]
+	
+		frame:SetScript("OnShow", function()
+			if not content._initialized then
+				content._initialized = true
+				C_Timer.After(0.05, function()
+					FilterAndSearchMatches(RatedStatsSearchBox and RatedStatsSearchBox:GetText() or "")
+				end)
+			end
+		end)
+	end
+	
+	PanelTemplates_SetTab(UIConfig, DEFAULT_TAB_ID)
+	contentFrames[DEFAULT_TAB_ID]:Show()
+	ACTIVE_TAB_ID = DEFAULT_TAB_ID
+	
+	-- Run filter on first visible tab
+	scrollContents[DEFAULT_TAB_ID]._initialized = true
+	C_Timer.After(0.05, function()
+		FilterAndSearchMatches("")
+	end)
+
     return UIConfig
 end
 
