@@ -16,8 +16,6 @@ end
 
 SLASH_RATEDSTATSDEBUG1 = "/rsdebug"
 SlashCmdList["RATEDSTATSDEBUG"] = function()
-    local playerName = UnitName("player") .. "-" .. GetRealmName()
-
     local categoryMappings = {
         { id = 7, name = "SoloShuffle", tableKey = "SoloShuffleHistory" },
         { id = 1, name = "2v2", tableKey = "v2History" },
@@ -29,31 +27,21 @@ SlashCmdList["RATEDSTATSDEBUG"] = function()
     for _, info in ipairs(categoryMappings) do
         local historyTable = Database[info.tableKey]
 
-        local foundStats = nil
-
         if historyTable and #historyTable > 0 then
             print("Total entries:", #historyTable)
-            print("Player Name:", playerName)
+            print("Category:", info.name)
 
             for _, entry in ipairs(historyTable) do
                 for _, stats in ipairs(entry.playerStats or {}) do
-                    if stats.name == playerName and stats.postmatchMMR and stats.postmatchMMR > 0 then
-                        foundStats = stats
-                        break
+                    if stats.loadout and stats.name then
+                        print("Player Name:", stats.name)
+                        print("  Loadout: " .. stats.loadout)
+                        print("  PvP Talent 1: " .. (stats.pvptalent1 or "N/A"))
+                        print("  PvP Talent 2: " .. (stats.pvptalent2 or "N/A"))
+                        print("  PvP Talent 3: " .. (stats.pvptalent3 or "N/A"))
+                        print(" ")
                     end
                 end
-                if foundStats then break end
-            end
-
-            if foundStats then
-                print("✅ Found latest valid match with player data")
-                print("postmatchMMR:", foundStats.postmatchMMR or "nil")
-                print("cr:", foundStats.cr or "nil")
-                print("damage:", foundStats.damage or "nil")
-                print("healing:", foundStats.healing or "nil")
-                print("ratingChange:", foundStats.ratingChange or "nil")
-            else
-                print("❌ No valid stats found for this player in any entry.")
             end
         else
             print("No history data for " .. info.name)
@@ -61,11 +49,17 @@ SlashCmdList["RATEDSTATSDEBUG"] = function()
     end
 end
 
+
 --------------------------------------
 -- Namespaces
 --------------------------------------
 local _, RSTATS = ... -- The first line sets up the local variables `_` and `RSTATS`, where `_` is typically used to ignore values, and `RSTATS` is the namespace for the addon
 local playerName = UnitName("player") .. "-" .. GetRealmName()
+-- Get the region dynamically
+local regionName = GetCurrentRegionName()  -- This will return the region as a string (e.g., "US", "EU", "KR")
+
+-- Combine the player name with the region dynamically
+local playerNameWithRegion = playerName .. "-" .. regionName
 
 RSTATS.Database = RSTATS_Database or {} -- adds Database table to RSTATS namespace
 RSTATS.Database[playerName] = RSTATS.Database[playerName] or {} -- Ensure the character-specific table exists within RSTATS_Database
@@ -81,6 +75,9 @@ local scrollContents = {}
 
 Database.combatLogEvents = Database.combatLogEvents or {}
 combatLogEvents = Database.combatLogEvents
+
+local LibDD = LibStub("LibUIDropDownMenu-4.0")
+local c = function(text) return RSTATS:ColorText(text) end
 
 -- Define a function to print table contents
 local function PrintTable(tbl, name)
@@ -143,7 +140,36 @@ local rowSpacing = {
 function Config:Toggle()
 	Config:CreateMenu()
     local menu = UIConfig or Config:CreateMenu();
-    menu:SetShown(not menu:IsShown());
+    local wasHidden = not menu:IsShown()
+
+    menu:SetShown(wasHidden)
+
+    -- ✅ If we're showing the menu now, check for historyTable growth
+    if wasHidden then
+        local tabID = PanelTemplates_GetSelectedTab(RSTATS.UIConfig)
+        local data = ({
+            [1] = Database.SoloShuffleHistory,
+            [2] = Database.v2History,
+            [3] = Database.v3History,
+            [4] = Database.RBGHistory,
+            [5] = Database.SoloRBGHistory,
+        })[tabID]
+
+        if data then
+            RSTATS.__LastHistoryCount = RSTATS.__LastHistoryCount or {}
+            local prev = RSTATS.__LastHistoryCount[tabID] or 0
+            local current = #data
+
+            if current > prev then
+                -- ✅ History grew, reset filters and re-run display
+                RatedStatsFilters[tabID] = {}
+                RSTATS.__LastHistoryCount[tabID] = current
+                C_Timer.After(0.1, function()
+                    FilterAndSearchMatches(RatedStatsSearchBox:GetText())
+                end)
+            end
+        end
+    end
 end
 
 -- Removing Config:GetThemeColor causes a lua error, needs investigating before removing
@@ -627,8 +653,6 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
 		duration = endTime - startTime - totalPreviousDuration
 	end
 
-
-	
 	-- Delay storing played games by 5 seconds to give the API time to update
 	C_Timer.After(5, function()
 		local function GetPlayedGames(categoryID)
@@ -705,6 +729,9 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
 
     AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, allianceTeamScore, hordeTeamScore, roundsWon, categoryName, categoryID, damp)
 
+	-- Call CheckPlayerTalents to process talents for new matches
+---	CheckPlayerTalents(playerName, true)  -- `true` indicates this is a new game and should check talents
+
     SaveData() -- Updated to call SaveData function
 end
 
@@ -766,30 +793,49 @@ function RefreshDataEvent(self, event, ...)
 			end
 		end)
 				
-    elseif event == "PVP_MATCH_ACTIVE" then
-        C_Timer.After(1, function()
-            if C_PvP.IsRatedSoloShuffle() then
-                self.isSoloShuffle = true
-					if self.isSoloShuffle and roundIndex and not playerDeathSeen then		
-						local cr, mmr = GetCRandMMR(7)
-						local historyTable = Database.SoloShuffleHistory
-						Database.CurrentCRforSoloShuffle = cr
-						Database.CurrentMMRforSoloShuffle = mmr
-						GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, "SoloShuffle", 7, startTime)
-					
-						if roundIndex < 6 then roundIndex = roundIndex + 1 end
-					end
+	elseif event == "PVP_MATCH_ACTIVE" then
+		C_Timer.After(1, function()
+			if C_PvP.IsRatedSoloShuffle() then
+				self.isSoloShuffle = true
+				if self.isSoloShuffle and roundIndex and not playerDeathSeen then		
+					local cr, mmr = GetCRandMMR(7)
+					local historyTable = Database.SoloShuffleHistory
+					Database.CurrentCRforSoloShuffle = cr
+					Database.CurrentMMRforSoloShuffle = mmr
+					GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, "SoloShuffle", 7, startTime)
 
-                previousRoundsWon = roundsWon or 0
-                if roundIndex == nil then
-                    roundIndex = 1
-                end
-                lastLoggedRound = {}
-                playerDeathSeen = false
-            else
-                self.isSoloShuffle = nil
-            end
-        end)
+					TalentTracker:Start()
+	
+					if roundIndex < 6 then roundIndex = roundIndex + 1 end
+				end
+	
+				previousRoundsWon = roundsWon or 0
+				if roundIndex == nil then
+					roundIndex = 1
+				end
+				lastLoggedRound = {}
+				playerDeathSeen = false
+	
+			else
+				self.isSoloShuffle = nil
+	
+				-- ✅ Start talent scan for other brackets (2v2, 3v3, RBG, etc.)
+				local matchBracket = C_PvP.GetActiveMatchBracket()
+				local tableMap = {
+					[0] = "v2History",
+					[1] = "v3History",
+					[4] = "RBGHistory",
+					[9] = "SoloRBGHistory",
+				}
+				local historyKey = tableMap[matchBracket]
+				local historyTable = historyKey and Database[historyKey]
+	
+				TalentTracker:Start()
+				else
+					print("|cffff8888[TalentTracker]|r Could not find playerStats to scan at match start.")
+				end
+			end
+		end)
 
     elseif self.isSoloShuffle and (event == "UNIT_HEALTH" or event == "UNIT_AURA" or event == "COMBAT_LOG_EVENT_UNFILTERED") then
 
@@ -819,7 +865,14 @@ function RefreshDataEvent(self, event, ...)
             Database.CurrentCRforSoloShuffle = cr
             Database.CurrentMMRforSoloShuffle = mmr
             GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, "SoloShuffle", 7, startTime)
-
+			
+			-- 🔁 Stop any previous scan
+			if TalentTracker then
+				TalentTracker:Stop()
+			end
+		
+			TalentTracker:Start()
+			
             if roundIndex < 6 then roundIndex = roundIndex + 1 end
         end
 
@@ -829,7 +882,7 @@ function RefreshDataEvent(self, event, ...)
 			if not (unit == "player" or unit:match("^party[1-3]$") or unit:match("^arena[1-3]$")) then return end
 		
 			if UnitIsPlayer(unit) and UnitIsDeadOrGhost(unit) then
-				C_Timer.After(0.05, function()
+				C_Timer.After(0.05, function() -- set to 0.05 as testing showed thats how fast it can be seen but still some slip through
 					local isFeign = IsFeignDeath(unit)
 		
 					local unitName = UnitName(unit)
@@ -859,6 +912,10 @@ function RefreshDataEvent(self, event, ...)
 
     elseif event == "PVP_MATCH_COMPLETE" then
         C_Timer.After(1, function()
+			if TalentTracker then
+				TalentTracker:Stop()
+			end
+
             if self.isSoloShuffle then
                 if roundIndex and not playerDeathSeen then
                     local cr, mmr = GetCRandMMR(7)
@@ -883,12 +940,16 @@ function RefreshDataEvent(self, event, ...)
                     Database.CurrentCRfor2v2 = cr
                     Database.CurrentMMRfor2v2 = mmr
                     GetPlayerStatsEndOfMatch(cr, mmr, historyTable, nil, "2v2", 1)
+					TalentTracker:Start()
+
                 elseif matchBracket == 1 then
                     local cr, mmr = GetCRandMMR(2)
                     local historyTable = Database.v3History
                     Database.CurrentCRfor3v3 = cr
                     Database.CurrentMMRfor3v3 = mmr
                     GetPlayerStatsEndOfMatch(cr, mmr, historyTable, nil, "3v3", 2)
+					TalentTracker:Start(()
+
                 end
             elseif C_PvP.IsRatedBattleground() then
                 local cr, mmr = GetCRandMMR(4)
@@ -896,12 +957,20 @@ function RefreshDataEvent(self, event, ...)
                 Database.CurrentCRforRBG = cr
                 Database.CurrentMMRforRBG = mmr
                 GetPlayerStatsEndOfMatch(cr, mmr, historyTable, nil, "RBG", 4)
+				if historyTable[1] and historyTable[1].playerStats then
+					TalentTracker:Start()
+				end
+
             elseif C_PvP.IsSoloRBG() then
                 local cr, mmr = GetCRandMMR(9)
                 local historyTable = Database.SoloRBGHistory
                 Database.CurrentCRforSoloRBG = cr
                 Database.CurrentMMRforSoloRBG = mmr
                 GetPlayerStatsEndOfMatch(cr, mmr, historyTable, nil, "SoloRBG", 9)
+				if historyTable[1] and historyTable[1].playerStats then
+					TalentTracker:Start()
+				end
+
             end
         end)
     end
@@ -1731,10 +1800,20 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             local newrating = rating + ratingChange
             local translatedFaction = (faction == 0 and "Horde" or "Alliance")
 
+			-- Fetch BattleTag for the player using GUID
+            local bnet = ""
+            if guid then
+                local accountInfo = C_BattleNet.GetAccountInfoByGUID(guid)
+                if accountInfo then
+                    bnet = accountInfo.battleTag or ""  -- Get BattleTag
+                end
+            end
+
             -- Create player data entry
             local playerData = {
                 name = name,
                 guid = guid,
+				bnet = bnet,
                 faction = translatedFaction,
                 race = raceName,
                 evaluatedrace = remappedRace,
@@ -2058,8 +2137,58 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                 end
             end
     
+			for _, player in ipairs(playerStats or {}) do
+				local pending = PendingPvPTalents[player.name]
+				if pending then
+					for k, v in pairs(pending) do
+						player[k] = v
+					end
+					print("|cff88ff88[RatedStats]|r Injected talents/loadout into:", player.name)
+					PendingPvPTalents[player.name] = nil -- clear once used
+				end
+			end
+	
             -- Save the updated data
             SaveData()
+			-- Re-run filters to refresh the UI with the new match included
+			local tabIDByCategoryID = {
+				[7] = 1, -- Solo Shuffle
+				[1] = 2, -- 2v2
+				[2] = 3, -- 3v3
+				[4] = 4, -- RBG
+				[9] = 5, -- Solo RBG
+			}
+			
+			local tabID = tabIDByCategoryID[categoryID]
+			if tabID and RSTATS.UIConfig and RSTATS.ContentFrames then
+				RatedStatsFilters[tabID] = {} -- ✅ Optional: wipe filters when adding a match
+				RSTATS.__LastHistoryCount = RSTATS.__LastHistoryCount or {}
+				RSTATS.__LastHistoryCount[tabID] = #(Database.SoloShuffleHistory or {})
+			
+				-- ✅ Soft-refresh UI: update the correct tab
+				C_Timer.After(0.1, function()
+					-- Select the correct content frame
+					local content = RSTATS.ScrollContents[tabID]
+					local frame   = RSTATS.ContentFrames[tabID]
+					local mmrID   = ({
+						[1] = 7,
+						[2] = 1,
+						[3] = 2,
+						[4] = 4,
+						[5] = 9
+					})[tabID]
+			
+					if content and frame then
+						-- Clear match frames cache so DisplayHistory redraws fresh
+						content.matchFrames = {}
+						content.matchFrameByID = {}
+			
+						local mmrLabel = DisplayCurrentCRMMR(frame, mmrID)
+						FilterAndSearchMatches(RatedStatsSearchBox:GetText())
+						RSTATS:UpdateStatsView(filterKey, tabID)
+					end
+				end)
+			end
         end)
     end
 end
@@ -2228,6 +2357,14 @@ end
 function ClearStaleMatchFrames(content)
     if not content or not content.matchFrames then return end
 
+		-- 🧹 Clean up lingering placeholder text
+	if content.placeholder then
+		content.placeholder:Hide()
+		content.placeholder:SetText("")
+		content.placeholder:SetParent(nil)
+		content.placeholder = nil
+	end
+
     for _, frame in ipairs(content.matchFrames) do
         if frame.nestedTable then
             if frame.nestedTable.headerTexts then
@@ -2286,9 +2423,16 @@ function SafeTabClick(tab)
             content._initialized = true
         end
 
-        -- Run filter to show results for this tab
+        -- Run filter + stat view update
         C_Timer.After(0.1, function()
+            local filterText = UIDropDownMenu_GetText(RSTATS.Dropdowns[id]) or "Today"
+            local currentFilter = filterText:lower():gsub(" ", "")
+			
+			local content = RSTATS.ScrollContents[id]
+			ClearStaleMatchFrames(content) -- ✅ Prevent ghosting/duplication
+            
             FilterAndSearchMatches(RatedStatsSearchBox and RatedStatsSearchBox:GetText() or "")
+            RSTATS:UpdateStatsView(currentFilter, id)
         end)
     end
 end
@@ -2312,11 +2456,12 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 
     -- 3) Create headers
     local scoreHeaderText = (tabID == 2 or tabID == 3) and "" or "Score"
-    local headers = {
-        "Win/Loss","Map","Match End Time","Duration","","",
-        "Faction","Raid Leader","Avg CR","Team MMR","Damage","Healing","Avg Rat Chg","",
-        scoreHeaderText,"","Faction","Raid Leader","Avg CR","Team MMR","Damage","Healing","Avg Rat Chg"
-    }
+	local c = function(text) return RSTATS:ColorText(text) end
+	local headers = {
+		c("Win/Loss"), c("Map"), c("Match End Time"), c("Duration"), "", "",
+		c("Faction"), c("Raid Leader"), c("Avg CR"), c("Team MMR"), c("Damage"), c("Healing"), c("Avg Rat Chg"), "",
+		c(scoreHeaderText), "", c("Faction"), c("Raid Leader"), c("Avg CR"), c("Team MMR"), c("Damage"), c("Healing"), c("Avg Rat Chg")
+	}
     local columnOffsets = {0,60,150,270,330,350,370,430,580,640,700,760,810,860,900,960,1000,1060,1210,1270,1330,1390,1450,1510}
     local headerFontSize = 10
     local entryFontSize  = 8
@@ -2350,11 +2495,17 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 	content.headerTexts = headerTexts
 	content.header = headerTexts[1]  -- First header acts as anchor reference
 
-    -- If no history, show a placeholder.
+	-- If no history, show a placeholder.
 	if not historyTable or #historyTable == 0 then
-		local placeholder = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+		-- Clean up any old placeholder if it somehow already exists
+		if content.placeholder then
+			content.placeholder:Hide()
+			content.placeholder = nil
+		end
+	
+		local placeholder = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
 		placeholder:SetFont("Fonts\\FRIZQT__.TTF", 10)
-		placeholder:SetPoint("TOPLEFT", headerTexts[1], "BOTTOMLEFT", 0, -20)
+		placeholder:SetPoint("TOPLEFT", content.header, "BOTTOMLEFT", 0, -20)
 	
 		if isFiltered then
 			placeholder:SetText("|cffff5555No data found.|r")
@@ -2366,6 +2517,8 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 		placeholder:SetWidth(900)
 		placeholder:SetHeight(50)
 		placeholder:SetWordWrap(true)
+		content.placeholder = placeholder -- ✅ Store reference for later cleanup
+	
 		return headerTexts, {}
 	end
 
@@ -2545,6 +2698,180 @@ local rowCounts = {
     ["Solo RBG"] = 8,
 }
 
+local function GetPlayerTalentCode()
+	
+end
+
+-- Function to check and process player talents for new games
+local function CheckPlayerTalents(playerName, isNewGame)
+    if isNewGame then
+        -- Check the history table and process talents for new games only
+        local playerStats = Database.SoloShuffleHistory[playerName]
+        
+        if not playerStats.talentCode then
+            -- This is a new game, so retrieve and store the talent code
+            local talentCode = GetPlayerTalentCode(playerName)  -- You need to define this function to get the talent code
+            playerStats.talentCode = talentCode  -- Store the talent code in the player's stats
+        end
+    end
+end
+
+-- Function to send a Battle.net invite using player's GUID or BattleTag
+local function SendBattleNetInvite(playerName)
+    local foundStats = nil
+
+    -- Loop through the history table to find the player entry
+    local categoryMappings = {
+        { id = 7, name = "SoloShuffle", tableKey = "SoloShuffleHistory" },
+        { id = 1, name = "2v2", tableKey = "v2History" },
+        { id = 2, name = "3v3", tableKey = "v3History" },
+        { id = 4, name = "RBG", tableKey = "RBGHistory" },
+        { id = 9, name = "SoloRBG", tableKey = "SoloRBGHistory" },
+    }
+
+    for _, info in ipairs(categoryMappings) do
+        local historyTable = Database[info.tableKey]
+
+        if historyTable and #historyTable > 0 then
+            -- Loop through the entries to find the matching player name and get their GUID
+            for _, entry in ipairs(historyTable) do
+                for _, stats in ipairs(entry.playerStats or {}) do
+                    if stats.name == playerName then
+                        foundStats = stats
+                        break
+                    end
+                end
+                if foundStats then break end
+            end
+
+            if foundStats then
+                -- We found the player and have their GUID or BattleTag
+                local bnet = foundStats.bnet or nil
+                local playerGUID = foundStats.guid
+                local accountInfo = nil
+
+                if bnet ~= nil and bnet ~= "" then
+                    -- If BattleTag exists, use it to send the invite
+                    accountInfo = bnet
+                elseif playerGUID then
+                    -- Otherwise, use GUID to get BattleTag
+                    accountInfo = C_BattleNet.GetAccountInfoByGUID(playerGUID)
+                end
+
+                if accountInfo then
+                    -- Check if the player is already on your friend list
+                    local isFriend = C_FriendList.IsFriend(accountInfo.battleTag)
+
+                    if isFriend then
+                        print("Already Friends!")
+                        -- Replace "Add Friend" button with "Already Friends" text
+                        -- (Add your UI button update code here)
+                    else
+                        -- Send Battle.net invite using BattleTag
+                        C_FriendList.AddFriend(accountInfo.battleTag)
+                        print("Battle.net invite sent to " .. accountInfo.battleTag)
+                    end
+                else
+                    print("No BattleTag found for player with GUID: " .. playerGUID)
+                end
+            else
+                print("No valid stats found for player: " .. playerName)
+            end
+        else
+            print("No history data for " .. info.name)
+        end
+    end
+end
+
+-- Function to create Add Friend and Talents buttons
+local function CreateFriendAndTalentButtons(playerName, parent)
+    -- Define categoryMappings inside the function
+    local categoryMappings = {
+        { id = 7, name = "SoloShuffle", tableKey = "SoloShuffleHistory" },
+        { id = 1, name = "2v2", tableKey = "v2History" },
+        { id = 2, name = "3v3", tableKey = "v3History" },
+        { id = 4, name = "RBG", tableKey = "RBGHistory" },
+        { id = 9, name = "SoloRBG", tableKey = "SoloRBGHistory" },
+    }
+
+	local me = UnitName("player") .. "-" .. GetRealmName()
+
+    -- Create the "Add Friend" button
+    local addFriendButton = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    addFriendButton:SetSize(100, 20)
+    addFriendButton:SetPoint("TOPLEFT", parent, "TOPLEFT", 45, -60)
+    addFriendButton:SetText("Add Friend")
+
+    -- Check if the player is yourself
+    if playerName == me then
+        -- If it's the player themselves, change the button text to "Yourself"
+        addFriendButton:SetText("Yourself")
+        addFriendButton:Disable() -- Optionally disable the button to prevent clicks
+        return -- Exit early since no need to continue processing
+    end
+
+    -- Get the GUID for the playerName (as playerName should include region)
+    local playerGUID
+    for _, info in ipairs(categoryMappings) do
+        local historyTable = Database[info.tableKey]
+
+        -- Check if the historyTable exists and is not empty
+        if historyTable and #historyTable > 0 then
+            -- Loop through the entries to find the matching player name and get their GUID
+            for _, entry in ipairs(historyTable) do
+                for _, stats in ipairs(entry.playerStats or {}) do
+                    if stats.name == playerName then
+                        playerGUID = stats.guid
+						bnet = stats.bnet
+                        break
+                    end
+                end
+                if playerGUID then break end
+            end
+        else
+            print("No valid history data found for category: " .. info.name)
+        end
+    end
+
+    -- Now check if the player is online or offline using the GUID
+    if playerGUID then
+        local accountInfo = C_BattleNet.GetAccountInfoByGUID(playerGUID)
+        if bnet then
+			addFriendButton:Show()
+		elseif accountInfo then
+            if accountInfo.isOnline then
+                -- Player is online, enable the button
+                addFriendButton:Show()
+            else
+                -- Player is offline, disable the button and show "Offline"
+                addFriendButton:Disable()
+                addFriendButton:SetText("Offline")
+            end
+        else
+            -- Player not found or unable to fetch account info
+            addFriendButton:Disable()
+            addFriendButton:SetText("Offline")
+        end
+    else
+        -- Player GUID not found, consider as offline
+        addFriendButton:Disable()
+        addFriendButton:SetText("Offline")
+    end
+
+    -- Create the "Talents" button
+    local talentsButton = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    talentsButton:SetSize(100, 20)
+    talentsButton:SetPoint("LEFT", addFriendButton, "RIGHT", 5, 0)
+    talentsButton:SetText("View Talents")
+
+    -- Open the Wowhead Talent URL when clicked
+    talentsButton:SetScript("OnClick", function()
+        local talentCode = GetPlayerTalentCode(playerName)  -- You’ll need to define this function to get the talent code
+        local talentURL = "https://www.wowhead.com/talent-calc/paladin/retribution/" .. talentCode .. regionString
+        print("View talents: " .. talentURL)  -- This prints to chat, can be replaced with opening the link in a browser
+    end)
+end
+
 local function CreateCopyNameFrame(playerName)
     -- Create a new frame for the popup
     local frame = CreateFrame("Frame", "CopyNameFrame", UIParent, "BackdropTemplate")
@@ -2585,6 +2912,9 @@ local function CreateCopyNameFrame(playerName)
     -- Handle clicking outside the EditBox to focus it again
     frame:SetScript("OnMouseDown", function() editBox:SetFocus() end)
     
+    -- Create the Add Friend and Talents buttons
+    CreateFriendAndTalentButtons(playerName, frame)
+
     -- Allow the frame to be closed by clicking a close button
     local closeButton = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     closeButton:SetPoint("TOPRIGHT", frame, "TOPRIGHT")
@@ -2824,8 +3154,6 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 text:SetJustifyH("CENTER")
                 text:SetPoint("TOPLEFT", nestedTable, "TOPLEFT", columnOffsets[i + 12], rowOffset)
                 text:SetText("-")
-				text:SetFrameStrata("HIGH")
-				text:SetFrameLevel(22)
             end
         end
     end
@@ -2901,22 +3229,22 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
 		contentFrame.crLabel:SetFont("Fonts\\FRIZQT__.TTF", 14)
 		contentFrame.crLabel:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 10, -10)
 	end
-	contentFrame.crLabel:SetText("Current CR: " .. currentCR)
+	contentFrame.crLabel:SetText(RSTATS:ColorText("Current CR: ") .. currentCR)
 	
 	if not contentFrame.mmrLabel then
 		contentFrame.mmrLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 		contentFrame.mmrLabel:SetFont("Fonts\\FRIZQT__.TTF", 14)
 		contentFrame.mmrLabel:SetPoint("TOPLEFT", contentFrame.crLabel, "BOTTOMLEFT", 0, -5)
 	end
-	contentFrame.mmrLabel:SetText("Current MMR: " .. currentMMR)
+	contentFrame.mmrLabel:SetText(RSTATS:ColorText("Current MMR: ") .. currentMMR)
 	
 	if not contentFrame.instructionLabel then
 		contentFrame.instructionLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 		contentFrame.instructionLabel:SetFont("Fonts\\FRIZQT__.TTF", 12)
 		contentFrame.instructionLabel:SetPoint("TOP", contentFrame, "TOP", 0, -10)
-		contentFrame.instructionLabel:SetJustifyH("RIGHT")
+		contentFrame.instructionLabel:SetJustifyH("CENTER")
 	end
-	contentFrame.instructionLabel:SetText("Click on rows to expand.    \nClick on player name to copy.")
+	contentFrame.instructionLabel:SetText("Click on rows to expand.    \nClick on player name to copy, Add Friend or get Talent Code.")
     
     -- Return the last label for potential further positioning
     return contentFrame.mmrLabel
@@ -2987,6 +3315,25 @@ function Config:CreateMenu()
     Config:CreateSearchBox(UIConfig)
     Config:CreateFilterMenu(UIConfig)
 
+	local statsBar = CreateFrame("Frame", nil, UIConfig)
+	statsBar:SetSize(800, 24)
+	statsBar:SetPoint("BOTTOMLEFT", UIConfig, "BOTTOMLEFT", 16, 15)
+	statsBar:SetPoint("BOTTOMRIGHT", UIConfig, "BOTTOMRIGHT", -16, 15)
+	
+	RSTATS.StatsBar = {
+		summaryLines = {}
+	}
+	RSTATS.Dropdowns = {}
+
+	-- Add this after contentFrame or other existing children are positioned
+	local timeFilterOptions = {
+		{ text = "Today", value = "today" },
+		{ text = "Yesterday", value = "yesterday" },
+		{ text = "This Week", value = "thisWeek" },
+		{ text = "This Month", value = "thisMonth" },
+		{ text = "This Season", value = "thisSeason" }
+	}
+
     -- Create 5 frames + scrollFrames for each tab
     for i = 1, 5 do
         local frame = CreateFrame("Frame", nil, UIConfig)
@@ -3032,10 +3379,149 @@ function Config:CreateMenu()
 		rowsAnchor:SetPoint("TOPLEFT", content, "TOPLEFT", 0, 0)
 		rowsAnchor:SetSize(content:GetWidth() * 0.96, 1)  -- Height is not important
 		content.rowsAnchor = rowsAnchor
-
+		
+		-- Create a per-tab dropdown
+		local dropdown = LibDD:Create_UIDropDownMenu("RatedStatsTimeFilterDropdown"..i, frame)
+		dropdown:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
+		UIDropDownMenu_SetWidth(dropdown, 120)
+		UIDropDownMenu_SetText(dropdown, "Today")
+		
+		RSTATS.Dropdowns[i] = dropdown  -- Store reference
+		content.dropdown = dropdown
+		
+		LibDD:UIDropDownMenu_Initialize(dropdown, function(self, level, menuList)
+			local info
+			local currentSelected = UIDropDownMenu_GetText(dropdown)
+		
+			for _, option in ipairs(timeFilterOptions) do
+				info = LibDD:UIDropDownMenu_CreateInfo()
+				info.text = option.text
+				info.checked = (option.text == currentSelected) -- ✅ Only one shows gold
+				info.isNotRadio = false                          -- ✅ Makes it look like a radio button (gold circle)
+				info.func = function()
+					UIDropDownMenu_SetSelectedName(dropdown, option.text)
+					UIDropDownMenu_SetText(dropdown, option.text)
+					RSTATS:UpdateStatsView(option.value, i)
+				end
+				LibDD:UIDropDownMenu_AddButton(info)
+			end
+		end)
+		
+		-- Summary line anchored to the tab's dropdown
+		local summaryLine = statsBar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		summaryLine:SetPoint("LEFT", dropdown, "RIGHT", 12, 0)
+		summaryLine:SetPoint("RIGHT", statsBar, "RIGHT", -8, 1)
+		summaryLine:SetJustifyH("CENTER")
+		
+		RSTATS.StatsBar.summaryLines[i] = summaryLine
         scrollFrames[i]   = scrollFrame
         scrollContents[i] = content
     end
+	
+	local selectedTimeFilter = "today"
+	
+	local Filters = RatedStatsFilters  -- Already exposed globally
+	local Stats = RSTATS_STATS         -- Our new global from stats.lua
+	
+	function RSTATS:UpdateStatsView(filterType, tabID)
+		tabID = tabID or PanelTemplates_GetSelectedTab(RSTATS.UIConfig)
+
+		local allMatches = ({
+			[1] = Database.SoloShuffleHistory,
+			[2] = Database.v2History,
+			[3] = Database.v3History,
+			[4] = Database.RBGHistory,
+			[5] = Database.SoloRBGHistory,
+		})[tabID] or {}
+	
+		-- Apply current tab filters
+		local filtered = {}
+		for _, match in ipairs(allMatches) do
+			if ApplyFilters(match) then
+				table.insert(filtered, match)
+			end
+		end
+	
+		-- Apply time range filter
+		local timeFiltered = FilterMatchesByTimeRange(filtered, filterType)
+	
+		-- Get summary stats
+		-- Bracket ID mapping for PvP API
+		local bracketIDMap = {
+			[1] = 7, -- Solo Shuffle
+			[2] = 1, -- 2v2
+			[3] = 2, -- 3v3
+			[4] = 4, -- RBG
+			[5] = 9, -- Solo RBG / Wargame BG
+		}
+		
+		local bracketID = bracketIDMap[tabID] or 1
+		local summary = Stats.CalculateSummary(timeFiltered, allMatches, bracketID)
+		
+		-- Inline icon for tier
+		local function GetIconMarkup(fileID)
+			return fileID and string.format("|T%d:16|t", fileID) or "-"
+		end
+				
+		local text = string.format(
+			"%s %d   %s %d   %s %d/%d/%d (%d%%)         %s %s %s         %s %s   %s %s",
+			c("CR +/-:"), summary.crDelta,
+			c("MMR +/-:"), summary.mmrDelta,
+			c("W/L/D:"), summary.win, summary.loss, summary.draw, summary.winrate,
+			c("You are a"), GetIconMarkup(summary.currentIconID),
+			c("fighting") .. " " .. GetIconMarkup(summary.enemyIconID) .. c(" 's"),
+			c("Best Map:"), summary.bestMap or "-",
+			c("Worst Map:"), summary.worstMap or "-"
+		)
+		
+		-- Hide all summary lines first
+		for i, line in ipairs(RSTATS.StatsBar.summaryLines) do
+			if line then line:Hide() end
+		end
+		
+		-- Show and update the one for this tab
+		local summaryLine = RSTATS.StatsBar.summaryLines[tabID]
+		if summaryLine then
+			summaryLine:SetText(text)
+			summaryLine:Show()
+		
+			summaryLine:EnableMouse(true)
+			summaryLine:SetScript("OnEnter", function()
+				GameTooltip:SetOwner(summaryLine, "ANCHOR_TOPRIGHT", -450, 0)
+				GameTooltip:ClearLines()
+		
+				if summary.currentBracket then
+					GameTooltip:AddDoubleLine("Your Bracket:", summary.currentBracket, 1, 1, 1, 1, 0.82, 0)
+				end
+				if summary.enemyBracket then
+					GameTooltip:AddDoubleLine("Enemy Bracket:", summary.enemyBracket, 1, 1, 1, 0.9, 0.2, 0.2)
+				end
+		
+				GameTooltip:Show()
+			end)
+		
+			summaryLine:SetScript("OnLeave", function()
+				GameTooltip:Hide()
+			end)
+		end
+	end
+	
+	-- FontString helpers
+	local function AddStat(label, anchor, xOff)
+		local text = statsBar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		text:SetPoint("LEFT", anchor, "RIGHT", xOff or 20, 0)
+		text:SetText(label)
+		return text
+	end
+	
+	C_Timer.After(0.05, function()
+		local dropdown = RSTATS.Dropdowns[DEFAULT_TAB_ID]
+		local selected = dropdown and UIDropDownMenu_GetText(dropdown) or "Today"
+		local filterKey = selected:lower():gsub(" ", "") or "today"
+	
+		FilterAndSearchMatches("")
+		RSTATS:UpdateStatsView(filterKey, DEFAULT_TAB_ID)
+	end)
 
     -- Tab buttons
     local tabNames = { "Solo Shuffle", "2v2", "3v3", "RBG", "Solo RBG" }
@@ -3054,11 +3540,26 @@ function Config:CreateMenu()
 
         -- OnClick just shows/hides the frames
         tab:SetScript("OnClick", function(self)
-            PanelTemplates_SetTab(UIConfig,self:GetID())
-            for j, f in ipairs(contentFrames) do
-               f:SetShown(j == self:GetID())
-            end
-        end)
+			local tabID = self:GetID()
+			PanelTemplates_SetTab(UIConfig, tabID)
+		
+			for j, f in ipairs(contentFrames) do
+			f:SetShown(j == tabID)
+			end
+		
+			ACTIVE_TAB_ID = tabID
+			local dropdown = RSTATS.Dropdowns[tabID]
+			local selected = dropdown and UIDropDownMenu_GetText(dropdown) or "Today"
+			local filterKey = selected:lower():gsub(" ", "") or "today"
+		
+			-- 🧹 Clear old stuff
+			local content = RSTATS.ScrollContents[tabID]
+			ClearStaleMatchFrames(content)
+		
+			-- ✅ Refresh tab view immediately
+			FilterAndSearchMatches(RatedStatsSearchBox and RatedStatsSearchBox:GetText() or "")
+			RSTATS:UpdateStatsView(filterKey, tabID)
+		end)
 
         tab:Show()
         tabs[i] = tab
@@ -3166,7 +3667,12 @@ function Config:CreateMenu()
 	-- Run filter on first visible tab
 	scrollContents[DEFAULT_TAB_ID]._initialized = true
 	C_Timer.After(0.05, function()
+		local dropdown = RSTATS.Dropdowns[DEFAULT_TAB_ID]
+		local selected = dropdown and UIDropDownMenu_GetText(dropdown) or "Today"
+		local filterKey = selected:lower():gsub(" ", "") or "today"
+	
 		FilterAndSearchMatches("")
+		RSTATS:UpdateStatsView(filterKey, DEFAULT_TAB_ID)
 	end)
 
     return UIConfig

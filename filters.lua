@@ -12,17 +12,17 @@ end
 local MapListsByTab = {
 	[1] = { -- Solo Shuffle
 		"NPG", "M", "HP", "BEA",
-		"ED", "NA", "TP", "DS",
+		"ED", "NA", "TTP", "DS",
 		"ROL", "AF", "COC"
 	},
 	[2] = { -- 2v2
 		"NPG", "M", "HP", "BEA",
-		"ED", "NA", "TP", "DS",
+		"ED", "NA", "TTP", "DS",
 		"ROL", "AF", "COC"
 	},
 	[3] = { -- 3v3
 		"NPG", "M", "HP", "BEA",
-		"ED", "NA", "TP", "DS",
+		"ED", "NA", "TTP", "DS",
 		"ROL", "AF", "COC"
 	},
 	[4] = { -- RBG
@@ -35,11 +35,33 @@ local MapListsByTab = {
 	}
 }
 
-local Seasons = {
-	{ label = "DF S4", start = time({ year = 2024, month = 4, day = 23 }), finish = time({ year = 2024, month = 7, day = 22 }) },
-	{ label = "TWW S1", start = time({ year = 2024, month = 9, day = 10 }), finish = time({ year = 2025, month = 2, day = 25 }) },
-	{ label = "TWW S2", start = time({ year = 2025, month = 3, day = 4 }), finish = 9999999999 },
+RatedStatsSeasons = {
+    { label = "DF S4", start = time({ year = 2024, month = 4, day = 23 }), finish = time({ year = 2024, month = 7, day = 22 }) },
+    { label = "TWW S1", start = time({ year = 2024, month = 9, day = 10 }), finish = time({ year = 2025, month = 2, day = 25 }) },
+    { label = "TWW S2", start = time({ year = 2025, month = 3, day = 4 }), finish = 9999999999 },
 }
+
+function RSTATS:GetCurrentSeasonStart()
+	local now = time()
+	for _, season in ipairs(RatedStatsSeasons or {}) do
+		if now >= season.start and now <= season.finish then
+			return season.start
+		end
+	end
+	return nil
+end
+
+function RSTATS:GetCurrentSeasonFinish()
+	local now = time()
+	for _, season in ipairs(RatedStatsSeasons or {}) do
+		if now >= season.start and now <= season.finish then
+			return season.finish
+		end
+	end
+	return nil
+end
+
+local Seasons = RatedStatsSeasons
 
 local CRBrackets = {
 	{ label = "0 - 1400", min = 0, max = 1400 },
@@ -245,8 +267,71 @@ function Config:CreateFilterMenu(parent)
 	end
 end
 
+-- 🕒 Time-based filtering helper
+function FilterMatchesByTimeRange(matches, filterType)
+	if not filterType or filterType == "thisSeason" then return matches end
+
+	local now = time()
+	local filtered = {}
+
+	local function isSameDay(ts1, ts2)
+		return date("%x", ts1) == date("%x", ts2)
+	end
+
+	local function isSameWeek(ts)
+		return tonumber(date("%W", ts)) == tonumber(date("%W", now))
+	end
+
+	local function isSameMonth(ts)
+		local nowTable = date("*t", now)
+		local thenTable = date("*t", ts)
+		return nowTable.month == thenTable.month and nowTable.year == thenTable.year
+	end
+
+	local function isYesterday(ts)
+		local today = date("*t", now)
+		local yday = time({ year = today.year, month = today.month, day = today.day }) - 86400
+		return isSameDay(ts, yday)
+	end
+
+	for _, match in ipairs(matches) do
+		local ts = match.timestamp
+		if ts then
+			local include = false
+
+			if filterType == "today" and isSameDay(ts, now) then include = true
+			elseif filterType == "yesterday" and isYesterday(ts) then include = true
+			elseif filterType == "thisWeek" and isSameWeek(ts) then include = true
+			elseif filterType == "thisMonth" and isSameMonth(ts) then include = true
+			elseif filterType == "thisSeason" then include = true end
+
+			if include then
+				table.insert(filtered, match)
+			end
+		end
+	end
+
+	return filtered
+end
+
 function ApplyFilters(match)
 	local f = GetCurrentFilters()
+
+	-- 🧹 Auto-hide 'Initial' games if history has > 2 matches
+	if match.friendlyWinLoss == "I" then
+		local tabID = PanelTemplates_GetSelectedTab(RSTATS.UIConfig)
+		local tableByTab = {
+			[1] = Database.SoloShuffleHistory,
+			[2] = Database.v2History,
+			[3] = Database.v3History,
+			[4] = Database.RBGHistory,
+			[5] = Database.SoloRBGHistory,
+		}
+		local historyTable = tableByTab[tabID]
+		if historyTable and #historyTable > 2 then
+			return false
+		end
+	end
 
 	-- 🏆 Win/Loss
 	if f.Win or f.Loss or f.Draw then
@@ -327,6 +412,10 @@ end
 function FilterAndSearchMatches(query)
 	query = (query or ""):lower()
 	local tabID = PanelTemplates_GetSelectedTab(RSTATS.UIConfig)
+
+	-- 🧠 Detect table growth per tab
+	RSTATS.__LastHistoryCount = RSTATS.__LastHistoryCount or {}
+
 	local data = ({
 		[1] = { id = 7, table = Database.SoloShuffleHistory },
 		[2] = { id = 1, table = Database.v2History },
@@ -336,6 +425,11 @@ function FilterAndSearchMatches(query)
 	})[tabID]
 
 	if not data or not data.table then return end
+
+	local prevCount = RSTATS.__LastHistoryCount[tabID] or 0
+	local currentCount = #data.table
+	local forceRedraw = currentCount > prevCount
+	RSTATS.__LastHistoryCount[tabID] = currentCount
 
 	local filtered = {}
 	for _, match in ipairs(data.table) do
@@ -374,9 +468,16 @@ function FilterAndSearchMatches(query)
 			scrollFrame:SetPoint("TOPLEFT", headerAnchor, "BOTTOMLEFT", 0, -5)
 			scrollFrame:SetPoint("BOTTOMRIGHT", contentFrame, "BOTTOMRIGHT", -20, 40)
 		end
+
+		-- 🚀 Trigger reflow if table grew (new match was added)
+		if forceRedraw then
+			RatedStatsFilters[tabID] = {}
+			UpdateClearButtonVisibility()
+		end
 	end
 
 	UpdateClearButtonVisibility()
 end
+
 
 
