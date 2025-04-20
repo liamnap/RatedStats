@@ -831,9 +831,7 @@ function RefreshDataEvent(self, event, ...)
 				local historyTable = historyKey and Database[historyKey]
 	
 				TalentTracker:Start()
-				else
-					print("|cffff8888[TalentTracker]|r Could not find playerStats to scan at match start.")
-				end
+				print("|cffff8888[TalentTracker]|r Could not find playerStats to scan at match start.")
 			end
 		end)
 
@@ -948,7 +946,7 @@ function RefreshDataEvent(self, event, ...)
                     Database.CurrentCRfor3v3 = cr
                     Database.CurrentMMRfor3v3 = mmr
                     GetPlayerStatsEndOfMatch(cr, mmr, historyTable, nil, "3v3", 2)
-					TalentTracker:Start(()
+					TalentTracker:Start()
 
                 end
             elseif C_PvP.IsRatedBattleground() then
