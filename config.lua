@@ -28,23 +28,70 @@ SlashCmdList["RATEDSTATSDEBUG"] = function()
         local historyTable = Database[info.tableKey]
 
         if historyTable and #historyTable > 0 then
-            print("Total entries:", #historyTable)
-            print("Category:", info.name)
+            local entry = historyTable[1]  -- 🔹 Latest match (at the top)
 
-            for _, entry in ipairs(historyTable) do
-                for _, stats in ipairs(entry.playerStats or {}) do
-                    if stats.loadout and stats.name then
-                        print("Player Name:", stats.name)
-                        print("  Loadout: " .. stats.loadout)
-                        print("  PvP Talent 1: " .. (stats.pvptalent1 or "N/A"))
-                        print("  PvP Talent 2: " .. (stats.pvptalent2 or "N/A"))
-                        print("  PvP Talent 3: " .. (stats.pvptalent3 or "N/A"))
-                        print(" ")
+            print("==========")
+            print("Latest Match in", info.name)
+            print("Match ID:", entry.matchID or "N/A")
+            print("Map:", entry.mapName or "Unknown")
+            print("Players with detected talents:")
+
+            for _, stats in ipairs(entry.playerStats or {}) do
+                local hasUseful =
+                    (stats.pvptalent1 and stats.pvptalent1 ~= "N/A") or
+                    (stats.pvptalent2 and stats.pvptalent2 ~= "N/A") or
+                    (stats.pvptalent3 and stats.pvptalent3 ~= "N/A") or
+                    (stats.heroSpec and stats.heroSpec ~= "N/A") or
+                    (stats.loadout and stats.loadout ~= "N/A" and stats.loadout ~= "")
+
+                if hasUseful then
+                    print("-----------")
+                    print("Name:", stats.name or "Unknown")
+                    print("GUID:", stats.guid or "Unknown")
+
+                    if stats.nameplate and stats.nameplate ~= "N/A" then
+                        print("  Nameplate:", stats.nameplate)
                     end
+
+                    if stats.loadout and stats.loadout ~= "N/A" and stats.loadout ~= "" then
+                        print("  Loadout:", stats.loadout)
+                    end
+
+                    for i = 1, 3 do
+                        local talentID = stats["pvptalent" .. i]
+                        if talentID and talentID ~= "N/A" then
+                            local talentName = "UnknownSpell"
+                            if stats.loadout and stats.loadout ~= "N/A" and stats.loadout ~= "" then
+                                -- Friendly player: assume proper PvP Talent ID
+                                talentName = select(2, GetPvpTalentInfoByID(talentID)) or "UnknownTalent"
+                            else
+                                -- Enemy player: it's a spellID
+                                local spellInfo = C_Spell.GetSpellInfo(talentID)
+            talentName = (spellInfo and spellInfo.name) or "UnknownSpell"
+                            end
+                            print("  PvP Talent " .. i .. ":", talentName, "(" .. talentID .. ")")
+                        end
+                    end
+
+                    if stats.heroSpec and stats.heroSpec ~= "N/A" then
+                        print("  Hero Spec:", stats.heroSpec)
+                    end
+
+					if stats.playerTrackedSpells and next(stats.playerTrackedSpells) then
+						local spellList = {}
+						for _, spellID in ipairs(stats.playerTrackedSpells) do
+							local spellInfo = C_Spell.GetSpellInfo(spellID)
+							if spellInfo and spellInfo.name then
+								table.insert(spellList, spellInfo.name .. " (" .. spellID .. ")")
+							else
+								table.insert(spellList, tostring(spellID))
+							end
+						end
+						table.sort(spellList)
+						print("  Player Tracked Spells:", table.concat(spellList, ", "))
+					end
                 end
             end
-        else
-            print("No history data for " .. info.name)
         end
     end
 end
@@ -76,7 +123,6 @@ local scrollContents = {}
 Database.combatLogEvents = Database.combatLogEvents or {}
 combatLogEvents = Database.combatLogEvents
 
-local LibDD = LibStub("LibUIDropDownMenu-4.0")
 local c = function(text) return RSTATS:ColorText(text) end
 
 -- Define a function to print table contents
@@ -184,37 +230,37 @@ local function Tab_OnClick(self)
     self.content:Show();
 end
 
-local function SetTabs(frame, numTabs, ...)
-    frame.numTabs = numTabs;
-
-    local contents = {};
-    local frameName = frame:GetName();
-
-    for i = 1, numTabs do
-        local tab = CreateFrame("Button", frameName.."Tab"..i, frame, "PanelTabButtonTemplate");
-		local parentWidth  = RatedStatsConfig:GetWidth()
-		local parentHeight = RatedStatsConfig:GetHeight()
-        tab:SetID(i);
-        tab:SetText(select(i, ...));
-        tab:SetScript("OnClick", Tab_OnClick);
-
-        tab.content = CreateFrame("Frame", nil, UIConfig.ScrollFrame, "BackdropTemplate"); -- Ensure BackdropTemplate is used
-        tab.content:SetSize(parentWidth * 0.5, parentHeight);
-        tab.content:Hide();
-
-        table.insert(contents, tab.content);
-
-        if (i == 1) then
-            tab:SetPoint("TOPLEFT", UIConfig, "BOTTOMLEFT", 10, 7); -- Changes the initial position of first tab
-        else
-            tab:SetPoint("TOPLEFT", _G[frameName.."Tab"..(i - 1)], "TOPRIGHT", -2, 0); -- Changes the position of the subsequent tabs eg overlap
-        end
-    end
-
-    Tab_OnClick(_G[frameName.."Tab1"]);
-
-    return unpack(contents);
-end
+--- local function SetTabs(frame, numTabs, ...)
+---     frame.numTabs = numTabs;
+--- 
+---     local contents = {};
+---     local frameName = frame:GetName();
+--- 
+---     for i = 1, numTabs do
+---         local tab = CreateFrame("Button", frameName.."Tab"..i, frame, "PanelTabButtonTemplate");
+--- 		local parentWidth  = RatedStatsConfig:GetWidth()
+--- 		local parentHeight = RatedStatsConfig:GetHeight()
+---         tab:SetID(i);
+---         tab:SetText(select(i, ...));
+---         tab:SetScript("OnClick", Tab_OnClick);
+--- 
+---         tab.content = CreateFrame("Frame", nil, UIConfig.ScrollFrame, "BackdropTemplate"); -- Ensure BackdropTemplate is used
+---         tab.content:SetSize(parentWidth * 0.5, parentHeight);
+---         tab.content:Hide();
+--- 
+---         table.insert(contents, tab.content);
+--- 
+---         if (i == 1) then
+---             tab:SetPoint("TOPLEFT", UIConfig, "BOTTOMLEFT", 10, 7); -- Changes the initial position of first tab
+---         else
+---             tab:SetPoint("TOPLEFT", _G[frameName.."Tab"..(i - 1)], "TOPRIGHT", -2, 0); -- Changes the position of the subsequent tabs eg overlap
+---         end
+---     end
+--- 
+---     Tab_OnClick(_G[frameName.."Tab1"]);
+--- 
+---     return unpack(contents);
+--- end
 
 ----------------------------------
 -- Utility functions
@@ -804,7 +850,9 @@ function RefreshDataEvent(self, event, ...)
 					Database.CurrentMMRforSoloShuffle = mmr
 					GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, "SoloShuffle", 7, startTime)
 
-					TalentTracker:Start()
+					C_Timer.After(45, function()
+						GetTalents:Start()
+					end)
 	
 					if roundIndex < 6 then roundIndex = roundIndex + 1 end
 				end
@@ -816,7 +864,7 @@ function RefreshDataEvent(self, event, ...)
 				lastLoggedRound = {}
 				playerDeathSeen = false
 	
-			else
+			elseif C_PvP.IsRatedArena() or C_PvP.IsRatedBattleground() or C_PvP.IsSoloRBG() then
 				self.isSoloShuffle = nil
 	
 				-- ✅ Start talent scan for other brackets (2v2, 3v3, RBG, etc.)
@@ -829,9 +877,10 @@ function RefreshDataEvent(self, event, ...)
 				}
 				local historyKey = tableMap[matchBracket]
 				local historyTable = historyKey and Database[historyKey]
-	
-				TalentTracker:Start()
-				print("|cffff8888[TalentTracker]|r Could not find playerStats to scan at match start.")
+				
+				C_Timer.After(120, function()
+					GetTalents:Start()
+				end)
 			end
 		end)
 
@@ -865,11 +914,13 @@ function RefreshDataEvent(self, event, ...)
             GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, "SoloShuffle", 7, startTime)
 			
 			-- 🔁 Stop any previous scan
-			if TalentTracker then
-				TalentTracker:Stop()
+			if GetTalents then
+				GetTalents:Stop(false)
 			end
 		
-			TalentTracker:Start()
+			C_Timer.After(45, function()
+				GetTalents:Start()
+			end)
 			
             if roundIndex < 6 then roundIndex = roundIndex + 1 end
         end
@@ -910,8 +961,8 @@ function RefreshDataEvent(self, event, ...)
 
     elseif event == "PVP_MATCH_COMPLETE" then
         C_Timer.After(1, function()
-			if TalentTracker then
-				TalentTracker:Stop()
+			if GetTalents then
+				GetTalents:Stop(false)
 			end
 
             if self.isSoloShuffle then
@@ -938,16 +989,12 @@ function RefreshDataEvent(self, event, ...)
                     Database.CurrentCRfor2v2 = cr
                     Database.CurrentMMRfor2v2 = mmr
                     GetPlayerStatsEndOfMatch(cr, mmr, historyTable, nil, "2v2", 1)
-					TalentTracker:Start()
-
                 elseif matchBracket == 1 then
                     local cr, mmr = GetCRandMMR(2)
                     local historyTable = Database.v3History
                     Database.CurrentCRfor3v3 = cr
                     Database.CurrentMMRfor3v3 = mmr
                     GetPlayerStatsEndOfMatch(cr, mmr, historyTable, nil, "3v3", 2)
-					TalentTracker:Start()
-
                 end
             elseif C_PvP.IsRatedBattleground() then
                 local cr, mmr = GetCRandMMR(4)
@@ -955,20 +1002,12 @@ function RefreshDataEvent(self, event, ...)
                 Database.CurrentCRforRBG = cr
                 Database.CurrentMMRforRBG = mmr
                 GetPlayerStatsEndOfMatch(cr, mmr, historyTable, nil, "RBG", 4)
-				if historyTable[1] and historyTable[1].playerStats then
-					TalentTracker:Start()
-				end
-
             elseif C_PvP.IsSoloRBG() then
                 local cr, mmr = GetCRandMMR(9)
                 local historyTable = Database.SoloRBGHistory
                 Database.CurrentCRforSoloRBG = cr
                 Database.CurrentMMRforSoloRBG = mmr
                 GetPlayerStatsEndOfMatch(cr, mmr, historyTable, nil, "SoloRBG", 9)
-				if historyTable[1] and historyTable[1].playerStats then
-					TalentTracker:Start()
-				end
-
             end
         end)
     end
@@ -1557,11 +1596,14 @@ local specIcons = {
     ["-"] = "-"  -- This will preserve the hyphen in the text
 }
 
-local function CreateIconWithTooltip(parentFrame, text, tooltipText, xOffset, yOffset)
+local function CreateIconWithTooltip(parentFrame, text, tooltipText, xOffset, yOffset, columnWidth, rowHeight)
     local icon = parentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     icon:SetFont("Fonts\\FRIZQT__.TTF", 14)
     icon:SetText(text)
-    icon:SetPoint("TOPLEFT", parentFrame, "TOPLEFT", xOffset, yOffset)
+
+    -- Center in the column cell
+    local centerX = xOffset + (columnWidth / 2)
+    icon:SetPoint("CENTER", parentFrame, "TOPLEFT", centerX, yOffset - (rowHeight / 2))
 
     icon:SetScript("OnEnter", function()
         GameTooltip:SetOwner(icon, "ANCHOR_RIGHT")
@@ -1712,6 +1754,35 @@ local racialFactionMapping = {
     ["Arcane Torrent"] = "Horde",  -- Blood Elf
     ["Gift of the Naaru"] = "Alliance",  -- Draenei
     ["Quaking Palm"] = "Neutral",  -- Pandaren
+}
+
+local mapShortName = {
+    -- Battlegrounds
+    ["Warsong Gulch"] = "WSG",
+    ["Arathi Basin"] = "AB",
+    ["Eye of the Storm"] = "EOTS",
+    ["The Battle for Gilneas"] = "TBfG",
+    ["Twin Peaks"] = "TP",
+    ["Silvershard Mines"] = "SSM",
+    ["Temple of Kotmogu"] = "TOK",
+    ["Deepwind Gorge"] = "DWG",
+    ["Seething Shore"] = "SS",
+    ["Deephaul Ravine"] = "DHR",
+
+    -- Arenas
+    ["Nagrand Arena"] = "NA",
+    ["Blade's Edge Arena"] = "BEA",
+    ["Dalaran Arena"] = "DA",
+    ["Ruins of Lordaeron"] = "ROL",
+    ["The Tiger's Peak"] = "TTP",
+    ["Tol'viron Arena"] = "TV",
+    ["Empyrean Domain"] = "ED",
+    ["Mugambala"] = "M",
+    ["Hook Point"] = "HP",
+    ["Enigma Crucible"] = "EC",
+    ["Valdrakken Arena"] = "VA",
+    ["Nokhudon Proving Grounds"] = "NPG",
+	["Cage of Carnage"] = "COC",
 }
 
 -- Function to determine the original faction of a player based on their combat log events
@@ -1907,10 +1978,11 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     for _, player in ipairs(friendlyPlayers) do
         table.insert(playerStats, player)
     end
-    for _, player in ipairs(enemyPlayers) do
+	
+	for _, player in ipairs(enemyPlayers) do
         table.insert(playerStats, player)
     end
-
+	
     -- Update raid leaders
     UpdateFriendlyRaidLeader()
     local enemyRaidLeader = GetEnemyRaidLeaderName(enemyFaction, enemyPlayers)
@@ -1950,6 +2022,31 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 		roundsWon = roundsWon or 0,
         playerStats = playerStats -- Nested table with player-specific details
     }
+
+	for _, player in ipairs(playerStats) do
+		-- 1. Inject from PendingPvPTalents (highest priority - direct inspect)
+		local pending = PendingPvPTalents[player.name]
+		if pending and (pending.loadout or pending.pvptalent1 or pending.pvptalent2 or pending.pvptalent3) then
+			for k, v in pairs(pending) do
+				player[k] = v
+			end
+			player.talentSource = "inspect"
+			PendingPvPTalents[player.name] = nil
+		end
+	
+		-- 2. Inject from DetectedPlayerTalents (CLEU + Inspect hybrid via GUID)
+		if player.guid then
+			local detected = RSTATS.DetectedPlayerTalents[player.guid]
+			if detected and (detected.heroSpec or detected.pvptalent1 or detected.loadout or detected.playerTrackedSpells) then
+				for k, v in pairs(detected) do
+					if k ~= "name" and player[k] == nil then
+						player[k] = v
+					end
+				end
+				player.talentSource = player.talentSource or "detected"
+			end
+		end
+	end
 
     table.insert(historyTable, 1, entry) -- Insert at the beginning to keep the latest at the top
     SaveData() -- Updated to call SaveData function
@@ -2134,20 +2231,14 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                     break
                 end
             end
-    
-			for _, player in ipairs(playerStats or {}) do
-				local pending = PendingPvPTalents[player.name]
-				if pending then
-					for k, v in pairs(pending) do
-						player[k] = v
-					end
-					print("|cff88ff88[RatedStats]|r Injected talents/loadout into:", player.name)
-					PendingPvPTalents[player.name] = nil -- clear once used
-				end
-			end
 	
             -- Save the updated data
             SaveData()
+			
+			if GetTalents then
+				GetTalents:ReallyClearMemory() -- now safe to clear everything
+			end
+			
 			-- Re-run filters to refresh the UI with the new match included
 			local tabIDByCategoryID = {
 				[7] = 1, -- Solo Shuffle
@@ -2449,49 +2540,175 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
     end)
 
     content.matchFrames = {}
-    content.headerTexts = {}
 	content.matchFrameByID = {}
 
     -- 3) Create headers
     local scoreHeaderText = (tabID == 2 or tabID == 3) and "" or "Score"
 	local c = function(text) return RSTATS:ColorText(text) end
 	local headers = {
-		c("Win/Loss"), c("Map"), c("Match End Time"), c("Duration"), "", "",
-		c("Faction"), c("Raid Leader"), c("Avg CR"), c("Team MMR"), c("Damage"), c("Healing"), c("Avg Rat Chg"), "",
-		c(scoreHeaderText), "", c("Faction"), c("Raid Leader"), c("Avg CR"), c("Team MMR"), c("Damage"), c("Healing"), c("Avg Rat Chg")
+		c("Win/Loss"), c(scoreHeaderText), c("Map"), c("Match End Time"), c("Duration"), "", "",
+		c("Faction"), c("Raid Leader"), c("Avg CR"), c("MMR"), c("Damage"), c("Healing"), c("Avg Rat Chg"), "",
+		 "", c("Faction"), c("Raid Leader"), c("Avg CR"), c("MMR"), c("Damage"), c("Healing"), c("Avg Rat Chg"), c("Note")
 	}
-    local columnOffsets = {0,60,150,270,330,350,370,430,580,640,700,760,810,860,900,960,1000,1060,1210,1270,1330,1390,1450,1510}
+	local columnOffsets = {}
+	local spacing = 8
+	local headerFont = "Fonts\\FRIZQT__.TTF"
+	local headerFontSize = 10
+	local headerFrameWidth = content:GetWidth() * 0.98
+	local splitIndex = 15  -- This is where you start the second faction header set
+	local splitX = headerFrameWidth * 0.57
+	local xOffset = 0
+	
+	local tempFS = UIParent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	tempFS:SetFont(headerFont, headerFontSize)
+	
+	local rawColumnWidths = {}
+	
+	-- Step 1: Measure headers
+	for i, text in ipairs(headers) do
+		tempFS:SetText(text)
+		rawColumnWidths[i] = tempFS:GetStringWidth() + spacing
+	end
+
+    -- 4) Format each match entry's columns.
+    local function formatMatch(match)
+        local scoreText = "-"
+        if match.friendlyTeamScore then
+            if match.teamFaction == "Alliance" then
+                scoreText = (match.friendlyTeamScore or "-").."  : "..(match.enemyTeamScore or "-")
+            else
+                scoreText = (match.enemyTeamScore or "-").."  : "..(match.friendlyTeamScore or "-")
+            end
+        elseif match.allianceTeamScore and match.teamFaction == "Alliance" then
+            scoreText = (match.allianceTeamScore or "-").." : "..(match.hordeTeamScore or "-")
+        else
+            scoreText = (match.hordeTeamScore or "-").."  : "..(match.allianceTeamScore or "-")
+        end
+        if tabID == 1 then
+            scoreText = (match.roundsWon or 0) .. " / 6"
+        elseif tabID == 2 or tabID == 3 then
+            scoreText = ""
+        end
+        if type(match.duration) == "number" then
+            match.duration = SecondsToTime(match.duration)
+        end
+		
+		local mapDisplay = mapShortName[match.mapName] or match.mapName or "N/A"
+
+        return {
+            (match.friendlyWinLoss or "-"),
+            scoreText,
+            (mapDisplay or "N/A"),
+            date("%a %d %b %Y - %H:%M:%S", match.endTime) or "N/A",
+            (match.duration or "N/A"),
+            "",
+            "",
+            (match.teamFaction or "N/A"),
+            (match.friendlyRaidLeader or "N/A"),
+            (match.friendlyAvgCR or "N/A"),
+            (match.friendlyMMR or "N/A"),
+            FormatNumber(match.friendlyTotalDamage) or "N/A",
+            FormatNumber(match.friendlyTotalHealing) or "N/A",
+            (match.friendlyRatingChange or "N/A"),
+            "",
+            "",
+            (match.enemyFaction or "N/A"),
+            (match.enemyRaidLeader or "N/A"),
+            (match.enemyAvgCR or "N/A"),
+            (match.enemyMMR or "N/A"),
+            FormatNumber(match.enemyTotalDamage) or "N/A",
+            FormatNumber(match.enemyTotalHealing) or "N/A",
+            (match.enemyRatingChange or "N/A"),
+			(match.note or "")
+        }
+    end
+	
+	-- Step 2: Measure row content using formatMatch
+	for _, match in ipairs(historyTable) do
+		local row = formatMatch(match)
+		for i, value in ipairs(row) do
+			tempFS:SetText(value or "")
+			local w = tempFS:GetStringWidth() + spacing
+			if w > (rawColumnWidths[i] or 0) then
+				rawColumnWidths[i] = w
+			end
+		end
+	end
+	
+	-- Step 3: Calculate final offsets using max widths
+	local columnOffsets = {}
+	local columnWidths = {}
+	local xOffset = 0
+	for i, width in ipairs(rawColumnWidths) do
+		if i == splitIndex + 1 then
+			xOffset = splitX
+		end
+		columnOffsets[i] = xOffset
+		columnWidths[i] = width
+		xOffset = xOffset + width
+	end
+	
+	tempFS:Hide()
+
+	local columnWidths = {}
+	for i = 1, #headers do
+		if i < #headers then
+			columnWidths[i] = columnOffsets[i + 1] - columnOffsets[i]
+		else
+			columnWidths[i] = headerFrameWidth - columnOffsets[i]
+		end
+	end
+
     local headerFontSize = 10
     local entryFontSize  = 8
 
-	-- Create a parent frame just for the headers (anchor to contentFrame, not scrollFrame)
-	local headerFrame = CreateFrame("Frame", nil, RSTATS.ContentFrames[tabID])
-	headerFrame:SetPoint("TOPLEFT", mmrLabel, "BOTTOMLEFT", 0, -30)
-	headerFrame:SetSize(RSTATS.ContentFrames[tabID]:GetWidth() * 0.98, 12)
-	headerFrame:SetFrameStrata("HIGH")
-	headerFrame:SetFrameLevel(24)
-	headerFrame:SetAlpha(1)
-	headerFrame:SetClipsChildren(true)
+	-- -----------------------------------------------------------
+	-- Header-row ― build once, reuse; never shrink in compact view
+	-- -----------------------------------------------------------
+	local contentFrame  = RSTATS.ContentFrames[tabID]
+	local headerFrame   = content.headerFrame   -- already built for this tab?
 	
-	-- Store reference so you can access it later
-	content.headerFrame = headerFrame
+	if not headerFrame then
+		-- First time on this tab → actually create the widgets
+		headerFrame = CreateFrame("Frame", nil, contentFrame)
+		headerFrame:SetPoint("TOPLEFT", mmrLabel, "BOTTOMLEFT", 0, -30)
 	
-	-- Create each header label inside this headerFrame
-	local headerTexts = {}
+		local startWidth = contentFrame:GetWidth() - 20          -- full-view width
+		headerFrame:SetSize(startWidth, 14)
+		headerFrame.fullWidth = startWidth                       -- remember “wide” size
 	
-	for i, name in ipairs(headers) do
-		local h = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-		h:SetFont("Fonts\\FRIZQT__.TTF", headerFontSize)
-		h:SetJustifyH("CENTER")
-		h:SetPoint("TOPLEFT", headerFrame, "TOPLEFT", columnOffsets[i], 0)
-		h:SetTextColor(1, 1, 1)
-		h:SetShadowOffset(1, -1)
-		h:SetText(name)
-		table.insert(headerTexts, h)
+		headerFrame:SetFrameStrata("HIGH")
+		headerFrame:SetFrameLevel(24)
+		headerFrame:SetClipsChildren(true)
+		headerFrame:SetClampRectInsets(0,0,0,0)
+		content.headerFrame = headerFrame
+	
+		-- Build the label fontStrings only once
+		local headerTexts = {}
+		for i, name in ipairs(headers) do
+			local h = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+			h:SetFont("Fonts\\FRIZQT__.TTF", headerFontSize)
+			h:SetJustifyH("CENTER")
+			h:SetTextColor(1,1,1)
+			h:SetShadowOffset(1,-1)
+			h:SetText(name)
+			table.insert(headerTexts, h)
+		end
+		content.headerTexts = headerTexts
+		content.header      = headerTexts[1]     -- first header = anchor
+	else
+		-- Header already exists → only (possibly) widen it
+		local want = math.max(headerFrame.fullWidth or 0,
+							contentFrame:GetWidth() - 20)
+		headerFrame:SetWidth(want)
+		headerFrame.fullWidth = want
 	end
 	
-	content.headerTexts = headerTexts
-	content.header = headerTexts[1]  -- First header acts as anchor reference
+	-- Re-anchor the texts every call (handles window growth)
+	for i, h in ipairs(content.headerTexts) do
+		h:ClearAllPoints()
+		h:SetPoint("TOPLEFT", headerFrame, "TOPLEFT", columnOffsets[i], 0)
+	end
 
 	-- If no history, show a placeholder.
 	if not historyTable or #historyTable == 0 then
@@ -2520,57 +2737,8 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 		return headerTexts, {}
 	end
 
-    -- 4) Format each match entry's columns.
-    local function formatMatch(match)
-        local scoreText = "-"
-        if match.friendlyTeamScore then
-            if match.teamFaction == "Alliance" then
-                scoreText = (match.friendlyTeamScore or "-").."  : "..(match.enemyTeamScore or "-")
-            else
-                scoreText = (match.enemyTeamScore or "-").."  : "..(match.friendlyTeamScore or "-")
-            end
-        elseif match.allianceTeamScore and match.teamFaction == "Alliance" then
-            scoreText = (match.allianceTeamScore or "-").." : "..(match.hordeTeamScore or "-")
-        else
-            scoreText = (match.hordeTeamScore or "-").."  : "..(match.allianceTeamScore or "-")
-        end
-        if tabID == 1 then
-            scoreText = (match.roundsWon or 0) .. " / 6"
-        elseif tabID == 2 or tabID == 3 then
-            scoreText = ""
-        end
-        if type(match.duration) == "number" then
-            match.duration = SecondsToTime(match.duration)
-        end
-        return {
-            (match.friendlyWinLoss or "-"),
-            (match.mapName or "N/A"),
-            date("%a %d %b %Y - %H:%M:%S", match.endTime) or "N/A",
-            (match.duration or "N/A"),
-            "",
-            "",
-            (match.teamFaction or "N/A"),
-            (match.friendlyRaidLeader or "N/A"),
-            (match.friendlyAvgCR or "N/A"),
-            (match.friendlyMMR or "N/A"),
-            FormatNumber(match.friendlyTotalDamage) or "N/A",
-            FormatNumber(match.friendlyTotalHealing) or "N/A",
-            (match.friendlyRatingChange or "N/A"),
-            "",
-            scoreText,
-            "",
-            (match.enemyFaction or "N/A"),
-            (match.enemyRaidLeader or "N/A"),
-            (match.enemyAvgCR or "N/A"),
-            (match.enemyMMR or "N/A"),
-            FormatNumber(match.enemyTotalDamage) or "N/A",
-            FormatNumber(match.enemyTotalHealing) or "N/A",
-            (match.enemyRatingChange or "N/A"),
-        }
-    end
-
 	-- After creating your headerTexts, pick the first header as the anchor
-	local anchorForRows = headerTexts[1]
+	local anchorForRows = content.headerTexts[1]
 
     -- 5) Create a base anchor frame placed immediately below mmrLabel.
     local baseAnchor = CreateFrame("Frame", nil, content)
@@ -2589,7 +2757,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
             table.insert(content.matchFrames, content.matchFrameByID[matchID])
         else
 			local matchFrame = CreateFrame("Frame", nil, nil, "BackdropTemplate")
-			matchFrame:SetSize(parentWidth * 0.94, parentHeight)  -- Initial minimal height
+			matchFrame:SetSize(parentWidth * 1.06, parentHeight)  -- Initial minimal height
 			matchFrame:SetFrameStrata("HIGH")
 			matchFrame:SetFrameLevel(22)
 			matchFrame:SetParent(content)
@@ -2601,8 +2769,10 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 			for j, colText in ipairs(columns) do
 				local fs = matchFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 				fs:SetFont("Fonts\\FRIZQT__.TTF", entryFontSize)
-				fs:SetJustifyH("CENTER")
+				fs:SetJustifyH("LEFT")
 				fs:SetPoint("TOPLEFT", matchFrame, "TOPLEFT", columnOffsets[j], -2)
+				fs:SetWidth(columnWidths[j] or 60)  -- Fallback in case
+				fs:SetWordWrap(false)  -- Optional: disable wrapping if you want single-line
 				fs:SetText(colText)
 				table.insert(matchFrame.fontStrings, fs)
 				table.insert(rowFontStrings, fs)
@@ -2668,6 +2838,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 			nestedTable:SetFrameStrata("HIGH")
 			nestedTable:SetFrameLevel(22)
 			nestedTable:Hide()
+			nestedTable:UpdateTeamView()
 			matchFrame.nestedTable = nestedTable
 	
 			-- Set a click handler for the row to toggle its nested table and reflow all rows.
@@ -2685,7 +2856,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
     ReflowRows(content)
 
     SaveData()
-    return headerTexts, content.matchFrames
+    return content.headerTexts, content.matchFrames
 end
 
 local rowCounts = {
@@ -2695,10 +2866,6 @@ local rowCounts = {
     ["RBG"] = 10,
     ["Solo RBG"] = 8,
 }
-
-local function GetPlayerTalentCode()
-	
-end
 
 -- Function to check and process player talents for new games
 local function CheckPlayerTalents(playerName, isNewGame)
@@ -2761,22 +2928,17 @@ local function SendBattleNetInvite(playerName)
                     local isFriend = C_FriendList.IsFriend(accountInfo.battleTag)
 
                     if isFriend then
-                        print("Already Friends!")
                         -- Replace "Add Friend" button with "Already Friends" text
                         -- (Add your UI button update code here)
                     else
                         -- Send Battle.net invite using BattleTag
                         C_FriendList.AddFriend(accountInfo.battleTag)
-                        print("Battle.net invite sent to " .. accountInfo.battleTag)
                     end
                 else
-                    print("No BattleTag found for player with GUID: " .. playerGUID)
                 end
             else
-                print("No valid stats found for player: " .. playerName)
             end
         else
-            print("No history data for " .. info.name)
         end
     end
 end
@@ -2827,7 +2989,6 @@ local function CreateFriendAndTalentButtons(playerName, parent)
                 if playerGUID then break end
             end
         else
-            print("No valid history data found for category: " .. info.name)
         end
     end
 
@@ -2921,19 +3082,23 @@ local function CreateCopyNameFrame(playerName)
     frame:Show()
 end
 
-local function CreateClickableName(parent, playerName, x, y)
+local function CreateClickableName(parent, playerName, x, y, columnWidth, rowHeight)
     -- Create a FontString to display the player name
     local nameText = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     nameText:SetFont(STANDARD_TEXT_FONT, 8, "OUTLINE")
-    nameText:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+
+    -- Center horizontally and vertically in the cell
+    local centerX = x + (columnWidth / 2)
+    local centerY = y - (rowHeight / 2)
+    nameText:SetPoint("CENTER", parent, "TOPLEFT", centerX, centerY)
+
     nameText:SetText(playerName)
 
     -- Create a clickable frame over the text
     local clickableFrame = CreateFrame("Button", nil, parent)
     clickableFrame:SetSize(nameText:GetStringWidth(), nameText:GetStringHeight())
-    clickableFrame:SetPoint("TOPLEFT", nameText, "TOPLEFT")
+    clickableFrame:SetPoint("CENTER", nameText, "CENTER")
 
-    -- On click, open the copy name frame
     clickableFrame:SetScript("OnClick", function()
         CreateCopyNameFrame(playerName)
     end)
@@ -2956,44 +3121,47 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     -- Calculate the size of the nested table
     local rowHeight = 15  -- Adjust this value based on your actual row height
     local tableHeight = playersPerTeam * rowHeight + 30  -- Adjust for padding or additional spacing
-	local parentWidth  = RatedStatsConfig:GetWidth()
+	-- Set base width as a percentage of the full config width
+	local baseWidth = parent:GetWidth() * 1.92
 
-    nestedTable:SetSize(parentWidth * 0.96, tableHeight)
+	nestedTable:SetSize(baseWidth, tableHeight)
 	nestedTable:SetFrameStrata("HIGH")
 	nestedTable:SetFrameLevel(22)
 	nestedTable:Hide()
+	
+	-- ───────── DEBUG (new) ─────────
+	print(("[DEBUG] NT-create parentW=%.0f  ntW=%.0f  mode=%s"): format(parent:GetWidth(), baseWidth, UIConfig and UIConfig.isCompact and "compact" or "full"))
+
+	-- ------------------------------------------------------------------
+	-- column geometry (build once – NEVER grow this table later)
+	-- ------------------------------------------------------------------
+	local baseWidths = {100,40,40,50,60,40,40,50,40,40,60,60,80} -- 13 cols
+	local COLS_PER_TEAM = #baseWidths                             -- =13
+	
+	-- ally + enemy  = 26
+	local columnWidths = {unpack(baseWidths)}
+	for i = 1, COLS_PER_TEAM do
+		columnWidths[#columnWidths+1] = baseWidths[i]
+	end
+	
+	-- ───────── DEBUG ─────────
+	print("|cffff8800[DEBUG]|r columnWidths entries: "..#columnWidths)   -- should be 26
+	
+	-- running X positions (+5 for padding)
+	local columnPositions = {}
+	do
+		local x = 0
+		for i, w in ipairs(columnWidths) do
+			columnPositions[i] = x + 5   -- 5-pixel left-pad
+			x = x + w
+		end
+	end
 
     local headers = {
-        "Character", "Faction", "Race", "Class", "Spec", "Role", "CR", "KBs", "HKs", "Damage", "Healing", "Rating Chg",
-        "Character", "Faction", "Race", "Class", "Spec", "Role", "CR", "KBs", "HKs", "Damage", "Healing", "Rating Chg"
+        "Character", "Faction", "Race", "Class", "Spec", "Hero", "Role", "CR", "KBs", "HKs", "Damage", "Healing", "Rating Chg",
+        "Character", "Faction", "Race", "Class", "Spec", "Hero", "Role", "CR", "KBs", "HKs", "Damage", "Healing", "Rating Chg"
     }
-    local columnOffsets = {
-        0,    -- 0: Character
-        150,  -- 1: Faction
-        190,  -- 2: Race
-        230,  -- 3: Class
-        270,  -- 4: Spec
-        310,  -- 5: Role
-        340,  -- 6: CR
-        390,  -- 7: KBs
-        420,  -- 8: HKs
-        450,  -- 9: Damage
-        500,  -- 10: Healing
-        560,  -- 11: Rating Chg
-    
-        820, -- 12: Character (Second set)
-        970, -- 13: Faction (Second set)
-        1010, -- 14: Race (Second set)
-        1050, -- 15: Class (Second set)
-        1090, -- 16: Spec (Second set)
-        1130, -- 17: Role (Second set)
-        1160, -- 18: CR (Second set)
-        1210, -- 19: KBs (Second set)
-        1240, -- 20: HKs (Second set)
-        1270, -- 21: Damage (Second set)
-        1320, -- 22: Healing (Second set)
-        1380  -- 23: Rating Chg (Second set)
-    }
+
     local headerFontSize = 10
     local entryFontSize = 8
     local headerHeight = 18  -- Height of the header row
@@ -3006,21 +3174,57 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     yourTeamHeader:SetText("                                                                                                            Your Team")
 
     -- Create "Enemy Team" header
-    local enemyTeamHeader = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    enemyTeamHeader:SetFont("Fonts\\FRIZQT__.TTF", headerFontSize)
-    enemyTeamHeader:SetJustifyH("CENTER")
-    enemyTeamHeader:SetPoint("TOPLEFT", nestedTable, "TOPLEFT", columnOffsets[13], 0)  -- Adjust position above enemy players
-    enemyTeamHeader:SetText("                                                                                                           Enemy Team")
+	local enemyTeamHeader = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	enemyTeamHeader:SetFont("Fonts\\FRIZQT__.TTF", headerFontSize)
+	enemyTeamHeader:SetJustifyH("CENTER")
+	-- we’ll anchor it *after* we calculate enemyBaseX
+	enemyTeamHeader:SetText("Enemy Team")
 
     -- Create nested table header row
-    for i, header in ipairs(headers) do
-        local headerText = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        headerText:SetFont("Fonts\\FRIZQT__.TTF", headerFontSize)  -- Set font size
-        headerText:SetJustifyH("CENTER")  -- Center text
-        headerText:SetPoint("TOPLEFT", yourTeamHeader, "TOPLEFT", columnOffsets[i], -18)  -- Adjust position
-        headerText:SetText(header)
-    end
-
+	local totalColumnsPerTeam = 13
+	local parentWidth = parent:GetWidth()
+	local columnWidth = (parentWidth * 0.5) / totalColumnsPerTeam
+	local headerY = -headerHeight  -- Keep vertical spacing consistent
+	local enemyBaseX	
+	local paneW     = parent:GetParent():GetParent():GetWidth()   -- visible-pane width
+	if UIConfig.isCompact then
+		enemyBaseX = paneW                  -- start exactly one pane right
+	else
+		enemyBaseX = columnPositions[COLS_PER_TEAM + 1]  -- first enemy col
+	end
+	
+	-- table now spans 13 cols (friendly) + 13 cols (enemy)
+	local baseWidth = paneW * 1.92          -- 0.92 ≈ 13/14 → use real ratio
+	nestedTable:SetWidth(baseWidth)
+	enemyTeamHeader:ClearAllPoints()
+	enemyTeamHeader:SetPoint("TOPLEFT", nestedTable, "TOPLEFT", enemyBaseX, 0)
+	
+	for i, header in ipairs(headers) do
+		local headerText = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		headerText:SetFont("Fonts\\FRIZQT__.TTF", headerFontSize)
+		headerText:SetJustifyH("CENTER")
+		headerText:SetText(header)
+	
+		local xPos
+		if i <= totalColumnsPerTeam then
+			-- “Your team” columns
+			xPos = columnPositions[i]
+		else
+			-- “Enemy team” columns use pre-computed origin
+			xPos = enemyBaseX + columnPositions[i - totalColumnsPerTeam]
+		end
+		
+		local width = columnWidths[i]
+		
+		-- ───────── DEBUG ─────────
+		if not width then
+			print(string.format("|cffff0000[WARN]|r header width nil  (i=%d  total=%d)",
+								i, #columnWidths))
+		end
+	
+		headerText:SetPoint("TOPLEFT", nestedTable, "TOPLEFT", xPos, -headerHeight)
+		headerText:SetWidth(width)
+	end
     -- Separate friendly and enemy player stats
     local friendlyPlayers = {}
     local enemyPlayers = {}
@@ -3048,13 +3252,14 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     -- Populate friendly player stats
     for index, player in ipairs(friendlyPlayers) do
         local rowOffset = -(headerHeight + 15 * index)  -- Adjust rowOffset to account for headers
-        local nameText = CreateClickableName(nestedTable, player.name, columnOffsets[1], rowOffset)
+		CreateClickableName(nestedTable, player.name, columnPositions[1], rowOffset, columnWidths[1], rowHeight)
         for i, stat in ipairs({
-            player.name,
+			"",
             factionIcons[player.originalFaction] or player.originalFaction, 
             raceIcons[player.race] or player.race, 
             classIcons[player.class] or player.class, 
             specIcons[player.spec] or player.spec, 
+			player.heroSpec or "",
             roleIcons[player.role] or player.role,  -- Replace numeric role with icon
             player.newrating, 
             player.killingBlows, 
@@ -3064,22 +3269,24 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
             player.ratingChange
         }) do
             if i == 2 then
-                CreateIconWithTooltip(nestedTable, stat, player.originalFaction, columnOffsets[i], rowOffset)
+                CreateIconWithTooltip(nestedTable, stat, player.originalFaction, columnPositions[i], rowOffset, columnWidths[i], rowHeight)
             elseif i == 3 then
-                CreateIconWithTooltip(nestedTable, stat, player.race, columnOffsets[i], rowOffset)
+                CreateIconWithTooltip(nestedTable, stat, player.race, columnPositions[i], rowOffset, columnWidths[i], rowHeight)
             elseif i == 4 then
-                CreateIconWithTooltip(nestedTable, stat, player.class, columnOffsets[i], rowOffset)
+                CreateIconWithTooltip(nestedTable, stat, player.class, columnPositions[i], rowOffset, columnWidths[i], rowHeight)
             elseif i == 5 then
-                CreateIconWithTooltip(nestedTable, stat, player.spec, columnOffsets[i], rowOffset)
-            elseif i == 6 then
+                CreateIconWithTooltip(nestedTable, stat, player.spec, columnPositions[i], rowOffset, columnWidths[i], rowHeight)
+            elseif i == 7 then
                 -- Add role tooltip
-                CreateIconWithTooltip(nestedTable, stat, roleTooltips[player.role], columnOffsets[i], rowOffset)
+                CreateIconWithTooltip(nestedTable, stat, roleTooltips[player.role], columnPositions[i], rowOffset, columnWidths[i], rowHeight)
             else
                 local textValue = stat or "-"  -- Provide a default value if stat is nil
                 local text = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+				local xPos = columnPositions[i]
+				local width = columnWidths[i]
                 text:SetFont("Fonts\\FRIZQT__.TTF", entryFontSize)
                 text:SetJustifyH("CENTER")
-                text:SetPoint("TOPLEFT", nestedTable, "TOPLEFT", columnOffsets[i], rowOffset)
+                text:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
                 text:SetText(tostring(textValue))  -- Ensure the value is converted to a string
             end
         end  -- This 'end' closes the inner 'for' loop
@@ -3087,14 +3294,16 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     
     -- Populate enemy player stats
     for index, player in ipairs(enemyPlayers) do
-        local rowOffset = -(headerHeight + 15 * index)  -- Adjust rowOffset to account for headers
-        local nameText = CreateClickableName(nestedTable, player.name, columnOffsets[13], rowOffset)
+		local rowOffset = -(headerHeight + 15 * index)  -- Adjust rowOffset to account for headers
+		
+		CreateClickableName(nestedTable, player.name, enemyBaseX + columnPositions[1], rowOffset, columnWidths[14], rowHeight)
         for i, stat in ipairs({
-            player.name,
+			"",
             factionIcons[player.originalFaction] or player.originalFaction, 
             raceIcons[player.race] or player.race, 
             classIcons[player.class] or player.class, 
-            specIcons[player.spec] or player.spec, 
+            specIcons[player.spec] or player.spec,
+			player.heroSpec or "",
             roleIcons[player.role] or player.role,  -- Replace numeric role with icon
             player.newrating, 
             player.killingBlows, 
@@ -3103,24 +3312,32 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
             FormatNumber(player.healing), 
             player.ratingChange
         }) do
-            local adjustedOffset = columnOffsets[i + 12]
+			local xPos  = enemyBaseX + columnPositions[i]   -- use shared origin
+			local width = columnWidths[i]                   -- no “+13”
+			
+			-- ───────── DEBUG ─────────
+			if not columnWidths[i+13] then
+				print(string.format("|cffff0000[WARN]|r columnWidths[%d] nil  (total=%d)",
+									i+13, #columnWidths))
+			end
+
             if i == 2 then
-                CreateIconWithTooltip(nestedTable, stat, player.originalFaction, adjustedOffset, rowOffset)
+                CreateIconWithTooltip(nestedTable, stat, player.originalFaction, xPos, rowOffset, width, rowHeight)
             elseif i == 3 then
-                CreateIconWithTooltip(nestedTable, stat, player.race, adjustedOffset, rowOffset)
+                CreateIconWithTooltip(nestedTable, stat, player.race, xPos, rowOffset, width, rowHeight)
             elseif i == 4 then
-                CreateIconWithTooltip(nestedTable, stat, player.class, adjustedOffset, rowOffset)
+                CreateIconWithTooltip(nestedTable, stat, player.class, xPos, rowOffset, width, rowHeight)
             elseif i == 5 then
-                CreateIconWithTooltip(nestedTable, stat, player.spec, adjustedOffset, rowOffset)
-            elseif i == 6 then
+                CreateIconWithTooltip(nestedTable, stat, player.spec, xPos, rowOffset, width, rowHeight)
+            elseif i == 7 then
                 -- Add role tooltip
-                CreateIconWithTooltip(nestedTable, stat, roleTooltips[player.role], adjustedOffset, rowOffset)
+                CreateIconWithTooltip(nestedTable, stat, roleTooltips[player.role], xPos, rowOffset, width, rowHeight)
             else
                 local textValue = stat or "-"  -- Provide a default value if stat is nil
                 local text = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
                 text:SetFont("Fonts\\FRIZQT__.TTF", entryFontSize)
                 text:SetJustifyH("CENTER")
-                text:SetPoint("TOPLEFT", nestedTable, "TOPLEFT", adjustedOffset, rowOffset)
+				text:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
                 text:SetText(tostring(textValue))  -- Ensure the value is converted to a string
             end
         end  -- This 'end' closes the inner 'for' loop
@@ -3130,14 +3347,15 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     if not (isInitial or isMissedGame) and #friendlyPlayers < numberOfRows then
         for index = #friendlyPlayers + 1, numberOfRows do
             local rowOffset = -15 * index
-            for i = 1, #headers do
+            for i = 1, #columnPositions do
                 local text = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-                text:SetFont("Fonts\\FRIZQT__.TTF", entryFontSize)
-                text:SetJustifyH("CENTER")
-                text:SetPoint("TOPLEFT", nestedTable, "TOPLEFT", columnOffsets[i], rowOffset)
-                text:SetText("-")
-				text:SetFrameStrata("HIGH")
-				text:SetFrameLevel(22)
+				local xPos = columnPositions[i]
+				local width = columnWidths[i]
+				text:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
+				text:SetWidth(width)
+				text:SetFont("Fonts\\FRIZQT__.TTF", entryFontSize)
+				text:SetJustifyH("CENTER")
+				text:SetText("-")
             end
         end
     end
@@ -3146,17 +3364,31 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     if not (isInitial or isMissedGame) and #enemyPlayers < numberOfRows then
         for index = #enemyPlayers + 1, numberOfRows do
             local rowOffset = -15 * index
-            for i = 1, #headers do
+            for i = 1, #columnPositions do
                 local text = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-                text:SetFont("Fonts\\FRIZQT__.TTF", entryFontSize)
-                text:SetJustifyH("CENTER")
-                text:SetPoint("TOPLEFT", nestedTable, "TOPLEFT", columnOffsets[i + 12], rowOffset)
-                text:SetText("-")
+				local xPos = columnPositions[i]
+				local width = columnWidths[i]
+				text:SetPoint("CENTER", parent, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
+				text:SetWidth(width)
+				text:SetFont("Fonts\\FRIZQT__.TTF", entryFontSize)
+				text:SetJustifyH("CENTER")
+				text:SetText("-")
             end
         end
     end
 
+	function nestedTable:UpdateTeamView()
+		local offset = 0
+		if UIConfig.isCompact and UIConfig.ActiveTeamView == 2 then
+			local paneW = self:GetParent():GetParent():GetParent():GetWidth()
+			offset      = paneW                      -- shift by one pane when ►
+		end
+	end
+
     SaveData()
+
+	RSTATS.LastNestedTable = nestedTable
+	nestedTable:UpdateTeamView()
 
     return nestedTable
 
@@ -3275,6 +3507,7 @@ function Config:CreateMenu()
     UIConfig:SetFrameLevel(20)
     UIConfig:SetClampedToScreen(true)
     UIConfig:SetTitle("Rated Stats")
+	UIConfig.fullContentWidth = parentWidth * 0.9        -- <- same number you used for SetSize()
 
     -- Background
     local faction = UnitFactionGroup("player")
@@ -3295,19 +3528,6 @@ function Config:CreateMenu()
     portrait:SetTexCoord(0.07, 0.93, 0.07, 0.93)
     portrait:SetDrawLayer("ARTWORK", 1)
     UIConfig.portrait = portrait
-
-    -- Page Buttons (if you need them later)
-    UIConfig.PrevPage = CreateFrame("Button", nil, UIConfig, "UIPanelButtonTemplate")
-    UIConfig.PrevPage:SetSize(28, 28)
-    UIConfig.PrevPage:SetText("<")
-    UIConfig.PrevPage:SetPoint("BOTTOMRIGHT", UIConfig, "BOTTOMRIGHT", -50, 20)
-    UIConfig.PrevPage:Hide()
-
-    UIConfig.NextPage = CreateFrame("Button", nil, UIConfig, "UIPanelButtonTemplate")
-    UIConfig.NextPage:SetSize(28, 28)
-    UIConfig.NextPage:SetText(">")
-    UIConfig.NextPage:SetPoint("BOTTOMRIGHT", UIConfig, "BOTTOMRIGHT", -20, 20)
-    UIConfig.NextPage:Hide()
 
     -- Example extra UI
     Config:CreateSearchBox(UIConfig)
@@ -3337,6 +3557,7 @@ function Config:CreateMenu()
         local frame = CreateFrame("Frame", nil, UIConfig)
         frame:SetPoint("TOPLEFT", UIConfig, "TOPLEFT", 20, -100)
         frame:SetPoint("BOTTOMRIGHT", UIConfig, "BOTTOMRIGHT", -20, 40)
+		frame:SetClipsChildren(true)
         frame:Hide()
         contentFrames[i] = frame
 
@@ -3362,7 +3583,7 @@ function Config:CreateMenu()
 
         local content = CreateFrame("Frame", "RatedStatsScrollChild"..i, scrollFrame)
 		content:SetPoint("TOPLEFT", scrollFrame, "TOPLEFT", 0, 0)
-		content:SetSize(scrollFrame:GetWidth() - 20, 0) -- optional if overridden later
+		content:SetSize(scrollFrame:GetWidth() + 20, 0) -- optional if overridden later
 		scrollFrame:SetScrollChild(content)
 
         local scrollbar = scrollFrame.ScrollBar
@@ -3379,7 +3600,7 @@ function Config:CreateMenu()
 		content.rowsAnchor = rowsAnchor
 		
 		-- Create a per-tab dropdown
-		local dropdown = LibDD:Create_UIDropDownMenu("RatedStatsTimeFilterDropdown"..i, frame)
+		local dropdown = CreateFrame("Frame", "RatedStatsTimeFilterDropdown"..i, frame, "UIDropDownMenuTemplate")
 		dropdown:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
 		UIDropDownMenu_SetWidth(dropdown, 120)
 		UIDropDownMenu_SetText(dropdown, "Today")
@@ -3387,12 +3608,12 @@ function Config:CreateMenu()
 		RSTATS.Dropdowns[i] = dropdown  -- Store reference
 		content.dropdown = dropdown
 		
-		LibDD:UIDropDownMenu_Initialize(dropdown, function(self, level, menuList)
+		UIDropDownMenu_Initialize(dropdown, function(self, level, menuList)
 			local info
 			local currentSelected = UIDropDownMenu_GetText(dropdown)
 		
 			for _, option in ipairs(timeFilterOptions) do
-				info = LibDD:UIDropDownMenu_CreateInfo()
+				info = UIDropDownMenu_CreateInfo()
 				info.text = option.text
 				info.checked = (option.text == currentSelected) -- ✅ Only one shows gold
 				info.isNotRadio = false                          -- ✅ Makes it look like a radio button (gold circle)
@@ -3401,7 +3622,7 @@ function Config:CreateMenu()
 					UIDropDownMenu_SetText(dropdown, option.text)
 					RSTATS:UpdateStatsView(option.value, i)
 				end
-				LibDD:UIDropDownMenu_AddButton(info)
+				UIDropDownMenu_AddButton(info)
 			end
 		end)
 		
@@ -3521,6 +3742,29 @@ function Config:CreateMenu()
 		RSTATS:UpdateStatsView(filterKey, DEFAULT_TAB_ID)
 	end)
 
+    -- Logic to toggle state
+    UIConfig.ActiveTeamView = 1  -- Default view
+    local function UpdateArrowState()
+        if UIConfig.ActiveTeamView == 1 then
+            UIConfig.TeamLeftButton:Disable()
+            UIConfig.TeamRightButton:Enable()
+        else
+            UIConfig.TeamRightButton:Disable()
+            UIConfig.TeamLeftButton:Enable()
+        end
+    end
+	
+	local function RefreshAllNestedTables(scrollFrame)
+		local function walk(f)
+			if f.UpdateTeamView then f:UpdateTeamView() end
+			for i = 1, f:GetNumChildren() do
+				walk(select(i, f:GetChildren()))
+			end
+		end
+		local root = scrollFrame and scrollFrame:GetScrollChild()
+		if root then walk(root) end
+	end
+
     -- Tab buttons
     local tabNames = { "Solo Shuffle", "2v2", "3v3", "RBG", "Solo RBG" }
     local tabs = {}
@@ -3546,12 +3790,37 @@ function Config:CreateMenu()
 			end
 		
 			ACTIVE_TAB_ID = tabID
+			
+			-- ✅ Adjust horizontal scroll to match current team view
+			local scrollFrame = RSTATS.ScrollFrames[tabID]
+			if UIConfig.isCompact then
+				local pageWidth = scrollFrame:GetWidth()       -- ← width of the visible pane
+				scrollFrame:SetHorizontalScroll(
+					UIConfig.ActiveTeamView == 2 and pageWidth or 0)
+			else
+				scrollFrame:SetHorizontalScroll(0)             -- full view
+			end
+
+print(("TAB-CLICK  tab=%d  paneW=%.0f  scrlX=%.0f  ActiveView=%d"):
+      format(tabID,
+             scrollFrame:GetWidth(),
+             scrollFrame:GetHorizontalScroll(),
+             UIConfig.ActiveTeamView))
+
+
+			UpdateArrowState()
+			
 			local dropdown = RSTATS.Dropdowns[tabID]
 			local selected = dropdown and UIDropDownMenu_GetText(dropdown) or "Today"
 			local filterKey = selected:lower():gsub(" ", "") or "today"
 		
 			-- 🧹 Clear old stuff
 			local content = RSTATS.ScrollContents[tabID]
+			if content.headerFrame then
+				local fullWidth = content:GetWidth()
+				content.headerFrame:SetWidth(fullWidth * 0.98)
+			end
+
 			ClearStaleMatchFrames(content)
 		
 			-- ✅ Refresh tab view immediately
@@ -3589,8 +3858,6 @@ function Config:CreateMenu()
         local headers5, frames5 = RSTATS:DisplayHistory(scrollContents[5], Database.SoloRBGHistory, mmrLabel5, 5)
         AdjustContentHeight(scrollContents[5])
 
-        UIConfig.PrevPage:Show()
-        UIConfig.NextPage:Show()
     end
 
     -- Optional ToggleViewButton
@@ -3621,18 +3888,144 @@ function Config:CreateMenu()
         if UIConfig.isCompact then
             UIConfig:SetWidth(parentWidth * 0.5)
             UIConfig.ToggleViewButton:SetNormalAtlas("RedButton-Expand")
+		    UIConfig.TeamLeftButton:Show()
+			UIConfig.TeamRightButton:Show()
         else
             UIConfig:SetWidth(parentWidth * 0.9)
             UIConfig.ToggleViewButton:SetNormalAtlas("RedButton-Condense")
+			UIConfig.TeamLeftButton:Hide()
+			UIConfig.TeamRightButton:Hide()
+			UIConfig.ActiveTeamView = 1
+			RSTATS.ScrollFrames[ACTIVE_TAB_ID]:SetHorizontalScroll(0)
+			UpdateArrowState()  -- This ensures arrow buttons visually reflect current team view
         end
         for _, f in ipairs(contentFrames) do
             f:SetWidth(UIConfig:GetWidth()-40)
         end
         for _, c in ipairs(scrollContents) do
             c:SetWidth(UIConfig:GetWidth()-40)
-        end
-    end)
 
+			-- 🔧 keep its rowsAnchor in sync –
+			--     that’s what all NestedTables are parented to
+			if c.rowsAnchor then
+				c.rowsAnchor:SetWidth(c:GetWidth()*0.96)
+			end
+			
+			----------------------------------------------------------------
+			--  🔧  NEW: shrink/grow every existing row + its nested table  -
+			----------------------------------------------------------------
+			if c.matchFrames then
+				local newRowW   = c:GetWidth()*1.06                -- row width
+				local newTableW = newRowW*1.92                     -- both teams
+				for _, row in ipairs(c.matchFrames) do
+					row:SetWidth(newRowW)
+					if row.nestedTable then
+						row.nestedTable:SetWidth(newTableW)
+						if row.nestedTable.UpdateTeamView then
+							row.nestedTable:UpdateTeamView()
+						end
+					end
+				end
+			end
+        end
+		
+		local newUIW = UIConfig.isCompact and parentWidth*0.5 or parentWidth*0.9
+		UIConfig:SetWidth(newUIW)
+	
+		----------------------------------------------------------
+		--  NEW: keep every scroll pane in step with the window  --
+		----------------------------------------------------------
+		for i, sf in ipairs(RSTATS.ScrollFrames) do
+			local w = RSTATS.ContentFrames[i]:GetWidth() - 8   -- same margin you used before
+			sf:SetWidth(w)
+	
+			-- keep its scrollbar snug
+			local bar = sf.ScrollBar
+			if bar then
+				bar:ClearAllPoints()
+				bar:SetPoint("TOPRIGHT",  sf, "TOPRIGHT", 0, -20)
+				bar:SetPoint("BOTTOMRIGHT",sf,"BOTTOMRIGHT",-2,16)
+			end
+		end
+		----------------------------------------------------------
+	
+		RefreshAllNestedTables(RSTATS.ScrollFrames[ACTIVE_TAB_ID])
+		
+		-- Resize header frame to match new width
+		local activeContent = RSTATS.ScrollContents[ACTIVE_TAB_ID]
+		local header = activeContent and activeContent.headerFrame
+		if header then
+			local frameWidth = RSTATS.ContentFrames[ACTIVE_TAB_ID]:GetWidth()
+			header:SetWidth(frameWidth - 20)
+		end
+		-- Also update the most recent nested table’s width
+		-- Refresh every nested table in the now-active scrollFrame
+		RefreshAllNestedTables(RSTATS.ScrollFrames[ACTIVE_TAB_ID])
+		print(string.format("[DEBUG] resize-toggle  mode=%s  UIW=%.0f  anchorW=%.0f", UIConfig.isCompact and "compact" or "full", UIConfig:GetWidth(), (activeContent and activeContent.rowsAnchor) and activeContent.rowsAnchor:GetWidth() or -1))
+    end)
+	
+    -- Small Arrow Buttons for Team View (like Spellbook arrows)
+    local arrowSize = 24
+    UIConfig.TeamLeftButton = CreateFrame("Button", nil, UIConfig, "UIPanelButtonTemplate")
+    UIConfig.TeamLeftButton:SetSize(arrowSize, arrowSize)
+    UIConfig.TeamLeftButton:SetPoint("BOTTOMRIGHT", UIConfig, "BOTTOMRIGHT", -48, 12)
+    UIConfig.TeamLeftButton:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Up")
+    UIConfig.TeamLeftButton:SetPushedTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Down")
+    UIConfig.TeamLeftButton:SetDisabledTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Disabled")
+    UIConfig.TeamLeftButton:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight")
+    UIConfig.TeamLeftButton:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP", 0, 1)
+        GameTooltip:SetText("Your Team", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    UIConfig.TeamLeftButton:SetScript("OnLeave", GameTooltip_Hide)
+
+    UIConfig.TeamRightButton = CreateFrame("Button", nil, UIConfig, "UIPanelButtonTemplate")
+    UIConfig.TeamRightButton:SetSize(arrowSize, arrowSize)
+    UIConfig.TeamRightButton:SetPoint("BOTTOMRIGHT", UIConfig, "BOTTOMRIGHT", -20, 12)
+    UIConfig.TeamRightButton:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up")
+    UIConfig.TeamRightButton:SetPushedTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Down")
+    UIConfig.TeamRightButton:SetDisabledTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Disabled")
+    UIConfig.TeamRightButton:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight")
+    UIConfig.TeamRightButton:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP", 0, 1)
+        GameTooltip:SetText("Enemy Team", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    UIConfig.TeamRightButton:SetScript("OnLeave", GameTooltip_Hide)
+
+	UIConfig.TeamLeftButton:SetScript("OnClick", function()
+		local scrollFrame = RSTATS.ScrollFrames[ACTIVE_TAB_ID]
+		scrollFrame:SetHorizontalScroll(0)         -- friendly half
+		UIConfig.ActiveTeamView = 1
+		UpdateArrowState()
+		RSTATS:UpdateStatsView(selectedTimeFilter, ACTIVE_TAB_ID)
+		RefreshAllNestedTables(scrollFrame)
+		print(("[DEBUG] arrow dir=%s  pageW=%.0f  scrollX=%.0f"): format("%s", pageWidth, scrollFrame:GetHorizontalScroll()))
+	end)
+		
+	UIConfig.TeamRightButton:SetScript("OnClick", function()
+		local scrollFrame = RSTATS.ScrollFrames[ACTIVE_TAB_ID]
+		local pageWidth = scrollFrame:GetWidth()  -- one “pane” right
+		scrollFrame:SetHorizontalScroll(pageWidth) -- enemy half
+		UIConfig.ActiveTeamView = 2
+		UpdateArrowState()
+		RSTATS:UpdateStatsView(selectedTimeFilter, ACTIVE_TAB_ID)
+		RefreshAllNestedTables(scrollFrame)
+		print(("[DEBUG] arrow dir=%s  pageW=%.0f  scrollX=%.0f"): format("%s", pageWidth, scrollFrame:GetHorizontalScroll()))
+	end)
+
+    UpdateArrowState()
+	
+	-- Show/hide arrows based on view
+	if UIConfig.isCompact then
+		UIConfig.TeamLeftButton:Show()
+		UIConfig.TeamRightButton:Show()
+	else
+		UIConfig.TeamLeftButton:Hide()
+		UIConfig.TeamRightButton:Hide()
+	end
+	
     UIConfig:Hide()
 
     -- Expose to your namespace if needed

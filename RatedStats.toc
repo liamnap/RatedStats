@@ -1,14 +1,15 @@
 ## Title: RatedStats
-## Version: 1.0
+## Version: TWW S2
 ## Author: liamp
-## Interface: 110100
+## Interface: 110105
 ## DefaultState: enabled
 ## SavedVariables: RSTATS_Database
 
-## OptionalDeps: LibDataBroker-1.1, LibDBIcon-1.0, LibDataBroker-1.1, LibDBIcon-1.0, LibUIDropDownMenu-4.0
+## OptionalDeps: LibDataBroker-1.1, LibDBIcon-1.0
 
 core.lua
 filters.lua
+herotalents.lua
 gettalents.lua
 stats.lua
 config.lua

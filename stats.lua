@@ -52,8 +52,12 @@ function Stats.CalculateSummary(filteredMatches, fullMatchHistory, bracketID)
     local win, loss, draw = 0, 0, 0
     local crDelta = 0
     local mapStats = {}
+	table.sort(filteredMatches, function(a, b)
+		return (a.endTime or 0) < (b.endTime or 0)
+	end)
 
     local firstMMR, lastMMR
+	local firstMatchID, lastMatchID
 
     for _, match in ipairs(filteredMatches) do
         -- Win/Loss/Draw
@@ -73,8 +77,12 @@ function Stats.CalculateSummary(filteredMatches, fullMatchHistory, bracketID)
 
                 local mmr = tonumber(ps.postmatchMMR)
                 if mmr then
-                    if not firstMMR then firstMMR = mmr end
+                    if not firstMMR then 
+						firstMMR = mmr
+						firstMatchID = match.matchID
+					end
                     lastMMR = mmr
+					lastMatchID = match.matchID
                 end
                 break
             end

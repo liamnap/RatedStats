@@ -1,2 +1,8 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Force LF endings for all text files
+* text=auto eol=lf
+
+# Explicitly define Lua/XML line endings to LF
+*.lua text eol=lf
+*.xml text eol=lf
+*.toc text eol=lf
+*.txt text eol=lf
