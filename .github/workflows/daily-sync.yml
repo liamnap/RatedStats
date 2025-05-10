@@ -1,0 +1,13 @@
+name: Daily PvP Sync
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/15 * * * *'
+
+jobs:
+  echo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm it works
+        run: echo "✅ The workflow is working and visible."
