@@ -1,3 +1,4 @@
+# Refreshing workflow to force registration
 name: Daily PvP Sync
 
 on:
