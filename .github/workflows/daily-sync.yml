@@ -1,36 +1,13 @@
-# Refreshing workflow to force registration
 name: Daily PvP Sync
 
 on:
+  workflow_dispatch:
   schedule:
     - cron: '*/15 * * * *'
-  workflow_dispatch:
 
 jobs:
-  sync:
+  echo:
     runs-on: ubuntu-latest
-    env:
-      BLIZZARD_CLIENT_ID: ${{ secrets.BLIZZARD_CLIENT_ID }}
-      BLIZZARD_CLIENT_SECRET: ${{ secrets.BLIZZARD_CLIENT_SECRET }}
-
     steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.x'
-
-      - name: Install dependencies
-        run: pip install requests
-
-      - name: Run PvP Sync
-        run: python sync_pvp.py
-
-      - name: Commit changes
-        run: |
-          git config user.name "GitHub Action"
-          git config user.email "action@github.com"
-          git add RatedStats/achiev/region_*.x
-          git commit -m "Daily PvP sync update" || echo "No changes"
-          git push origin dev
+      - name: Confirm it works
+        run: echo "✅ The workflow is working and visible."
