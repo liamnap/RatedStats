@@ -6,8 +6,30 @@ on:
     - cron: '*/15 * * * *'
 
 jobs:
-  echo:
+  sync:
     runs-on: ubuntu-latest
+    env:
+      BLIZZARD_CLIENT_ID: ${{ secrets.BLIZZARD_CLIENT_ID }}
+      BLIZZARD_CLIENT_SECRET: ${{ secrets.BLIZZARD_CLIENT_SECRET }}
+
     steps:
-      - name: Confirm it works
-        run: echo "✅ The workflow is working and visible."
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run PvP Sync Script
+        run: python sync_pvp.py
+
+      - name: Commit results to dev
+        run: |
+          git config user.name "GitHub Action"
+          git config user.email "action@github.com"
+          git add RatedStats/achiev/region_*.x
+          git commit -m "Daily PvP sync update" || echo "No changes to commit"
+          git push origin dev
