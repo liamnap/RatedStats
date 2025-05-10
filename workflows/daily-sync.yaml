@@ -2,7 +2,7 @@ name: Daily PvP Sync
 
 on:
   schedule:
-    - cron: 'cron: '0 19 * * *'
+    - cron: '30 18 * * *'
   workflow_dispatch:
 
 jobs:
