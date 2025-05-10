@@ -2,7 +2,7 @@ name: Daily PvP Sync
 
 on:
   schedule:
-    - cron: '20 19 * * *'
+    - cron: '30 19 * * *'
   workflow_dispatch:
 
 jobs:
@@ -13,23 +13,23 @@ jobs:
       BLIZZARD_CLIENT_SECRET: ${{ secrets.BLIZZARD_CLIENT_SECRET }}
 
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.x'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
 
-    - name: Install dependencies
-      run: pip install requests
+      - name: Install dependencies
+        run: pip install requests
 
-    - name: Run PvP Sync
-      run: python sync_pvp.py
+      - name: Run PvP Sync
+        run: python sync_pvp.py
 
-    - name: Commit changes
-      run: |
-        git config user.name "GitHub Action"
-        git config user.email "action@github.com"
-        git add RatedStats/achiev/region_*.x
-        git commit -m "Daily PvP sync update"
-        git push origin dev
+      - name: Commit changes
+        run: |
+          git config user.name "GitHub Action"
+          git config user.email "action@github.com"
+          git add RatedStats/achiev/region_*.x
+          git commit -m "Daily PvP sync update" || echo "No changes"
+          git push origin dev
