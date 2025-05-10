@@ -32,5 +32,4 @@ jobs:
         git config user.email "action@github.com"
         git add RatedStats/ratedstats/achiev/region_*.x
         git commit -m "Daily PvP sync update"
-        git push origin main
-        git push origin main:dev
+        git push origin dev
