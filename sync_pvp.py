@@ -86,6 +86,18 @@ async def get_pvp_achievements(session, headers):
     for category_id in PVP_CATEGORY_IDS:
         url = f"{API_BASE}/data/wow/achievement-category/{category_id}?namespace={NAMESPACE_STATIC}&locale={LOCALE}"
         data = await fetch(session, url, headers)
+
+        if not data or "achievements" not in data:
+            print(f"[WARN] Missing or invalid category {category_id} in region {REGION}")
+            continue
+
+        for ach in data["achievements"]:
+            achievements[ach["id"]] = ach["name"]
+
+        if not data:  # ✅ ADD THIS CHECK
+            print(f"[SKIP] Category {category_id} returned no data")
+            continue
+
         for ach in data.get("achievements", []):
             achievements[ach["id"]] = ach["name"]
     return achievements
