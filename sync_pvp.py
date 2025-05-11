@@ -5,16 +5,19 @@ import aiohttp
 import requests
 from pathlib import Path
 
-REGION = "us"
-LOCALE = "en_US"
+# REGION/LOCALE MATCH ORIGINAL
+REGION = "eu"
+LOCALE = "en_GB"
+API_HOST = f"{REGION}.api.blizzard.com"
+API_BASE = f"https://{API_HOST}"
 NAMESPACE_STATIC = f"static-{REGION}"
 NAMESPACE_PROFILE = f"profile-{REGION}"
-API_BASE = f"https://{REGION}.api.blizzard.com"
 OUTFILE = Path(f"achiev/region_{REGION}.x")
 
-# Manually defined PvP category IDs
-PVP_CATEGORY_IDS = [95, 165, 167, 168, 169]  # Root PvP, Arena, BG, etc.
+# Known PvP category IDs
+PVP_CATEGORY_IDS = [95, 165, 167, 168, 169]
 
+# Inline token auth
 def get_access_token(region):
     client_id = os.environ["BLIZZARD_CLIENT_ID"]
     client_secret = os.environ["BLIZZARD_CLIENT_SECRET"]
@@ -27,6 +30,7 @@ def get_access_token(region):
     response.raise_for_status()
     return response.json()["access_token"]
 
+# Fetch helper
 async def fetch(session, url, headers):
     async with session.get(url, headers=headers) as resp:
         if resp.status != 200:
@@ -34,6 +38,7 @@ async def fetch(session, url, headers):
             return {}
         return await resp.json()
 
+# PvP achievements by category
 async def get_pvp_achievements(session, headers):
     achievements = {}
     for category_id in PVP_CATEGORY_IDS:
@@ -41,13 +46,14 @@ async def get_pvp_achievements(session, headers):
         data = await fetch(session, url, headers)
         for ach in data.get("achievements", []):
             achievements[ach["id"]] = ach["name"]
-    return achievements  # {id: name}
+    return achievements
 
+# Character achievement fetch
 async def get_character_achievements(session, headers, realm, name):
     url = f"{API_BASE}/profile/wow/character/{realm}/{name.lower()}/achievements?namespace={NAMESPACE_PROFILE}&locale={LOCALE}"
-    data = await fetch(session, url, headers)
-    return data
+    return await fetch(session, url, headers)
 
+# Main process logic
 async def process_characters(characters):
     token = get_access_token(REGION)
     headers = { "Authorization": f"Bearer {token}" }
@@ -87,8 +93,8 @@ async def process_characters(characters):
                     f.write(json.dumps(entry, separators=(",", ":")) + "\n")
                     print(f"Stored: {char_key} with {len(earned_pvp)} PvP achievements")
 
+# Example characters
 if __name__ == "__main__":
-    # EXAMPLE character list — replace with real logic or dynamic source
     characters = {
         "emeriss": ["Liami"],
         "stormscale": ["Anotherchar"]
