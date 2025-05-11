@@ -24,6 +24,7 @@ jobs:
         run: pip install requests
 
       - name: Run PvP Sync Script
+        working-directory: RatedStats
         run: python sync_pvp.py
 
       - name: Commit results to dev
