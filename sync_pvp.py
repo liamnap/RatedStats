@@ -20,12 +20,12 @@ def get_token(region):
     r = requests.post(url, data={"grant_type": "client_credentials"}, auth=(CLIENT_ID, CLIENT_SECRET))
     r.raise_for_status()
     return r.json()["access_token"]
-    print("Access Token:", access_token)
 
 def verify_character_exists(name, realm, region, token):
     url = f"https://{region}.api.blizzard.com/profile/wow/character/{realm}/{name}"
-    params = {"namespace": f"profile-{region}", "locale": "en_GB", "access_token": token}
-    r = requests.get(url, params=params)
+    params = {"namespace": f"profile-{region}", "locale": "en_GB"}
+    headers = { "Authorization": f"Bearer {token}" }
+    r = requests.get(url, headers=headers, params=params)
     if r.status_code != 200:
         print(f"❌ Character not found: {name}-{realm} ({region}) → {r.status_code}")
         return False
@@ -33,8 +33,9 @@ def verify_character_exists(name, realm, region, token):
 
 def get_achievements(name, realm, region, token):
     url = f"https://{region}.api.blizzard.com/profile/wow/character/{realm}/{name}/achievements"
-    params = {"namespace": f"profile-{region}", "locale": "en_GB", "access_token": token}
-    r = requests.get(url, params=params)
+    params = {"namespace": f"profile-{region}", "locale": "en_GB"}
+    headers = { "Authorization": f"Bearer {token}" }
+    r = requests.get(url, headers=headers, params=params)
     if r.status_code == 200:
         return r.json()
     print(f"❌ Failed to fetch achievements for {name}-{realm}: {r.status_code}")
@@ -45,10 +46,10 @@ def get_achievement_info(aid, region, token):
     url = f"https://{region}.api.blizzard.com/data/wow/achievement/{aid}"
     params = {
         "namespace": f"static-{region}",
-        "locale": "en_GB",
-        "access_token": token
+        "locale": "en_GB"
     }
-    r = requests.get(url, params=params)
+    headers = { "Authorization": f"Bearer {token}" }
+    r = requests.get(url, headers=headers, params=params)
     if r.status_code == 200:
         return r.json()
     return {}
@@ -76,19 +77,19 @@ def save_region(region, players):
 
         if not verify_character_exists(name, realm, region, token):
             print("⚠️ Skipping character due to failed verification.")
-            # FALL THROUGH for liami-emeriss diagnostic
             if not (name == "liami" and realm == "emeriss"):
                 continue
 
-        # Debug fallback: test Liami-Emeriss using known-working URL format
+        # Diagnostic
         if name == "liami" and realm == "emeriss":
             print("🛠 Running diagnostic check for Liami-Emeriss")
             debug_url = f"https://{region}.api.blizzard.com/profile/wow/character/emeriss/liami/achievements"
-            debug_params = {"namespace": "profile-eu", "locale": "en_GB", "access_token": token}
-            r = requests.get(debug_url, params=debug_params)
+            debug_params = {"namespace": f"profile-{region}", "locale": "en_GB"}
+            debug_headers = { "Authorization": f"Bearer {token}" }
+            r = requests.get(debug_url, headers=debug_headers, params=debug_params)
             print(f"🧪 Diagnostic status: {r.status_code}")
             print(f"🧪 Full URL: {r.url}")
-            print(f"🧪 Response: {r.text[:300]}...")  # Trimmed for CI output
+            print(f"🧪 Response: {r.text[:300]}...")
 
         data = get_achievements(name, realm, region, token)
         if not data.get("achievements"):
