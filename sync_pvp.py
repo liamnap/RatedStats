@@ -36,12 +36,34 @@ def get_achievements(name, realm, region, token):
         return r.json()
     return {}
 
-def extract_pvp_achievements(data):
-    pvp_achievements = []
+def is_pvp_category(cat_id):
+    # Expand as needed from official PvP categories
+    return cat_id in [95, 165, 15092, 15266, 15270, 15279]
+
+def get_achievement_info(aid, region, token):
+    url = f"https://{region}.api.blizzard.com/data/wow/achievement/{aid}"
+    params = {
+        "namespace": f"static-{region}",
+        "locale": "en_GB",
+        "access_token": token
+    }
+    r = requests.get(url, params=params)
+    if r.status_code == 200:
+        return r.json()
+    return {}
+
+def extract_pvp_achievements(data, region, token):
+    pvp = []
     for a in data.get("achievements", []):
-        if is_pvp_achievement(a):
-            pvp_achievements.append(f'{a["id"]}:{a["name"]}')
-    return pvp_achievements
+        aid = a.get("id")
+        if not aid:
+            continue
+        details = get_achievement_info(aid, region, token)
+        cat = details.get("category", {}).get("id")
+        if cat and is_pvp_category(cat):
+            name = details.get("name", "Unknown")
+            pvp.append(f"{aid}:{name}")
+    return pvp
 
 def save_region(region, players):
     token = get_token(region)
