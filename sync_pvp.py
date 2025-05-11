@@ -62,6 +62,7 @@ def save_region(region, players):
         char_realm = data.get("character", {}).get("realm", {}).get("slug", realm).replace("-", " ").title().replace(" ", "-")
         key = f"{char_name}-{char_realm}"
 
+        print(f"✅ {key} → {encoded}")
         all_data[key] = encoded
 
     today = datetime.datetime.utcnow()
