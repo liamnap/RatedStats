@@ -28,7 +28,7 @@ def get_achievements(name, realm, region, token):
     char_name = quote(name.lower())
     realm_slug = quote(realm.lower())
 
-    url = f"https://{region}.api.blizzard.com/profile/wow/character/{realm_slug}/{char_name}/achievements"
+    url = url = f"https://{region}.api.blizzard.com/profile/wow/character/{realm.lower()}/{name.lower()}/achievements"
     params = {
         "namespace": f"profile-{region}",
         "locale": "en_GB",
