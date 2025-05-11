@@ -59,7 +59,7 @@ def save_region(region, players):
     day = today.timetuple().tm_yday
     year = today.year
     version = f"{BASE_VERSION}-day{day}-{year}"
-    filename = f"RatedStats/achiev/region_{region}.x"
+    filename = f"achiev/region_{region}.x"
 
     with open(filename, "w") as f:
         f.write(f'PvPSeenVersion = "{version}"\n\n')
