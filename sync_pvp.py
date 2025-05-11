@@ -9,7 +9,6 @@ from pathlib import Path
 REGION = os.getenv("REGION", "eu")
 API_HOST = f"{REGION}.api.blizzard.com"
 API_BASE = f"https://{API_HOST}"
-NAMESPACE_STATIC = f"static-{REGION}"
 NAMESPACE_PROFILE = f"profile-{REGION}"
 OUTFILE = Path(f"achiev/region_{REGION}.x")
 
@@ -41,6 +40,26 @@ def get_access_token(region):
     )
     response.raise_for_status()
     return response.json()["access_token"]
+
+def get_latest_static_namespace(region):
+    # fallback to basic if the call fails
+    default = f"{REGION}"
+    token = get_access_token("us")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    index_url = f"https://{region}.api.blizzard.com/data/wow/achievement-category/index?namespace=static-{region}&locale=en_US"
+    try:
+        resp = requests.get(index_url, headers=headers)
+        resp.raise_for_status()
+        namespace = resp.json().get("_links", {}).get("self", {}).get("href", "")
+        # Extract versioned namespace
+        if "namespace=" in namespace:
+            return namespace.split("namespace=")[-1].split("&")[0]
+    except Exception as e:
+        print(f"[WARN] Could not fetch latest static namespace: {e}")
+    return default
+NAMESPACE_STATIC = f"static-{get_latest_static_namespace(REGION)}"
+print(f"[INFO] Resolved static namespace: {NAMESPACE_STATIC}")
 
 # Fetch character list from PvP leaderboard
 def get_characters_from_leaderboards(region, headers, season_id, brackets):
@@ -90,9 +109,6 @@ async def get_pvp_achievements(session, headers):
         if not data or "achievements" not in data:
             print(f"[WARN] Missing or invalid category {category_id} in region {REGION}")
             continue
-
-        for ach in data["achievements"]:
-            achievements[ach["id"]] = ach["name"]
 
         if not data:  # ✅ ADD THIS CHECK
             print(f"[SKIP] Category {category_id} returned no data")
