@@ -74,19 +74,20 @@ def save_region(region, players):
         realm = realm.lower()
 
         if not verify_character_exists(name, realm, region, token):
-            continue
+            print("⚠️ Skipping character due to failed verification.")
+            # FALL THROUGH for liami-emeriss diagnostic
+            if not (name == "liami" and realm == "emeriss"):
+                continue
 
         # Debug fallback: test Liami-Emeriss using known-working URL format
         if name == "liami" and realm == "emeriss":
             print("🛠 Running diagnostic check for Liami-Emeriss")
             debug_url = f"https://{region}.api.blizzard.com/profile/wow/character/emeriss/liami/achievements"
-            debug_params = {"namespace": f"profile-eu", "locale": "en_GB", "access_token": token}
+            debug_params = {"namespace": "profile-eu", "locale": "en_GB", "access_token": token}
             r = requests.get(debug_url, params=debug_params)
             print(f"🧪 Diagnostic status: {r.status_code}")
-            print(f"URL: {r.url}")
-            if r.status_code != 200:
-                print(f"❌ Diagnostic request failed for Liami-Emeriss")
-                continue
+            print(f"🧪 Full URL: {r.url}")
+            print(f"🧪 Response: {r.text[:300]}...")  # Trimmed for CI output
 
         data = get_achievements(name, realm, region, token)
         if not data.get("achievements"):
