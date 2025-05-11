@@ -1,42 +1,97 @@
-name: Daily PvP Sync
+import os
+import json
+import asyncio
+import aiohttp
+import requests
+from pathlib import Path
 
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: '*/15 * * * *'
+REGION = "us"
+LOCALE = "en_US"
+NAMESPACE_STATIC = f"static-{REGION}"
+NAMESPACE_PROFILE = f"profile-{REGION}"
+API_BASE = f"https://{REGION}.api.blizzard.com"
+OUTFILE = Path(f"achiev/region_{REGION}.x")
 
-jobs:
-  sync:
-    runs-on: ubuntu-latest
-    env:
-      BLIZZARD_CLIENT_ID: ${{ secrets.BLIZZARD_CLIENT_ID }}
-      BLIZZARD_CLIENT_SECRET: ${{ secrets.BLIZZARD_CLIENT_SECRET }}
+# Manually defined PvP category IDs
+PVP_CATEGORY_IDS = [95, 165, 167, 168, 169]  # Root PvP, Arena, BG, etc.
 
-    steps:
-      - uses: actions/checkout@v3
+def get_access_token(region):
+    client_id = os.environ["BLIZZARD_CLIENT_ID"]
+    client_secret = os.environ["BLIZZARD_CLIENT_SECRET"]
+    url = f"https://{region}.battle.net/oauth/token"
+    response = requests.post(
+        url,
+        data={"grant_type": "client_credentials"},
+        auth=(client_id, client_secret)
+    )
+    response.raise_for_status()
+    return response.json()["access_token"]
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.x'
+async def fetch(session, url, headers):
+    async with session.get(url, headers=headers) as resp:
+        if resp.status != 200:
+            print(f"Failed: {url} - {resp.status}")
+            return {}
+        return await resp.json()
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install aiohttp
+async def get_pvp_achievements(session, headers):
+    achievements = {}
+    for category_id in PVP_CATEGORY_IDS:
+        url = f"{API_BASE}/data/wow/achievement-category/{category_id}?namespace={NAMESPACE_STATIC}&locale={LOCALE}"
+        data = await fetch(session, url, headers)
+        for ach in data.get("achievements", []):
+            achievements[ach["id"]] = ach["name"]
+    return achievements  # {id: name}
 
-      - name: Debug Show full directory and files
-        run: |
-          echo "Working directory: $(pwd)"
-          ls -R
+async def get_character_achievements(session, headers, realm, name):
+    url = f"{API_BASE}/profile/wow/character/{realm}/{name.lower()}/achievements?namespace={NAMESPACE_PROFILE}&locale={LOCALE}"
+    data = await fetch(session, url, headers)
+    return data
 
-      - name: Run PvP Sync Script
-        run: python sync_pvp.py
+async def process_characters(characters):
+    token = get_access_token(REGION)
+    headers = { "Authorization": f"Bearer {token}" }
 
-      - name: Commit results to dev
-        run: |
-          git config user.name "GitHub Action"
-          git config user.email "action@github.com"
-          git add achiev/region_*.x
-          git commit -m "Daily PvP sync update" || echo "No changes to commit"
-          git push origin dev
+    async with aiohttp.ClientSession() as session:
+        pvp_achievements = await get_pvp_achievements(session, headers)
+
+        with open(OUTFILE, "w") as f:
+            for realm, char_names in characters.items():
+                for name in char_names:
+                    data = await get_character_achievements(session, headers, realm, name)
+                    if not data:
+                        continue
+
+                    char_guid = data.get("character", {}).get("id", None)
+                    char_key = f"{name.lower()}-{realm.lower()}"
+
+                    earned = data.get("achievements", [])
+                    earned_pvp = [
+                        (ach["id"], pvp_achievements[ach["id"]])
+                        for ach in earned
+                        if ach["id"] in pvp_achievements
+                    ]
+
+                    if not earned_pvp:
+                        continue
+
+                    entry = {
+                        "character": char_key,
+                        "guid": char_guid
+                    }
+
+                    for idx, (aid, aname) in enumerate(earned_pvp, 1):
+                        entry[f"id{idx}"] = aid
+                        entry[f"name{idx}"] = aname
+
+                    f.write(json.dumps(entry, separators=(",", ":")) + "\n")
+                    print(f"Stored: {char_key} with {len(earned_pvp)} PvP achievements")
+
+if __name__ == "__main__":
+    # EXAMPLE character list — replace with real logic or dynamic source
+    characters = {
+        "emeriss": ["Liami"],
+        "stormscale": ["Anotherchar"]
+    }
+
+    asyncio.run(process_characters(characters))
