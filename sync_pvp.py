@@ -133,10 +133,16 @@ async def process_characters(characters_by_guid):
         tasks = [process_one(char) for char in characters_by_guid.values()]
         results = await asyncio.gather(*tasks)
 
+        # Filter out None results
+        filtered_results = [line for line in results if line]
+
+        # Sort by character name
+        sorted_results = sorted(filtered_results, key=lambda line: json.loads(line)["character"])
+
+        # Write to file
         with open(OUTFILE, "w") as f:
-            for line in results:
-                if line:
-                    f.write(line + "\n")
+            for line in sorted_results:
+                f.write(line + "\n")
 
 # Entry point
 if __name__ == "__main__":
