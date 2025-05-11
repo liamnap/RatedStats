@@ -22,14 +22,21 @@ def get_token(region):
     r.raise_for_status()
     return r.json()["access_token"]
 
+from urllib.parse import quote
+
 def get_achievements(name, realm, region, token):
-    url = f"https://{region}.api.blizzard.com/profile/wow/character/{realm}/{name}/achievements"
+    char_name = quote(name.lower())
+    realm_slug = quote(realm.lower())
+
+    url = f"https://{region}.api.blizzard.com/profile/wow/character/{realm_slug}/{char_name}/achievements"
     params = {
         "namespace": f"profile-{region}",
         "locale": "en_GB",
         "access_token": token
     }
+
     r = requests.get(url, params=params)
+    print(f"🔍 Requesting: {r.url}")
     if r.status_code != 200:
         print(f"❌ Failed to fetch achievements for {name}-{realm}: {r.status_code}")
         return {}
