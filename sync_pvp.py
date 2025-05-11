@@ -10,7 +10,7 @@ REGION = os.getenv("REGION", "eu")
 API_HOST = f"{REGION}.api.blizzard.com"
 API_BASE = f"https://{API_HOST}"
 NAMESPACE_PROFILE = f"profile-{REGION}"
-OUTFILE = Path(f"achiev/region_{REGION}.x")
+OUTFILE = Path(f"achiev/region_{REGION}.lua")
 
 LOCALES = {
     "us": "en_US",
