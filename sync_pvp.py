@@ -90,13 +90,14 @@ async def get_character_achievements(session, headers, realm, name):
 # Main logic
 async def process_characters(characters_by_guid):
     token = get_access_token(REGION)
-    headers = { "Authorization": f"Bearer {token}" }
+    headers = {"Authorization": f"Bearer {token}"}
 
     async with aiohttp.ClientSession() as session:
         pvp_achievements = await get_pvp_achievements(session, headers)
+        semaphore = asyncio.Semaphore(10)  # Adjust concurrency as needed
 
-        with open(OUTFILE, "w") as f:
-            for char in characters_by_guid.values():
+        async def process_one(char):
+            async with semaphore:
                 name = char["name"]
                 realm = char["realm"]
                 guid = char["id"]
@@ -104,7 +105,7 @@ async def process_characters(characters_by_guid):
 
                 data = await get_character_achievements(session, headers, realm, name)
                 if not data:
-                    continue
+                    return None
 
                 earned = data.get("achievements", [])
                 earned_pvp = [
@@ -114,19 +115,25 @@ async def process_characters(characters_by_guid):
                 ]
 
                 if not earned_pvp:
-                    continue
+                    return None
 
                 entry = {
                     "character": char_key,
                     "guid": guid
                 }
-
                 for idx, (aid, aname) in enumerate(earned_pvp, 1):
                     entry[f"id{idx}"] = aid
                     entry[f"name{idx}"] = aname
 
-                f.write(json.dumps(entry, separators=(",", ":")) + "\n")
-                print(f"Stored: {char_key} with {len(earned_pvp)} PvP achievements")
+                return json.dumps(entry, separators=(",", ":"))
+
+        tasks = [process_one(char) for char in characters_by_guid.values()]
+        results = await asyncio.gather(*tasks)
+
+        with open(OUTFILE, "w") as f:
+            for line in results:
+                if line:
+                    f.write(line + "\n")
 
 # Entry point
 if __name__ == "__main__":
