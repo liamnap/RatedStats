@@ -7,8 +7,8 @@ CLIENT_ID = os.getenv("BLIZZARD_CLIENT_ID")
 CLIENT_SECRET = os.getenv("BLIZZARD_CLIENT_SECRET")
 
 PLAYERS_BY_REGION = {
-    "eu": [("elitee", "twilights-hammer"), ("markwards", "ragnaros")],
-    "us": [("bigarena", "tichondrius")],
+    "eu": [],
+    "us": [],
     "kr": [],
     "tw": []
 }
