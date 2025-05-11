@@ -50,8 +50,18 @@ def get_latest_static_namespace(region):
     index_url = f"https://{region}.api.blizzard.com/data/wow/achievement-category/index?namespace=static-{region}&locale=en_US"
     try:
         resp = requests.get(index_url, headers=headers)
-        resp.raise_for_status()
-        namespace = resp.json().get("_links", {}).get("self", {}).get("href", "")
+        if not resp.ok:
+            print(f"[WARN] Failed to fetch static namespace index: {resp.status_code} - {index_url}")
+            return default
+
+        try:
+            namespace = resp.json().get("_links", {}).get("self", {}).get("href", "")
+            if "namespace=" in namespace:
+                return namespace.split("namespace=")[-1].split("&")[0]
+        except Exception as e:
+            print(f"[WARN] Could not decode namespace JSON: {e}")
+        return default
+
         # Extract versioned namespace
         if "namespace=" in namespace:
             return namespace.split("namespace=")[-1].split("&")[0]
