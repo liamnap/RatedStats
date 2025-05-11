@@ -120,10 +120,6 @@ async def get_pvp_achievements(session, headers):
             print(f"[WARN] Missing or invalid category {category_id} in region {REGION}")
             continue
 
-        if not data:  # ✅ ADD THIS CHECK
-            print(f"[SKIP] Category {category_id} returned no data")
-            continue
-
         for ach in data.get("achievements", []):
             achievements[ach["id"]] = ach["name"]
     return achievements
