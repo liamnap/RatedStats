@@ -7,12 +7,20 @@ from pathlib import Path
 
 # REGION/LOCALE CONFIG
 REGION = os.getenv("REGION", "eu")
-LOCALE = "en_GB"
 API_HOST = f"{REGION}.api.blizzard.com"
 API_BASE = f"https://{API_HOST}"
 NAMESPACE_STATIC = f"static-{REGION}"
 NAMESPACE_PROFILE = f"profile-{REGION}"
 OUTFILE = Path(f"achiev/region_{REGION}.x")
+
+LOCALES = {
+    "us": "en_US",
+    "eu": "en_GB",
+    "kr": "ko_KR",
+    "tw": "zh_TW"
+}
+LOCALE = LOCALES.get(REGION, "en_US")
+print(f"[INFO] Running for region: {REGION} with locale: {LOCALE}")
 
 # Known PvP category IDs
 PVP_CATEGORY_IDS = [95, 165, 167, 168, 169]
