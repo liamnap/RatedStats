@@ -1,6 +1,7 @@
 import os
 import requests
 import datetime
+import json
 
 BASE_VERSION = "v2.0"
 CLIENT_ID = os.getenv("BLIZZARD_CLIENT_ID")
@@ -13,10 +14,15 @@ PLAYERS_BY_REGION = {
     "tw": []
 }
 
-def is_pvp_achievement(achievement):
-    # Known PvP-related category IDs
-    category_id = achievement.get("category", {}).get("id")
-    return category_id in [95, 165, 15092, 15266, 15270, 15279]
+# Load achievement metadata from static dump
+with open("achievements_index.json", encoding="utf-8") as f:
+    ALL_ACHIEVEMENTS = {str(a["id"]): a for a in json.load(f)["achievements"] if "id" in a}
+
+# PvP-related category IDs
+PVP_CATEGORY_IDS = {95, 165, 15092, 15266, 15270, 15279}
+
+def is_pvp_category(cat_id):
+    return cat_id in PVP_CATEGORY_IDS
 
 def get_token(region):
     url = f"https://{region}.battle.net/oauth/token"
@@ -25,8 +31,7 @@ def get_token(region):
     return r.json()["access_token"]
 
 def get_achievements(name, realm, region, token):
-def get_achievements(name, realm, region, token):
-    url = f"https://{region}.api.blizzard.com/profile/wow/character/{realm.lower()}/{name.lower()}/achievements"
+    url = f"https://{region}.api.blizzard.com/profile/wow/character/{realm}/{name}/achievements"
     params = {
         "namespace": f"profile-{region}",
         "locale": "en_GB",
@@ -39,39 +44,16 @@ def get_achievements(name, realm, region, token):
         return {}
     return r.json()
 
-def is_pvp_category(cat_id):
-    # Expand as needed from official PvP categories
-    return cat_id in [95, 165, 15092, 15266, 15270, 15279]
-
-def get_achievement_info(aid, region, token):
-    if aid in ACHIEVEMENT_CACHE:
-        return ACHIEVEMENT_CACHE[aid]
-
-    url = f"https://{region}.api.blizzard.com/data/wow/achievement/{aid}"
-    params = {
-        "namespace": f"static-{region}",
-        "locale": "en_GB",
-        "access_token": token
-    }
-    r = requests.get(url, params=params)
-    if r.status_code == 200:
-        data = r.json()
-        ACHIEVEMENT_CACHE[aid] = data
-        return data
-    else:
-        print(f"⚠️  Failed to fetch achievement {aid}: {r.status_code}")
-    return {}
-
-def extract_pvp_achievements(data, region, token):
+def extract_pvp_achievements(data):
     pvp = []
     for a in data.get("achievements", []):
-        aid = a.get("id")
-        if not aid:
+        aid = str(a.get("id"))
+        info = ALL_ACHIEVEMENTS.get(aid)
+        if not info:
             continue
-        details = get_achievement_info(aid, region, token)
-        cat = details.get("category", {}).get("id")
-        if cat and is_pvp_category(cat):
-            name = details.get("name", "Unknown")
+        cat = info.get("category", {}).get("id")
+        if is_pvp_category(cat):
+            name = info.get("name", "Unknown").replace('"', "'")
             pvp.append(f"{aid}:{name}")
     return pvp
 
@@ -85,17 +67,16 @@ def save_region(region, players):
             print(f"⚠️  No data for {name}-{realm} in {region.upper()}")
             continue
 
-        summary = extract_pvp_achievements(data, region, token)
+        summary = extract_pvp_achievements(data)
         if not summary:
             print(f"ℹ️  No PvP achievements found for {name}-{realm}")
             continue
 
-        # Prefer formatted name from API if available
         char_name = data.get("character", {}).get("name", name).capitalize()
         char_realm = data.get("character", {}).get("realm", {}).get("slug", realm).replace("-", " ").title().replace(" ", "-")
         key = f"{char_name}-{char_realm}"
 
-        print(f"✅ {key} → {len(summary)} achievements")
+        print(f"✅ {key} → {len(summary)} PvP achievements")
         all_data[key] = summary
 
     today = datetime.datetime.utcnow()
@@ -108,8 +89,8 @@ def save_region(region, players):
         f.write(f'PvPSeenVersion = "{version}"\n\n')
         f.write(f'PvPSeen_{region.upper()} = {{\n')
         for char_key, achievements in all_data.items():
-            achievement_str = ",".join(achievements)
-            f.write(f'  ["{char_key}"] = "{achievement_str}",\n')
+            line = ",".join(achievements)
+            f.write(f'  ["{char_key}"] = "{line}",\n')
         f.write("}\n")
 
 def main():
