@@ -23,6 +23,11 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
+      - name: Debug Show full directory and files
+        run: |
+          echo "Working directory: $(pwd)"
+          ls -R
+
       - name: Run PvP Sync Script
         working-directory: RatedStats
         run: python RatedStats/sync_pvp.py
