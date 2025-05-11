@@ -17,7 +17,7 @@ PVP_CATEGORIES = {95, 165, 15092, 15266, 15270, 15279}
 
 def get_token(region):
     url = f"https://{region}.battle.net/oauth/token"
-    r = requests.post(url, data={"grant_type": "client_credentials"}, auth=(CLIENT_ID, CLIENT_SECRET))
+    r = requests.post(url, data={"grant_type": "client_credentials", timeout=10}, auth=(CLIENT_ID, CLIENT_SECRET))
     r.raise_for_status()
     return r.json()["access_token"]
 
@@ -25,7 +25,7 @@ def verify_character_exists(name, realm, region, token):
     url = f"https://{region}.api.blizzard.com/profile/wow/character/{realm}/{name}"
     params = {"namespace": f"profile-{region}", "locale": "en_GB"}
     headers = { "Authorization": f"Bearer {token}" }
-    r = requests.get(url, headers=headers, params=params)
+    r = requests.get(url, headers=headers, params=params, timeout=10)
     if r.status_code != 200:
         print(f"❌ Character not found: {name}-{realm} ({region}) → {r.status_code}")
         return False
@@ -35,7 +35,7 @@ def get_achievements(name, realm, region, token):
     url = f"https://{region}.api.blizzard.com/profile/wow/character/{realm}/{name}/achievements"
     params = {"namespace": f"profile-{region}", "locale": "en_GB"}
     headers = { "Authorization": f"Bearer {token}" }
-    r = requests.get(url, headers=headers, params=params)
+    r = requests.get(url, headers=headers, params=params, timeout=10)
     if r.status_code == 200:
         return r.json()
     print(f"❌ Failed to fetch achievements for {name}-{realm}: {r.status_code}")
@@ -49,12 +49,16 @@ def get_achievement_info(aid, region, token):
         "locale": "en_GB"
     }
     headers = { "Authorization": f"Bearer {token}" }
-    r = requests.get(url, headers=headers, params=params)
+    r = requests.get(url, headers=headers, params=params, timeout=10)
     if r.status_code == 200:
         return r.json()
     return {}
+    
+import time
+start = time.time()
 
 def extract_pvp_achievements(data, region, token):
+    print(f"⏱️ Took {time.time() - start:.2f} seconds to extract PvP achievements")
     pvp = []
     for a in data.get("achievements", []):
         aid = a.get("id")
@@ -86,7 +90,7 @@ def save_region(region, players):
             debug_url = f"https://{region}.api.blizzard.com/profile/wow/character/emeriss/liami/achievements"
             debug_params = {"namespace": f"profile-{region}", "locale": "en_GB"}
             debug_headers = { "Authorization": f"Bearer {token}" }
-            r = requests.get(debug_url, headers=debug_headers, params=debug_params)
+            r = requests.get(debug_url, headers=debug_headers, params=debug_params, timeout=10)
             print(f"🧪 Diagnostic status: {r.status_code}")
             print(f"🧪 Full URL: {r.url}")
             print(f"🧪 Response: {r.text[:300]}...")
