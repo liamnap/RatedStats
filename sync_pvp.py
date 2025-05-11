@@ -133,9 +133,22 @@ async def process_characters(characters):
         lines = [r for r in results if r]
         lines.sort(key=lambda l: json.loads(l)["character"])
 
-        with open(OUTFILE, "w") as f:
+        with open(OUTFILE, "w", encoding="utf-8") as f:
+            f.write("return {\n")
             for line in lines:
-                f.write(line + "\n")
+                obj = json.loads(line)
+                parts = [f'character = "{obj["character"]}", guid = {obj["guid"]}']
+                for i in range(1, 100):  # reasonable upper bound
+                    id_key = f"id{i}"
+                    name_key = f"name{i}"
+                    if id_key in obj and name_key in obj:
+                        name = obj[name_key].replace('"', '\\"')
+                        parts.append(f'id{i} = {obj[id_key]}, name{i} = "{name}"')
+                    else:
+                        break
+                lua_line = "    { " + ", ".join(parts) + " },\n"
+                f.write(lua_line)
+            f.write("}\n")
 
 # RUN
 if __name__ == "__main__":
