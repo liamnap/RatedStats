@@ -70,17 +70,20 @@ import time
 start = time.time()
 
 def extract_pvp_achievements(data, region, token):
-    print(f"⏱️ Took {time.time() - start:.2f} seconds to extract PvP achievements")
+    print(f"📥 Extracting PvP achievements from {len(data.get('achievements', []))} total...", flush=True)
     pvp = []
-    for a in data.get("achievements", []):
+    for i, a in enumerate(data.get("achievements", []), start=1):
         aid = a.get("id")
         if not aid:
             continue
+        if i % 50 == 0:
+            print(f"🔄 Checked {i} achievements...", flush=True)
         details = get_achievement_info(aid, region, token)
         cat = details.get("category", {}).get("id")
         if cat in PVP_CATEGORIES:
             name = details.get("name", "Unknown")
             pvp.append(f"{aid}:{name}")
+    print(f"✅ Found {len(pvp)} PvP achievements", flush=True)
     return pvp
 
 def save_region(region, players):
