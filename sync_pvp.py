@@ -34,6 +34,9 @@ def get_achievements(name, realm, region, token):
     r = requests.get(url, params=params)
     if r.status_code == 200:
         return r.json()
+    print(f"❌ Failed or empty response for {name}-{realm} ({region})")
+    print(f"Status: {r.status_code}, URL: {r.url}")
+    print(r.text)
     return {}
 
 def is_pvp_category(cat_id):
