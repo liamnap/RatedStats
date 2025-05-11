@@ -5,7 +5,7 @@ import aiohttp
 import requests
 from pathlib import Path
 
-# REGION/LOCALE MATCH ORIGINAL
+# REGION/LOCALE CONFIG
 REGION = "eu"
 LOCALE = "en_GB"
 API_HOST = f"{REGION}.api.blizzard.com"
@@ -16,6 +16,10 @@ OUTFILE = Path(f"achiev/region_{REGION}.x")
 
 # Known PvP category IDs
 PVP_CATEGORY_IDS = [95, 165, 167, 168, 169]
+
+# Current season and brackets to include
+PVP_SEASON_ID = 38
+BRACKETS = ["2v2", "3v3", "rbg", "shuffle"]
 
 # Inline token auth
 def get_access_token(region):
@@ -30,7 +34,37 @@ def get_access_token(region):
     response.raise_for_status()
     return response.json()["access_token"]
 
-# Fetch helper
+# Fetch character list from PvP leaderboard
+def get_characters_from_leaderboards(region, headers, season_id, brackets):
+    characters_by_guid = {}
+
+    for bracket in brackets:
+        url = f"https://{region}.api.blizzard.com/data/wow/pvp-season/{season_id}/pvp-leaderboard/{bracket}?namespace=dynamic-{region}&locale={LOCALE}"
+        response = requests.get(url, headers=headers)
+        if response.status_code != 200:
+            print(f"Failed leaderboard fetch: {url} - {response.status_code}")
+            continue
+
+        data = response.json()
+        for entry in data.get("entries", []):
+            char = entry.get("character")
+            if not char:
+                continue
+
+            char_id = char["id"]
+            realm = char["realm"]["slug"]
+            name = char["name"]
+
+            if char_id not in characters_by_guid:
+                characters_by_guid[char_id] = {
+                    "id": char_id,
+                    "name": name,
+                    "realm": realm
+                }
+
+    return characters_by_guid  # keyed by guid
+
+# Async fetch helper
 async def fetch(session, url, headers):
     async with session.get(url, headers=headers) as resp:
         if resp.status != 200:
@@ -38,7 +72,7 @@ async def fetch(session, url, headers):
             return {}
         return await resp.json()
 
-# PvP achievements by category
+# Get PvP achievements
 async def get_pvp_achievements(session, headers):
     achievements = {}
     for category_id in PVP_CATEGORY_IDS:
@@ -48,13 +82,13 @@ async def get_pvp_achievements(session, headers):
             achievements[ach["id"]] = ach["name"]
     return achievements
 
-# Character achievement fetch
+# Get a character’s achievements
 async def get_character_achievements(session, headers, realm, name):
     url = f"{API_BASE}/profile/wow/character/{realm}/{name.lower()}/achievements?namespace={NAMESPACE_PROFILE}&locale={LOCALE}"
     return await fetch(session, url, headers)
 
-# Main process logic
-async def process_characters(characters):
+# Main logic
+async def process_characters(characters_by_guid):
     token = get_access_token(REGION)
     headers = { "Authorization": f"Bearer {token}" }
 
@@ -62,42 +96,48 @@ async def process_characters(characters):
         pvp_achievements = await get_pvp_achievements(session, headers)
 
         with open(OUTFILE, "w") as f:
-            for realm, char_names in characters.items():
-                for name in char_names:
-                    data = await get_character_achievements(session, headers, realm, name)
-                    if not data:
-                        continue
+            for char in characters_by_guid.values():
+                name = char["name"]
+                realm = char["realm"]
+                guid = char["id"]
+                char_key = f"{name.lower()}-{realm.lower()}"
 
-                    char_guid = data.get("character", {}).get("id", None)
-                    char_key = f"{name.lower()}-{realm.lower()}"
+                data = await get_character_achievements(session, headers, realm, name)
+                if not data:
+                    continue
 
-                    earned = data.get("achievements", [])
-                    earned_pvp = [
-                        (ach["id"], pvp_achievements[ach["id"]])
-                        for ach in earned
-                        if ach["id"] in pvp_achievements
-                    ]
+                earned = data.get("achievements", [])
+                earned_pvp = [
+                    (ach["id"], pvp_achievements[ach["id"]])
+                    for ach in earned
+                    if ach["id"] in pvp_achievements
+                ]
 
-                    if not earned_pvp:
-                        continue
+                if not earned_pvp:
+                    continue
 
-                    entry = {
-                        "character": char_key,
-                        "guid": char_guid
-                    }
+                entry = {
+                    "character": char_key,
+                    "guid": guid
+                }
 
-                    for idx, (aid, aname) in enumerate(earned_pvp, 1):
-                        entry[f"id{idx}"] = aid
-                        entry[f"name{idx}"] = aname
+                for idx, (aid, aname) in enumerate(earned_pvp, 1):
+                    entry[f"id{idx}"] = aid
+                    entry[f"name{idx}"] = aname
 
-                    f.write(json.dumps(entry, separators=(",", ":")) + "\n")
-                    print(f"Stored: {char_key} with {len(earned_pvp)} PvP achievements")
+                f.write(json.dumps(entry, separators=(",", ":")) + "\n")
+                print(f"Stored: {char_key} with {len(earned_pvp)} PvP achievements")
 
-# Example characters
+# Entry point
 if __name__ == "__main__":
-    characters = {
-        "emeriss": ["Liami"],
-        "stormscale": ["Anotherchar"]
-    }
+    token = get_access_token(REGION)
+    headers = { "Authorization": f"Bearer {token}" }
 
-    asyncio.run(process_characters(characters))
+    characters_by_guid = get_characters_from_leaderboards(
+        region=REGION,
+        headers=headers,
+        season_id=PVP_SEASON_ID,
+        brackets=BRACKETS
+    )
+
+    asyncio.run(process_characters(characters_by_guid))
