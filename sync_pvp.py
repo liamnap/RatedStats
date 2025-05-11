@@ -25,19 +25,19 @@ def get_token(region):
     return r.json()["access_token"]
 
 def get_achievements(name, realm, region, token):
-    url = f"https://{region}.api.blizzard.com/profile/wow/character/{realm}/{name}/achievements"
+def get_achievements(name, realm, region, token):
+    url = f"https://{region}.api.blizzard.com/profile/wow/character/{realm.lower()}/{name.lower()}/achievements"
     params = {
         "namespace": f"profile-{region}",
         "locale": "en_GB",
         "access_token": token
     }
     r = requests.get(url, params=params)
-    if r.status_code == 200:
-        return r.json()
-    print(f"❌ Failed or empty response for {name}-{realm} ({region})")
-    print(f"Status: {r.status_code}, URL: {r.url}")
-    print(r.text)
-    return {}
+    if r.status_code != 200:
+        print(f"❌ Failed or empty response for {name}-{realm} ({region})")
+        print(f"Status: {r.status_code}, URL: {r.url}")
+        return {}
+    return r.json()
 
 def is_pvp_category(cat_id):
     # Expand as needed from official PvP categories
