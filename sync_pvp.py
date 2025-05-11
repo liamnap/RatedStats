@@ -7,18 +7,14 @@ CLIENT_ID = os.getenv("BLIZZARD_CLIENT_ID")
 CLIENT_SECRET = os.getenv("BLIZZARD_CLIENT_SECRET")
 
 PLAYERS_BY_REGION = {
-    "eu": [],
+    "eu": ["liami", "emeriss"],
     "us": [],
     "kr": [],
     "tw": []
 }
 
 ACHIEVEMENT_MAPPING = {
-    9232: "Glad",
-    41019: "Elite",
-    41018: "Duelist",
     41017: "RivalII",
-    41016: "RivalI",
     # Add more IDs as needed
 }
 
@@ -37,12 +33,13 @@ def get_achievements(name, realm, region, token):
     return {}
 
 def extract_counts(data):
-    counts = {key: 0 for key in set(ACHIEVEMENT_MAPPING.values())}
+    print(f"📦 Checking {len(data.get('achievements', []))} achievements...")
+    counts = {"RivalII": 0}
     for a in data.get("achievements", []):
-        id = a.get("id")
-        cat = ACHIEVEMENT_MAPPING.get(id)
-        if cat:
-            counts[cat] += 1
+        print(f"🧾 {a.get('id')} - {a.get('name')}")
+        if a.get("id") == 41017:
+            print("✅ Rival II achievement found!")
+            counts["RivalII"] += 1
     return counts
 
 def save_region(region, players):
