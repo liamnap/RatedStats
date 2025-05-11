@@ -6,7 +6,7 @@ import requests
 from pathlib import Path
 
 # REGION/LOCALE CONFIG
-REGION = "eu"
+REGION = os.getenv("REGION", "eu")
 LOCALE = "en_GB"
 API_HOST = f"{REGION}.api.blizzard.com"
 API_BASE = f"https://{API_HOST}"
