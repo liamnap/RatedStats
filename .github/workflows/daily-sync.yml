@@ -25,9 +25,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install aiohttp
 
-  - name: Run PvP sync
-    run: python sync_pvp.py
-
       - name: Debug Show full directory and files
         run: |
           echo "Working directory: $(pwd)"
