@@ -60,11 +60,7 @@ def get_latest_static_namespace(region):
                 return namespace.split("namespace=")[-1].split("&")[0]
         except Exception as e:
             print(f"[WARN] Could not decode namespace JSON: {e}")
-        return default
-
-    except Exception as e:
-        print(f"[WARN] Could not fetch latest static namespace: {e}")
-    return default
+        return f"static-{default}"
 NAMESPACE_STATIC = get_latest_static_namespace(REGION)
 print(f"[INFO] Resolved static namespace: {NAMESPACE_STATIC}")
 
