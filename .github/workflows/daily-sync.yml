@@ -29,8 +29,7 @@ jobs:
           ls -R
 
       - name: Run PvP Sync Script
-        working-directory: RatedStats
-        run: python RatedStats/sync_pvp.py
+        run: python sync_pvp.py
 
       - name: Commit results to dev
         run: |
