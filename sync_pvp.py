@@ -41,6 +41,9 @@ def is_pvp_category(cat_id):
     return cat_id in [95, 165, 15092, 15266, 15270, 15279]
 
 def get_achievement_info(aid, region, token):
+    if aid in ACHIEVEMENT_CACHE:
+        return ACHIEVEMENT_CACHE[aid]
+
     url = f"https://{region}.api.blizzard.com/data/wow/achievement/{aid}"
     params = {
         "namespace": f"static-{region}",
@@ -49,7 +52,11 @@ def get_achievement_info(aid, region, token):
     }
     r = requests.get(url, params=params)
     if r.status_code == 200:
-        return r.json()
+        data = r.json()
+        ACHIEVEMENT_CACHE[aid] = data
+        return data
+    else:
+        print(f"⚠️  Failed to fetch achievement {aid}: {r.status_code}")
     return {}
 
 def extract_pvp_achievements(data, region, token):
