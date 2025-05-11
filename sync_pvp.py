@@ -13,10 +13,10 @@ PLAYERS_BY_REGION = {
     "tw": []
 }
 
-ACHIEVEMENT_MAPPING = {
-    41017: "RivalII",
-    # Add more IDs as needed
-}
+def is_pvp_achievement(achievement):
+    # Known PvP-related category IDs
+    category_id = achievement.get("category", {}).get("id")
+    return category_id in [95, 165, 15092, 15266, 15270, 15279]
 
 def get_token(region):
     url = f"https://{region}.battle.net/oauth/token"
@@ -26,41 +26,45 @@ def get_token(region):
 
 def get_achievements(name, realm, region, token):
     url = f"https://{region}.api.blizzard.com/profile/wow/character/{realm}/{name}/achievements"
-    params = {"namespace": f"profile-{region}", "locale": "en_GB", "access_token": token}
+    params = {
+        "namespace": f"profile-{region}",
+        "locale": "en_GB",
+        "access_token": token
+    }
     r = requests.get(url, params=params)
     if r.status_code == 200:
         return r.json()
     return {}
 
-def extract_counts(data):
-    print(f"📦 Checking {len(data.get('achievements', []))} achievements...")
-    counts = {"RivalII": 0}
+def extract_pvp_achievements(data):
+    pvp_achievements = []
     for a in data.get("achievements", []):
-        print(f"🧾 {a.get('id')} - {a.get('name')}")
-        if a.get("id") == 41017:
-            print("✅ Rival II achievement found!")
-            counts["RivalII"] += 1
-    return counts
+        if is_pvp_achievement(a):
+            pvp_achievements.append(f'{a["id"]}:{a["name"]}')
+    return pvp_achievements
 
 def save_region(region, players):
     token = get_token(region)
     all_data = {}
+
     for name, realm in players:
         data = get_achievements(name.lower(), realm.lower(), region, token)
         if not data or not data.get("achievements"):
             print(f"⚠️  No data for {name}-{realm} in {region.upper()}")
             continue
 
-        summary = extract_counts(data)
-        encoded = " ".join([f"{k}:{v}" for k, v in summary.items() if v > 0])
+        summary = extract_pvp_achievements(data)
+        if not summary:
+            print(f"ℹ️  No PvP achievements found for {name}-{realm}")
+            continue
 
         # Prefer formatted name from API if available
         char_name = data.get("character", {}).get("name", name).capitalize()
         char_realm = data.get("character", {}).get("realm", {}).get("slug", realm).replace("-", " ").title().replace(" ", "-")
         key = f"{char_name}-{char_realm}"
 
-        print(f"✅ {key} → {encoded}")
-        all_data[key] = encoded
+        print(f"✅ {key} → {len(summary)} achievements")
+        all_data[key] = summary
 
     today = datetime.datetime.utcnow()
     day = today.timetuple().tm_yday
@@ -68,11 +72,12 @@ def save_region(region, players):
     version = f"{BASE_VERSION}-day{day}-{year}"
     filename = f"achiev/region_{region}.x"
 
-    with open(filename, "w") as f:
+    with open(filename, "w", encoding="utf-8") as f:
         f.write(f'PvPSeenVersion = "{version}"\n\n')
         f.write(f'PvPSeen_{region.upper()} = {{\n')
-        for key, line in all_data.items():
-            f.write(f'  ["{key}"] = "{line}",\n')
+        for char_key, achievements in all_data.items():
+            achievement_str = ",".join(achievements)
+            f.write(f'  ["{char_key}"] = "{achievement_str}",\n')
         f.write("}\n")
 
 def main():
