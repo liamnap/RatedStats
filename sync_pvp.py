@@ -11,7 +11,7 @@ API_HOST = f"{REGION}.api.blizzard.com"
 API_BASE = f"https://{API_HOST}"
 NAMESPACE_PROFILE = f"profile-{REGION}"
 OUTFILE = Path(f"achiev/region_{REGION}.lua")
-+REGION_VAR = f"ACHIEVEMENTS_{REGION.upper()}"
+REGION_VAR = f"ACHIEVEMENTS_{REGION.upper()}"
 
 LOCALES = {
     "us": "en_US",
