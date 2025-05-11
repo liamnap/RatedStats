@@ -20,7 +20,7 @@ def get_token(region):
     r = requests.post(url, data={"grant_type": "client_credentials"}, auth=(CLIENT_ID, CLIENT_SECRET))
     r.raise_for_status()
     return r.json()["access_token"]
-    print("Access Token:" access_token)
+    print("Access Token:", access_token)
 
 def verify_character_exists(name, realm, region, token):
     url = f"https://{region}.api.blizzard.com/profile/wow/character/{realm}/{name}"
