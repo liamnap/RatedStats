@@ -43,7 +43,7 @@ def get_access_token(region):
 
 def get_latest_static_namespace(region):
     # fallback to basic if the call fails
-    default = f"static-{region}"
+    default = region
     token = get_access_token("us")
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -62,13 +62,10 @@ def get_latest_static_namespace(region):
             print(f"[WARN] Could not decode namespace JSON: {e}")
         return default
 
-        # Extract versioned namespace
-        if "namespace=" in namespace:
-            return namespace.split("namespace=")[-1].split("&")[0]
     except Exception as e:
         print(f"[WARN] Could not fetch latest static namespace: {e}")
     return default
-NAMESPACE_STATIC = f"static-{get_latest_static_namespace(REGION)}"
+NAMESPACE_STATIC = get_latest_static_namespace(REGION)
 print(f"[INFO] Resolved static namespace: {NAMESPACE_STATIC}")
 
 # Fetch character list from PvP leaderboard
