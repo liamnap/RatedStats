@@ -1,3 +1,6 @@
-PvPSeenVersion = "day000-achievs"
+PvPSeenVersion = "v2.0-day131-2025"
 
-PvPSeen_EU = {}
+PvPSeen_EU = {
+  ["Elitee-Twilights-hammer"] = "",
+  ["Markwards-Ragnaros"] = "",
+}

@@ -1,3 +1,5 @@
-PvPSeenVersion = "day000-achievs"
+PvPSeenVersion = "v2.0-day131-2025"
 
-PvPSeen_US = {}
+PvPSeen_US = {
+  ["Bigarena-Tichondrius"] = "",
+}
