@@ -75,7 +75,7 @@ def save_region(region, players):
             print(f"⚠️  No data for {name}-{realm} in {region.upper()}")
             continue
 
-        summary = extract_pvp_achievements(data)
+        summary = extract_pvp_achievements(data, region, token)
         if not summary:
             print(f"ℹ️  No PvP achievements found for {name}-{realm}")
             continue
