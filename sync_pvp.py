@@ -43,7 +43,7 @@ def get_access_token(region):
 
 def get_latest_static_namespace(region):
     # fallback to basic if the call fails
-    default = f"{REGION}"
+    default = f"static-{region}"
     token = get_access_token("us")
     headers = {"Authorization": f"Bearer {token}"}
 
