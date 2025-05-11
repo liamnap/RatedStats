@@ -16,10 +16,22 @@ PLAYERS_BY_REGION = {
 PVP_CATEGORIES = {95, 165, 15092, 15266, 15270, 15279}
 
 def get_token(region):
+    print(f"🔐 Requesting token for region: {region}", flush=True)
     url = f"https://{region}.battle.net/oauth/token"
-    r = requests.post(url, data={"grant_type": "client_credentials"}, auth=(CLIENT_ID, CLIENT_SECRET), timeout=10)
-    r.raise_for_status()
-    return r.json()["access_token"]
+    try:
+        r = requests.post(
+            url,
+            data={"grant_type": "client_credentials"},
+            auth=(CLIENT_ID, CLIENT_SECRET),
+            timeout=10
+        )
+        r.raise_for_status()
+        token = r.json()["access_token"]
+        print(f"✅ Token received for {region}", flush=True)
+        return token
+    except requests.RequestException as e:
+        print(f"❌ Failed to retrieve token for {region}: {e}", flush=True)
+        return None
 
 def verify_character_exists(name, realm, region, token):
     url = f"https://{region}.api.blizzard.com/profile/wow/character/{realm}/{name}"
@@ -73,6 +85,9 @@ def extract_pvp_achievements(data, region, token):
 
 def save_region(region, players):
     token = get_token(region)
+    if not token:
+        print(f"❌ Skipping region {region} due to token failure", flush=True)
+        return
     all_data = {}
 
     for name, realm in players:
