@@ -50,9 +50,18 @@ def save_region(region, players):
     all_data = {}
     for name, realm in players:
         data = get_achievements(name.lower(), realm.lower(), region, token)
+        if not data or not data.get("achievements"):
+            print(f"⚠️  No data for {name}-{realm} in {region.upper()}")
+            continue
+
         summary = extract_counts(data)
         encoded = " ".join([f"{k}:{v}" for k, v in summary.items() if v > 0])
-        key = f"{name.capitalize()}-{realm.capitalize()}"
+
+        # Prefer formatted name from API if available
+        char_name = data.get("character", {}).get("name", name).capitalize()
+        char_realm = data.get("character", {}).get("realm", {}).get("slug", realm).replace("-", " ").title().replace(" ", "-")
+        key = f"{char_name}-{char_realm}"
+
         all_data[key] = encoded
 
     today = datetime.datetime.utcnow()
