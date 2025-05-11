@@ -1,7 +1,6 @@
 import os
 import requests
 import datetime
-import json
 
 BASE_VERSION = "v2.0"
 CLIENT_ID = os.getenv("BLIZZARD_CLIENT_ID")
@@ -14,15 +13,8 @@ PLAYERS_BY_REGION = {
     "tw": []
 }
 
-# Load achievement metadata from static dump
-with open("achievements_index.json", encoding="utf-8") as f:
-    ALL_ACHIEVEMENTS = {str(a["id"]): a for a in json.load(f)["achievements"] if "id" in a}
-
 # PvP-related category IDs
 PVP_CATEGORY_IDS = {95, 165, 15092, 15266, 15270, 15279}
-
-def is_pvp_category(cat_id):
-    return cat_id in PVP_CATEGORY_IDS
 
 def get_token(region):
     url = f"https://{region}.battle.net/oauth/token"
@@ -39,23 +31,40 @@ def get_achievements(name, realm, region, token):
     }
     r = requests.get(url, params=params)
     if r.status_code != 200:
-        print(f"❌ Failed or empty response for {name}-{realm} ({region})")
-        print(f"Status: {r.status_code}, URL: {r.url}")
+        print(f"❌ Failed to fetch achievements for {name}-{realm}: {r.status_code}")
         return {}
     return r.json()
 
-def extract_pvp_achievements(data):
-    pvp = []
+def get_achievement_details(aid, region, token):
+    url = f"https://{region}.api.blizzard.com/data/wow/achievement/{aid}"
+    params = {
+        "namespace": f"static-{region}",
+        "locale": "en_GB",
+        "access_token": token
+    }
+    r = requests.get(url, params=params)
+    if r.status_code != 200:
+        print(f"⚠️  Skipping achievement {aid}, failed to fetch details ({r.status_code})")
+        return None
+    return r.json()
+
+def is_pvp_category(cat_id):
+    return cat_id in PVP_CATEGORY_IDS
+
+def extract_pvp_achievements(data, region, token):
+    result = []
     for a in data.get("achievements", []):
-        aid = str(a.get("id"))
-        info = ALL_ACHIEVEMENTS.get(aid)
-        if not info:
+        aid = a.get("id")
+        if not aid:
             continue
-        cat = info.get("category", {}).get("id")
+        details = get_achievement_details(aid, region, token)
+        if not details:
+            continue
+        cat = details.get("category", {}).get("id")
         if is_pvp_category(cat):
-            name = info.get("name", "Unknown").replace('"', "'")
-            pvp.append(f"{aid}:{name}")
-    return pvp
+            name = details.get("name", "Unknown").replace('"', "'")
+            result.append(f"{aid}:{name}")
+    return result
 
 def save_region(region, players):
     token = get_token(region)
@@ -67,7 +76,7 @@ def save_region(region, players):
             print(f"⚠️  No data for {name}-{realm} in {region.upper()}")
             continue
 
-        summary = extract_pvp_achievements(data)
+        summary = extract_pvp_achievements(data, region, token)
         if not summary:
             print(f"ℹ️  No PvP achievements found for {name}-{realm}")
             continue
