@@ -90,17 +90,30 @@ def build_pvp_achievement_lookup(region, token):
     print(f"✅ Identified {len(lookup)} PvP achievements", flush=True)
     return lookup
 
-def extract_pvp_achievements(data, pvp_lookup):
+def extract_pvp_achievements(data, region, token):
     print(f"📥 Extracting PvP achievements from {len(data.get('achievements', []))} total...", flush=True)
     pvp = []
+    cache = {}  # achievement_id → achievement_data
+
     for i, a in enumerate(data.get("achievements", []), start=1):
         aid = a.get("id")
         if not aid:
             continue
-        if aid in pvp_lookup:
-            pvp.append(f"{aid}:{pvp_lookup[aid]}")
-        if i % 100 == 0:
+
+        if i % 50 == 0:
             print(f"🔄 Checked {i} achievements...", flush=True)
+
+        if aid in cache:
+            details = cache[aid]
+        else:
+            details = get_achievement_info(aid, region, token)
+            cache[aid] = details
+
+        cat = details.get("category", {}).get("id")
+        if cat in PVP_CATEGORIES:
+            name = details.get("name", "Unknown")
+            pvp.append(f"{aid}:{name}")
+
     print(f"✅ Found {len(pvp)} PvP achievements", flush=True)
     return pvp
 
