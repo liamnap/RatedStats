@@ -17,7 +17,7 @@ PVP_CATEGORIES = {95, 165, 15092, 15266, 15270, 15279}
 
 def get_token(region):
     url = f"https://{region}.battle.net/oauth/token"
-    r = requests.post(url, data={"grant_type": "client_credentials", timeout=10}, auth=(CLIENT_ID, CLIENT_SECRET))
+    r = requests.post(url, data={"grant_type": "client_credentials"}, auth=(CLIENT_ID, CLIENT_SECRET), timeout=10)
     r.raise_for_status()
     return r.json()["access_token"]
 
