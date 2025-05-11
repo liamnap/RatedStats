@@ -25,7 +25,7 @@ BRACKETS = ["2v2", "3v3", "rbg", "shuffle"]
 def get_access_token(region):
     client_id = os.environ["BLIZZARD_CLIENT_ID"]
     client_secret = os.environ["BLIZZARD_CLIENT_SECRET"]
-    url = f"https://{region}.battle.net/oauth/token"
+    url = "https://us.battle.net/oauth/token"
     response = requests.post(
         url,
         data={"grant_type": "client_credentials"},
