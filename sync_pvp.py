@@ -94,17 +94,18 @@ async def process_characters(characters_by_guid):
 
     async with aiohttp.ClientSession() as session:
         pvp_achievements = await get_pvp_achievements(session, headers)
-        semaphore = asyncio.Semaphore(10)  # Adjust concurrency as needed
+        semaphore = asyncio.Semaphore(10)
 
         async def process_one(char):
             async with semaphore:
-                name = char["name"]
-                realm = char["realm"]
+                name = char["name"].lower()
+                realm = char["realm"].lower()
                 guid = char["id"]
-                char_key = f"{name.lower()}-{realm.lower()}"
+                char_key = f"{name}-{realm}"
 
                 data = await get_character_achievements(session, headers, realm, name)
                 if not data:
+                    print(f"[SKIP] {char_key} - no data (possibly 404)")
                     return None
 
                 earned = data.get("achievements", [])
@@ -115,6 +116,7 @@ async def process_characters(characters_by_guid):
                 ]
 
                 if not earned_pvp:
+                    print(f"[NO PVP] {char_key} - has no PvP achievements")
                     return None
 
                 entry = {
@@ -125,6 +127,7 @@ async def process_characters(characters_by_guid):
                     entry[f"id{idx}"] = aid
                     entry[f"name{idx}"] = aname
 
+                print(f"Stored: {char_key} with {len(earned_pvp)} PvP achievements")
                 return json.dumps(entry, separators=(",", ":"))
 
         tasks = [process_one(char) for char in characters_by_guid.values()]
