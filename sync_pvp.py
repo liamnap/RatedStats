@@ -1,4 +1,5 @@
 import os
+import time
 import requests
 from datetime import datetime, UTC
 
@@ -54,35 +55,55 @@ def get_achievements(name, realm, region, token):
     print(f"URL: {r.url}")
     return {}
 
-def get_achievement_info(aid, region, token):
-    url = f"https://{region}.api.blizzard.com/data/wow/achievement/{aid}"
-    params = {
-        "namespace": f"static-{region}",
-        "locale": "en_GB"
-    }
+def fetch_achievement_index(region, token):
+    url = f"https://{region}.api.blizzard.com/data/wow/achievement/index"
+    params = {"namespace": f"static-{region}", "locale": "en_GB"}
     headers = { "Authorization": f"Bearer {token}" }
-    r = requests.get(url, headers=headers, params=params, timeout=10)
-    if r.status_code == 200:
-        return r.json()
-    return {}
-    
-import time
-start = time.time()
+    r = requests.get(url, headers=headers, params=params, timeout=15)
+    r.raise_for_status()
+    return r.json().get("achievements", [])
 
-def extract_pvp_achievements(data, region, token):
-    print(f"📥 Extracting PvP achievements from {len(data.get('achievements', []))} total...", flush=True)
-    pvp = []
-    for i, a in enumerate(data.get("achievements", []), start=1):
-        aid = a.get("id")
-        if not aid:
+def enrich_achievement_details(index, region, token):
+    headers = { "Authorization": f"Bearer {token}" }
+    achievement_data = {}
+    print(f"📦 Enriching {len(index)} achievements...", flush=True)
+
+    for i, entry in enumerate(index, 1):
+        aid = entry.get("id")
+        href = entry.get("key", {}).get("href")
+        if not aid or not href:
             continue
-        if i % 50 == 0:
-            print(f"🔄 Checked {i} achievements...", flush=True)
-        details = get_achievement_info(aid, region, token)
-        cat = details.get("category", {}).get("id")
-        if cat in PVP_CATEGORIES:
-            name = details.get("name", "Unknown")
-            pvp.append(f"{aid}:{name}")
+        try:
+            r = requests.get(href, headers=headers, timeout=5)
+            if r.status_code == 200:
+                info = r.json()
+                achievement_data[aid] = {
+                    "name": info.get("name"),
+                    "category": info.get("category", {}).get("id")
+                }
+        except requests.RequestException:
+            continue
+
+        if i % 500 == 0:
+            print(f"🔄 Loaded {i} achievement records...", flush=True)
+
+    return achievement_data
+
+def extract_pvp_achievements(data, achievement_data):
+    total = len(data.get("achievements", []))
+    print(f"📥 Extracting PvP achievements from {total} total...", flush=True)
+    pvp = []
+
+    for i, a in enumerate(data.get("achievements", []), 1):
+        aid = a.get("id")
+        info = achievement_data.get(aid)
+        if not aid or not info:
+            continue
+        if info["category"] in PVP_CATEGORIES:
+            pvp.append(f'{aid}:{info["name"]}')
+        if i % 100 == 0:
+            print(f"🔍 Checked {i} achievements...", flush=True)
+
     print(f"✅ Found {len(pvp)} PvP achievements", flush=True)
     return pvp
 
@@ -91,6 +112,11 @@ def save_region(region, players):
     if not token:
         print(f"❌ Skipping region {region} due to token failure", flush=True)
         return
+
+    # Enrich PvP metadata once per region
+    index = fetch_achievement_index(region, token)
+    achievement_data = enrich_achievement_details(index, region, token)
+
     all_data = {}
 
     for name, realm in players:
@@ -102,50 +128,6 @@ def save_region(region, players):
             if not (name == "liami" and realm == "emeriss"):
                 continue
 
-        # Diagnostic
         if name == "liami" and realm == "emeriss":
             print("🛠 Running diagnostic check for Liami-Emeriss")
-            debug_url = f"https://{region}.api.blizzard.com/profile/wow/character/emeriss/liami/achievements"
-            debug_params = {"namespace": f"profile-{region}", "locale": "en_GB"}
-            debug_headers = { "Authorization": f"Bearer {token}" }
-            r = requests.get(debug_url, headers=debug_headers, params=debug_params, timeout=10)
-            print(f"🧪 Diagnostic status: {r.status_code}")
-            print(f"🧪 Full URL: {r.url}")
-            print(f"🧪 Response: {r.text[:300]}...")
-
-        data = get_achievements(name, realm, region, token)
-        if not data.get("achievements"):
-            print(f"⚠️  No achievements found for {name}-{realm}")
-            continue
-
-        summary = extract_pvp_achievements(data, region, token)
-        if not summary:
-            print(f"ℹ️  No PvP achievements found for {name}-{realm}")
-            continue
-
-        char_name = data.get("character", {}).get("name", name).capitalize()
-        char_realm = data.get("character", {}).get("realm", {}).get("slug", realm).replace("-", " ").title().replace(" ", "-")
-        key = f"{char_name}-{char_realm}"
-
-        print(f"✅ {key} → {len(summary)} PvP achievements")
-        all_data[key] = summary
-
-    today = datetime.now(UTC)
-    version = f"{BASE_VERSION}-day{today.timetuple().tm_yday}-{today.year}"
-    filename = f"achiev/region_{region}.x"
-
-    with open(filename, "w", encoding="utf-8") as f:
-        f.write(f'PvPSeenVersion = "{version}"\n\n')
-        f.write(f'PvPSeen_{region.upper()} = {{\n')
-        for char_key, achievements in all_data.items():
-            achievement_str = ",".join(achievements)
-            f.write(f'  ["{char_key}"] = "{achievement_str}",\n')
-        f.write("}\n")
-
-def main():
-    for region, players in PLAYERS_BY_REGION.items():
-        if players:
-            save_region(region, players)
-
-if __name__ == "__main__":
-    main()
+            debug_url = f"https://{region}.api.blizzard.com/profile
