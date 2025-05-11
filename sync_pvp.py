@@ -11,6 +11,7 @@ API_HOST = f"{REGION}.api.blizzard.com"
 API_BASE = f"https://{API_HOST}"
 NAMESPACE_PROFILE = f"profile-{REGION}"
 OUTFILE = Path(f"achiev/region_{REGION}.lua")
++REGION_VAR = f"ACHIEVEMENTS_{REGION.upper()}"
 
 LOCALES = {
     "us": "en_US",
@@ -134,11 +135,12 @@ async def process_characters(characters):
         lines.sort(key=lambda l: json.loads(l)["character"])
 
         with open(OUTFILE, "w", encoding="utf-8") as f:
-            f.write("return {\n")
+            f.write(f'-- File: RatedStats/achiev/region_{REGION}.lua\n')
+            f.write("local achievements = {\n")
             for line in lines:
                 obj = json.loads(line)
                 parts = [f'character = "{obj["character"]}", guid = {obj["guid"]}']
-                for i in range(1, 100):  # reasonable upper bound
+                for i in range(1, 100):
                     id_key = f"id{i}"
                     name_key = f"name{i}"
                     if id_key in obj and name_key in obj:
@@ -148,7 +150,8 @@ async def process_characters(characters):
                         break
                 lua_line = "    { " + ", ".join(parts) + " },\n"
                 f.write(lua_line)
-            f.write("}\n")
+            f.write("}\n\n")
+            f.write(f"{REGION_VAR} = achievements\n")
 
 # RUN
 if __name__ == "__main__":
