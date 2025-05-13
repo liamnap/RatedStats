@@ -50,6 +50,8 @@ from urllib.parse import urlparse
 
 from urllib.parse import urlparse
 
+from urllib.parse import urlparse
+
 def get_available_brackets(region, season_id):
     url = f"https://{region}.api.blizzard.com/data/wow/pvp-season/{season_id}/pvp-leaderboard/index?namespace=dynamic-{region}&locale={LOCALE}"
     token = get_access_token(region)
@@ -60,10 +62,15 @@ def get_available_brackets(region, season_id):
     
     data = resp.json()
     leaderboards = data.get("leaderboards", [])
-    
-    print(f"[DEBUG] Raw leaderboards data:")
-    for lb in leaderboards:
-        print(f" - {lb}")
+
+    # Define the only brackets we want to use
+    allowed_brackets = {
+        "2v2",
+        "3v3",
+        "rbg",
+        "shuffle-overall",
+        "blitz-overall"
+    }
 
     brackets = []
     for entry in leaderboards:
@@ -71,9 +78,10 @@ def get_available_brackets(region, season_id):
         if not href:
             continue
         bracket = urlparse(href).path.rstrip("/").split("/")[-1]
-        brackets.append(bracket)
+        if bracket in allowed_brackets:
+            brackets.append(bracket)
 
-    print(f"[INFO] Available brackets this season: {', '.join(brackets)}")
+    print(f"[INFO] Filtered brackets this season: {', '.join(brackets)}")
     return brackets
 
 PVP_SEASON_ID = get_current_pvp_season_id(REGION)
