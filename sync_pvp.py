@@ -218,7 +218,7 @@ async def process_characters(characters):
                 matched = []
                 for a in earned:
                     aid = a["id"]
-                        name = a.get("achievement", {}).get("name")
+                    name = a.get("achievement", {}).get("name")
                     if not name:
                         print(f"{Fore.RED}[ERROR] Missing achievement name for ID {aid}")
                         continue
