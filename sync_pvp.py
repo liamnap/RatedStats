@@ -173,7 +173,14 @@ async def get_pvp_achievements(session, headers):
 # CHAR ACHIEVEMENTS
 async def get_character_achievements(session, headers, realm, name):
     url = f"{API_BASE}/profile/wow/character/{realm}/{name.lower()}/achievements?namespace={NAMESPACE_PROFILE}&locale={LOCALE}"
-    return await fetch(session, url, headers)
+    async with session.get(url, headers=headers) as r:
+        if r.status == 404:
+            # Character profile doesn't exist — likely private or inactive
+            return None
+        elif r.status != 200:
+            print(f"[FAIL] {url} - {r.status}")
+            return None
+        return await r.json()
 
 # MAIN
 async def process_characters(characters):
