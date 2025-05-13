@@ -21,8 +21,30 @@ LOCALES = {
 }
 LOCALE = LOCALES.get(REGION, "en_US")
 
-PVP_SEASON_ID = 38
-BRACKETS = ["2v2", "3v3", "rbg", "solo-shuffle", "rated-battleground-blitz"]
+def get_current_pvp_season_id(region):
+    url = f"https://{region}.api.blizzard.com/data/wow/pvp-season/index?namespace=dynamic-{region}&locale={LOCALE}"
+    token = get_access_token(region)
+    headers = {"Authorization": f"Bearer {token}"}
+    resp = requests.get(url, headers=headers)
+    if not resp.ok:
+        raise RuntimeError(f"[FAIL] Unable to fetch PvP season index: {resp.status_code}")
+    data = resp.json()
+    return data["seasons"][-1]["id"]  # Last entry = latest season
+
+def get_available_brackets(region, season_id):
+    url = f"https://{region}.api.blizzard.com/data/wow/pvp-season/{season_id}/pvp-leaderboard/index?namespace=dynamic-{region}&locale={LOCALE}"
+    token = get_access_token(region)
+    headers = {"Authorization": f"Bearer {token}"}
+    resp = requests.get(url, headers=headers)
+    if not resp.ok:
+        raise RuntimeError(f"[FAIL] Unable to fetch PvP leaderboard index for season {season_id}: {resp.status_code}")
+    data = resp.json()
+    brackets = [b["bracket"]["type"] for b in data.get("leaderboards", [])]
+    print(f"[INFO] Available brackets this season: {', '.join(brackets)}")
+    return brackets
+
+PVP_SEASON_ID = get_current_pvp_season_id(REGION)
+BRACKETS = get_available_brackets(REGION, PVP_SEASON_ID)
 
 # AUTH
 def get_access_token(region):
