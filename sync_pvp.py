@@ -126,8 +126,10 @@ def get_characters_from_leaderboards(region, headers, season_id, brackets):
             if not c or c["id"] in seen:
                 continue
             # TEMP: only include Liami-Emeriss
-            if not (c["name"] == "liami" and c["realm"]["slug"] == "emeriss"):
+            print(f"[DEBUG] Checking character: {c['name']} - {c['realm']['slug']}")
+            if not (c["name"].lower() == "liami" and c["realm"]["slug"].lower() == "emeriss"):
                 continue
+
             seen[c["id"]] = {
                 "id": c["id"],
                 "name": c["name"],
@@ -204,6 +206,7 @@ async def process_characters(characters):
     async with aiohttp.ClientSession(timeout=timeout) as session:
         pvp_achievements = await get_pvp_achievements(session, headers)
         pvp_names_set = set(pvp_achievements.values())
+        print(f"[FINAL DEBUG] PvP achievement keywords loaded: {len(pvp_names_set)}")
         semaphore = asyncio.Semaphore(10)
 
         async def process_one(char):
@@ -258,6 +261,7 @@ async def process_characters(characters):
         lines = [r for r in results if r]
         lines.sort(key=lambda l: json.loads(l)["character"])
 
+        print(f"[FINAL DEBUG] Number of matched entries to write: {len(lines)}")
         with open(OUTFILE, "w", encoding="utf-8") as f:
             f.write(f'-- File: RatedStats/achiev/region_{REGION}.lua\n')
             f.write("local achievements = {\n")
@@ -282,4 +286,10 @@ if __name__ == "__main__":
     token = get_access_token(REGION)
     headers = {"Authorization": f"Bearer {token}"}
     chars = get_characters_from_leaderboards(REGION, headers, PVP_SEASON_ID, BRACKETS)
+    print(f"[FINAL DEBUG] Characters fetched: {len(chars)}")
+    if chars:
+        print("[FINAL DEBUG] Characters found:", list(chars.values())[0])
+    else:
+        print("[FINAL DEBUG] No characters matched.")
+
     asyncio.run(process_characters(chars))
