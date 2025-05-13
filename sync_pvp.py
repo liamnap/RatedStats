@@ -195,6 +195,7 @@ async def process_characters(characters):
     timeout = aiohttp.ClientTimeout(total=15)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         pvp_achievements = await get_pvp_achievements(session, headers)
+        pvp_names_set = set(pvp_achievements.values())
         semaphore = asyncio.Semaphore(10)
 
         async def process_one(char):
@@ -213,13 +214,12 @@ async def process_characters(characters):
                     name = a.get("achievement", {}).get("name")
                     if not name:
                         continue
-                    for keyword in pvp_achievements.values():
-                        if name == keyword:
-                            matched.append((aid, keyword))
-                            print(f"[MATCH] {char_key}: {name}")
-                            break
-                    else:
-                        print(f"[MISS]  {char_key}: {name}")
+
+                if name in pvp_names_set:
+                    matched.append((aid, name))
+                    print(f"[MATCH] {char_key}: {name}")
+                else:
+                    print(f"[MISS]  {char_key}: {name}")
 
                 matches = matched
 
