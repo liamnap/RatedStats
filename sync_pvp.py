@@ -128,6 +128,11 @@ def get_characters_from_leaderboards(region, headers, season_id, brackets):
             }
     return seen
 
+    # TEMP LIMIT FOR DEBUGGING
+    limited = dict(list(seen.items())[:100])  # only take the first 100
+    print(f"[DEBUG] Character sample size: {len(limited)}")
+    return limited
+
 # FETCH WRAPPER
 async def fetch(session, url, headers):
     async with session.get(url, headers=headers) as r:
@@ -187,11 +192,13 @@ async def process_characters(characters):
     token = get_access_token(REGION)
     headers = {"Authorization": f"Bearer {token}"}
 
-    async with aiohttp.ClientSession() as session:
+    timeout = aiohttp.ClientTimeout(total=15)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
         pvp_achievements = await get_pvp_achievements(session, headers)
         semaphore = asyncio.Semaphore(10)
 
         async def process_one(char):
+            print(f"[DEBUG] Processing: {char['name']}-{char['realm']}")
             async with semaphore:
                 name, realm, guid = char["name"].lower(), char["realm"].lower(), char["id"]
                 char_key = f"{name}-{realm}"
@@ -209,8 +216,19 @@ async def process_characters(characters):
                 print(f"[OK] {char_key} - {len(matches)}")
                 return json.dumps(entry, separators=(",", ":"))
 
+        from asyncio import as_completed
+
         tasks = [process_one(c) for c in characters.values()]
-        results = await asyncio.gather(*tasks)
+        results = []
+
+        for coro in as_completed(tasks):
+            try:
+                result = await coro
+                if result:
+                    results.append(result)
+            except Exception as e:
+                print(f"[ERROR] Character task failed: {e}")
+
         lines = [r for r in results if r]
         lines.sort(key=lambda l: json.loads(l)["character"])
 
