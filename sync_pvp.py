@@ -126,7 +126,7 @@ def get_characters_from_leaderboards(region, headers, season_id, brackets):
             if not c or c["id"] in seen:
                 continue
             # TEMP: only include Liami-Emeriss
-            if not (c["name"] == "Liami" and c["realm"]["slug"] == "emeriss"):
+            if not (c["name"] == "liami" and c["realm"]["slug"] == "emeriss"):
                 continue
             seen[c["id"]] = {
                 "id": c["id"],
