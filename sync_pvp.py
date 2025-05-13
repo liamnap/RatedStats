@@ -125,9 +125,9 @@ def get_characters_from_leaderboards(region, headers, season_id, brackets):
             c = entry.get("character")
             if not c or c["id"] in seen:
                 continue
-            # TEMP: only include Liami-Emeriss
+            # TEMP: only include sharn-Emeriss
             print(f"[DEBUG] Checking character: {c['name']} - {c['realm']['slug']}")
-            if not (c["name"].lower() == "liami" and c["realm"]["slug"].lower() == "emeriss"):
+            if not (c["name"].lower() == "sharn" and c["realm"]["slug"].lower() == "emeriss"):
                 continue
 
             seen[c["id"]] = {
