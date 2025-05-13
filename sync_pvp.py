@@ -153,37 +153,39 @@ async def fetch(session, url, headers):
 
 # PVP ACHIEVEMENTS
 async def get_pvp_achievements(session, headers):
-    url = f"{API_BASE}/data/wow/achievement/index?namespace={NAMESPACE_STATIC}&locale={LOCALE}"
+    url = f"{API_BASE}/data/wow/achievement-category/index?namespace={NAMESPACE_STATIC}&locale={LOCALE}"
     index = await fetch(session, url, headers)
     matches = {}
 
     KEYWORDS = [
-        # Classic PvP Titles
         "Scout", "Grunt", "Sergeant", "Senior Sergeant", "First Sergeant",
         "Stone Guard", "Blood Guard", "Legionnaire", "Centurion", "Champion",
         "Lieutenant General", "General", "Warlord", "High Warlord",
         "Private", "Corporal", "Knight", "Knight-Lieutenant", "Knight-Captain",
         "Knight-Champion", "Lieutenant Commander", "Commander", "Marshal", "Field Marshal", "Grand Marshal",
-
-        # Rated PvP Brackets
         "Combatant I", "Combatant II",
         "Challenger I", "Challenger II",
         "Rival I", "Rival II",
         "Duelist", "Elite",
-        "Gladiator",      # Generic Gladiator tier
-        "Legend",         # Solo Shuffle top end-of-season
-        "Hero of the Horde", "Hero of the Alliance",  # R1 RBG
-        "Prized"          # New R1 format (e.g. Prized Warlord)
+        "Gladiator", "Legend",
+        "Hero of the Horde", "Hero of the Alliance",
+        "Prized"
     ]
 
-    for category in index.get("categories", []):
-        for achievement in category.get("achievements", []):
-            name = achievement["name"]
+    async def fetch_category_achievements(category):
+        achievements = category.get("achievements", [])
+        for a in achievements:
+            name = a["name"]
             if any(k in name for k in KEYWORDS):
-                matches[achievement["id"]] = name
+                matches[a["id"]] = name
+
+        for subcat in category.get("categories", []):
+            await fetch_category_achievements(subcat)
+
+    for category in index.get("categories", []):
+        await fetch_category_achievements(category)
 
     return matches
-
 
 # CHAR ACHIEVEMENTS
 async def get_character_achievements(session, headers, realm, name):
