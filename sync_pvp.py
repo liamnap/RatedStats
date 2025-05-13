@@ -153,8 +153,8 @@ async def fetch(session, url, headers):
 
 # PVP ACHIEVEMENTS
 async def get_pvp_achievements(session, headers):
-    url = f"{API_BASE}/data/wow/achievement-category/index?namespace={NAMESPACE_STATIC}&locale={LOCALE}"
-    index = await fetch(session, url, headers)
+    index_url = f"{API_BASE}/data/wow/achievement-category/index?namespace={NAMESPACE_STATIC}&locale={LOCALE}"
+    index = await fetch(session, index_url, headers)
     matches = {}
 
     KEYWORDS = [
@@ -169,21 +169,21 @@ async def get_pvp_achievements(session, headers):
         "Duelist", "Elite",
         "Gladiator", "Legend",
         "Hero of the Horde", "Hero of the Alliance",
-        "Prized"
+        "Prized", "Strategist"
     ]
 
-    async def fetch_category_achievements(category):
-        achievements = category.get("achievements", [])
-        for a in achievements:
-            name = a["name"]
-            if any(k in name for k in KEYWORDS):
+    async def process_category(cat_url):
+        data = await fetch(session, cat_url, headers)
+        for a in data.get("achievements", []):
+            name = a.get("name")
+            if name and any(k in name for k in KEYWORDS):
                 matches[a["id"]] = name
+        for sub in data.get("categories", []):
+            await process_category(sub["key"]["href"])
 
-        for subcat in category.get("categories", []):
-            await fetch_category_achievements(subcat)
-
-    for category in index.get("categories", []):
-        await fetch_category_achievements(category)
+    # Start walking all top-level categories
+    for cat in index.get("categories", []):
+        await process_category(cat["key"]["href"])
 
     return matches
 
