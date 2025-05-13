@@ -44,6 +44,8 @@ def get_current_pvp_season_id(region):
     data = resp.json()
     return data["seasons"][-1]["id"]  # Last entry = latest season
 
+from urllib.parse import urlparse
+
 def get_available_brackets(region, season_id):
     url = f"https://{region}.api.blizzard.com/data/wow/pvp-season/{season_id}/pvp-leaderboard/index?namespace=dynamic-{region}&locale={LOCALE}"
     token = get_access_token(region)
@@ -52,7 +54,16 @@ def get_available_brackets(region, season_id):
     if not resp.ok:
         raise RuntimeError(f"[FAIL] Unable to fetch PvP leaderboard index for season {season_id}: {resp.status_code}")
     data = resp.json()
-    brackets = [b["bracket"]["type"] for b in data.get("leaderboards", [])]
+
+    brackets = []
+    for entry in data.get("leaderboards", []):
+        href = entry.get("href")
+        if not href:
+            continue
+        # Extract last part of URL path (e.g. "3v3" or "solo-shuffle")
+        bracket = urlparse(href).path.rstrip("/").split("/")[-1]
+        brackets.append(bracket)
+
     print(f"[INFO] Available brackets this season: {', '.join(brackets)}")
     return brackets
 
