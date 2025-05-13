@@ -222,13 +222,13 @@ async def process_characters(characters):
                     aid = a["id"]
                     name = a.get("achievement", {}).get("name")
                     if not name:
-                        print(f"{Fore.RED}[ERROR] Missing achievement name for ID {aid}")
+                        print(f"{RED}[ERROR] Missing achievement name for ID {aid}")
                         continue
                     if name in pvp_names_set:
                         matched.append((aid, name))
-                        print(f"{Fore.GREEN}[MATCH] {char_key}: {name}")
+                        print(f"{GREEN}[MATCH] {char_key}: {name}")
                     else:
-                        print(f"{Fore.YELLOW}[MISS]  {char_key}: {name}")
+                        print(f"{YELLOW}[MISS]  {char_key}: {name}")
 
                 matches = matched
 
