@@ -21,6 +21,19 @@ LOCALES = {
 }
 LOCALE = LOCALES.get(REGION, "en_US")
 
+# AUTH
+def get_access_token(region):
+    client_id = os.environ["BLIZZARD_CLIENT_ID"]
+    client_secret = os.environ["BLIZZARD_CLIENT_SECRET"]
+    url = f"https://us.battle.net/oauth/token"
+    resp = requests.post(
+        url,
+        data={"grant_type": "client_credentials"},
+        auth=(client_id, client_secret)
+    )
+    resp.raise_for_status()
+    return resp.json()["access_token"]
+
 def get_current_pvp_season_id(region):
     url = f"https://{region}.api.blizzard.com/data/wow/pvp-season/index?namespace=dynamic-{region}&locale={LOCALE}"
     token = get_access_token(region)
@@ -45,19 +58,6 @@ def get_available_brackets(region, season_id):
 
 PVP_SEASON_ID = get_current_pvp_season_id(REGION)
 BRACKETS = get_available_brackets(REGION, PVP_SEASON_ID)
-
-# AUTH
-def get_access_token(region):
-    client_id = os.environ["BLIZZARD_CLIENT_ID"]
-    client_secret = os.environ["BLIZZARD_CLIENT_SECRET"]
-    url = f"https://us.battle.net/oauth/token"
-    resp = requests.post(
-        url,
-        data={"grant_type": "client_credentials"},
-        auth=(client_id, client_secret)
-    )
-    resp.raise_for_status()
-    return resp.json()["access_token"]
 
 # STATIC NAMESPACE
 def get_latest_static_namespace(region):
