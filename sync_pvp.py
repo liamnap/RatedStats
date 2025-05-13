@@ -21,9 +21,8 @@ LOCALES = {
 }
 LOCALE = LOCALES.get(REGION, "en_US")
 
-PVP_CATEGORY_IDS = [95, 165, 167, 168, 169]
 PVP_SEASON_ID = 38
-BRACKETS = ["2v2", "3v3", "rbg", "shuffle"]
+BRACKETS = ["2v2", "3v3", "rbg", "shuffle", "blitz"]
 
 # AUTH
 def get_access_token(region):
@@ -89,13 +88,37 @@ async def fetch(session, url, headers):
 
 # PVP ACHIEVEMENTS
 async def get_pvp_achievements(session, headers):
-    out = {}
-    for cid in PVP_CATEGORY_IDS:
-        url = f"{API_BASE}/data/wow/achievement-category/{cid}?namespace={NAMESPACE_STATIC}&locale={LOCALE}"
-        data = await fetch(session, url, headers)
-        for ach in data.get("achievements", []):
-            out[ach["id"]] = ach["name"]
-    return out
+    url = f"{API_BASE}/data/wow/achievement/index?namespace={NAMESPACE_STATIC}&locale={LOCALE}"
+    index = await fetch(session, url, headers)
+    matches = {}
+
+    KEYWORDS = [
+        # Classic PvP Titles
+        "Scout", "Grunt", "Sergeant", "Senior Sergeant", "First Sergeant",
+        "Stone Guard", "Blood Guard", "Legionnaire", "Centurion", "Champion",
+        "Lieutenant General", "General", "Warlord", "High Warlord",
+        "Private", "Corporal", "Knight", "Knight-Lieutenant", "Knight-Captain",
+        "Knight-Champion", "Lieutenant Commander", "Commander", "Marshal", "Field Marshal", "Grand Marshal",
+
+        # Rated PvP Brackets
+        "Combatant I", "Combatant II",
+        "Challenger I", "Challenger II",
+        "Rival I", "Rival II",
+        "Duelist", "Elite",
+        "Gladiator",      # Generic Gladiator tier
+        "Legend",         # Solo Shuffle top end-of-season
+        "Hero of the Horde", "Hero of the Alliance",  # R1 RBG
+        "Prized"          # New R1 format (e.g. Prized Warlord)
+    ]
+
+    for category in index.get("categories", []):
+        for achievement in category.get("achievements", []):
+            name = achievement["name"]
+            if any(k in name for k in KEYWORDS):
+                matches[achievement["id"]] = name
+
+    return matches
+
 
 # CHAR ACHIEVEMENTS
 async def get_character_achievements(session, headers, realm, name):
