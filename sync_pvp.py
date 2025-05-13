@@ -206,9 +206,26 @@ async def process_characters(characters):
                 if not data:
                     return None
                 earned = data.get("achievements", [])
-                matches = [(a["id"], pvp_achievements[a["id"]]) for a in earned if a["id"] in pvp_achievements]
+
+                matched = []
+                for a in earned:
+                    aid = a["id"]
+                    name = a.get("achievement", {}).get("name")
+                    if not name:
+                        continue
+                    for keyword in pvp_achievements.values():
+                        if name == keyword:
+                            matched.append((aid, keyword))
+                            print(f"[MATCH] {char_key}: {name}")
+                            break
+                    else:
+                        print(f"[MISS]  {char_key}: {name}")
+
+                matches = matched
+
                 if not matches:
                     return None
+
                 entry = {"character": char_key, "guid": guid}
                 for i, (aid, aname) in enumerate(matches, 1):
                     entry[f"id{i}"] = aid
