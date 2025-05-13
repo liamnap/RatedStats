@@ -126,9 +126,9 @@ def get_characters_from_leaderboards(region, headers, season_id, brackets):
             if not c or c["id"] in seen:
                 continue
             # TEMP: only include Advidance-Wrathbringer
-            print(f"[DEBUG] Checking character: {c['name']} - {c['realm']['slug']}")
-            if not (c["name"].lower() == "avidance" and c["realm"]["slug"].lower() == "wrathbringer"):
-                continue
+#            print(f"[DEBUG] Checking character: {c['name']} - {c['realm']['slug']}")
+#            if not (c["name"].lower() == "avidance" and c["realm"]["slug"].lower() == "wrathbringer"):
+#                continue
 
             seen[c["id"]] = {
                 "id": c["id"],
