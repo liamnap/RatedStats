@@ -22,7 +22,7 @@ LOCALES = {
 LOCALE = LOCALES.get(REGION, "en_US")
 
 PVP_SEASON_ID = 38
-BRACKETS = ["2v2", "3v3", "rbg", "shuffle", "blitz"]
+BRACKETS = ["2v2", "3v3", "rbg", "solo-shuffle", "rated-battleground-blitz"]
 
 # AUTH
 def get_access_token(region):
