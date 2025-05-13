@@ -4,8 +4,10 @@ import asyncio
 import aiohttp
 import requests
 from pathlib import Path
-from colorama import Fore, Style, init
-init(autoreset=True)
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+RED = "\033[91m"
+RESET = "\033[0m"
 
 # CONFIG
 REGION = os.getenv("REGION", "eu")
