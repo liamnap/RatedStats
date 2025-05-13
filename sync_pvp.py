@@ -4,6 +4,8 @@ import asyncio
 import aiohttp
 import requests
 from pathlib import Path
+from colorama import Fore, Style, init
+init(autoreset=True)
 
 # CONFIG
 REGION = os.getenv("REGION", "eu")
@@ -121,11 +123,15 @@ def get_characters_from_leaderboards(region, headers, season_id, brackets):
             c = entry.get("character")
             if not c or c["id"] in seen:
                 continue
+            # TEMP: only include Liami-Emeriss
+            if not (c["name"] == "Liami" and c["realm"]["slug"] == "emeriss"):
+                continue
             seen[c["id"]] = {
                 "id": c["id"],
                 "name": c["name"],
                 "realm": c["realm"]["slug"]
             }
+
     return seen
 
     # TEMP LIMIT FOR DEBUGGING
@@ -207,19 +213,20 @@ async def process_characters(characters):
                 if not data:
                     return None
                 earned = data.get("achievements", [])
+                print(f"[DEBUG] {char_key} has {len(earned)} achievements")
 
                 matched = []
                 for a in earned:
                     aid = a["id"]
-                    name = a.get("achievement", {}).get("name")
+                        name = a.get("achievement", {}).get("name")
                     if not name:
+                        print(f"{Fore.RED}[ERROR] Missing achievement name for ID {aid}")
                         continue
-
-                if name in pvp_names_set:
-                    matched.append((aid, name))
-                    print(f"[MATCH] {char_key}: {name}")
-                else:
-                    print(f"[MISS]  {char_key}: {name}")
+                    if name in pvp_names_set:
+                        matched.append((aid, name))
+                        print(f"{Fore.GREEN}[MATCH] {char_key}: {name}")
+                    else:
+                        print(f"{Fore.YELLOW}[MISS]  {char_key}: {name}")
 
                 matches = matched
 
