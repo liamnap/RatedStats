@@ -48,6 +48,8 @@ from urllib.parse import urlparse
 
 from urllib.parse import urlparse
 
+from urllib.parse import urlparse
+
 def get_available_brackets(region, season_id):
     url = f"https://{region}.api.blizzard.com/data/wow/pvp-season/{season_id}/pvp-leaderboard/index?namespace=dynamic-{region}&locale={LOCALE}"
     token = get_access_token(region)
@@ -65,7 +67,7 @@ def get_available_brackets(region, season_id):
 
     brackets = []
     for entry in leaderboards:
-        href = entry.get("href")
+        href = entry.get("key", {}).get("href")
         if not href:
             continue
         bracket = urlparse(href).path.rstrip("/").split("/")[-1]
