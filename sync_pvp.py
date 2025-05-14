@@ -147,7 +147,7 @@ async def fetch(session, url, headers):
 
 # PVP ACHIEVEMENTS
 async def get_pvp_achievements(session, headers):
-    url = f"{API_BASE}/data/wow/achievement/index?namespace={NAMESPACE_STATIC}&locale={LOCALE}"
+    url = f"{API_BASE}/data/wow/achievement/index?namespace={NAMESPACE_STATIC}&locale=en_US"
     index = await fetch(session, url, headers)
     matches = {}
 
