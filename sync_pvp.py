@@ -263,7 +263,7 @@ async def process_characters(characters):
                 if not data:
                     return None
                 earned = data.get("achievements", [])
-                print(f"[DEBUG] {char_key} has {len(earned)} achievements")
+#                print(f"[DEBUG] {char_key} has {len(earned)} achievements")
 
                 matched = []
                 for a in earned:
