@@ -275,7 +275,7 @@ async def process_characters(characters):
                     if name in pvp_names_set:
                         matched.append((aid, name))
                         print(f"{GREEN}[MATCH] {char_key}: {name}{RESET}")
-                    else:
+#                    else:
 #                        print(f"{YELLOW}[MISS]  {char_key}: {name}{RESET}")
 
                 matches = matched
