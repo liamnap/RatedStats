@@ -151,76 +151,81 @@ async def get_pvp_achievements(session, headers):
     index = await fetch(session, url, headers)
     matches = {}
 
-	KEYWORDS = [
-		# Main Achievements
-		{"type": "exact", "value": "Scout"},
-		{"type": "exact", "value": "Private"},
-		{"type": "exact", "value": "Grunt"},
-		{"type": "exact", "value": "Corporal"},
-		{"type": "exact", "value": "Sergeant"}, 			# Both factions use Sergeant
-		{"type": "exact", "value": "Senior Sergeant"},
-		{"type": "exact", "value": "Master Sergeant"},
-		{"type": "exact", "value": "First Sergeant"},
-		{"type": "exact", "value": "Sergeant Major"},
-		{"type": "exact", "value": "Stone Guard"},
-		{"type": "exact", "value": "Knight"},
-		{"type": "exact", "value": "Blood Guard"},
-		{"type": "exact", "value": "Knight-Lieutenant"},
-		{"type": "exact", "value": "Legionnaire"},
-		{"type": "exact", "value": "Knight-Captain"},
-		{"type": "exact", "value": "Centurion"},
-		{"type": "exact", "value": "Knight-Champion"},
-		{"type": "exact", "value": "Champion"},
-		{"type": "exact", "value": "Lieutenant Commander"},
-		{"type": "exact", "value": "Lieutenant General"},
-		{"type": "exact", "value": "Commander"},
-		{"type": "exact", "value": "General"},
-		{"type": "exact", "value": "Marshal"},
-		{"type": "exact", "value": "Warlord"},
-		{"type": "exact", "value": "Field Marshal"},
-		{"type": "exact", "value": "High Warlord"},
-		{"type": "exact", "value": "Grand Marshal"},
-		
-		# Rated PvP Season Tiers
-		{"type": "prefix", "value": "Combatant I"},
-		{"type": "prefix", "value": "Combatant II"},
-		{"type": "prefix", "value": "Challenger I"},
-		{"type": "prefix", "value": "Challenger II"},
-		{"type": "prefix", "value": "Rival I"},
-		{"type": "prefix", "value": "Rival II"},
-		{"type": "prefix", "value": "Duelist"},
-		{"type": "prefix", "value": "Elite"},
-		{"type": "prefix", "value": "Gladiator"},
-		{"type": "prefix", "value": "Legend"},
-		
-		# R1 Titles
-		{"type": "prefix", "value": "Hero of the "},   			# Hero of the X
-		{"type": "prefix", "value": "Primal Gladiator"},      		# WoD S1
-		{"type": "prefix", "value": "Wild Gladiator"},        		# WoD S2
-		{"type": "prefix", "value": "Warmongering Gladiator"},		# WoD S3
-		{"type": "prefix", "value": "Vindictive Gladiator"}   		# Legion S1
-		{"type": "prefix", "value": "Fearless Gladiator"},      	# Legion S2
-		{"type": "prefix", "value": "Cruel Gladiator"},         	# Legion S3
-		{"type": "prefix", "value": "Ferocious Gladiator"},     	# Legion S4
-		{"type": "prefix", "value": "Fierce Gladiator"},        	# Legion S5
-		{"type": "prefix", "value": "Demonic Gladiator"},       	# Legion S6–7
-		{"type": "prefix", "value": "Sinister Gladiator"},      	# BFA S1
-		{"type": "prefix", "value": "Notorious Gladiator"},     	# BFA S2
-		{"type": "prefix", "value": "Corrupted Gladiator"},     	# BFA S4
-		{"type": "prefix", "value": "Unchained Gladiator"},     	# SL S2
-		{"type": "prefix", "value": "Cosmic Gladiator"},        	# SL S3
-		{"type": "prefix", "value": "Eternal Gladiator"},       	# SL S4
-		{"type": "prefix", "value": "Crimson Gladiator"},       	# DF S1
-		{"type": "prefix", "value": "Obsidian Gladiator"},      	# DF S2
-		{"type": "prefix", "value": "Draconic Gladiator"},      	# DF S3
-		{"type": "prefix", "value": "Seasoned Gladiator"},      	# DF S4 
-		{"type": "prefix", "value": "Prized"},         			# Prized X
-	}
+    KEYWORDS = [
+        # Main Achievements
+        {"type": "exact", "value": "Scout"},
+        {"type": "exact", "value": "Private"},
+        {"type": "exact", "value": "Grunt"},
+        {"type": "exact", "value": "Corporal"},
+        {"type": "exact", "value": "Sergeant"},
+        {"type": "exact", "value": "Senior Sergeant"},
+        {"type": "exact", "value": "Master Sergeant"},
+        {"type": "exact", "value": "First Sergeant"},
+        {"type": "exact", "value": "Sergeant Major"},
+        {"type": "exact", "value": "Stone Guard"},
+        {"type": "exact", "value": "Knight"},
+        {"type": "exact", "value": "Blood Guard"},
+        {"type": "exact", "value": "Knight-Lieutenant"},
+        {"type": "exact", "value": "Legionnaire"},
+        {"type": "exact", "value": "Knight-Captain"},
+        {"type": "exact", "value": "Centurion"},
+        {"type": "exact", "value": "Knight-Champion"},
+        {"type": "exact", "value": "Champion"},
+        {"type": "exact", "value": "Lieutenant Commander"},
+        {"type": "exact", "value": "Lieutenant General"},
+        {"type": "exact", "value": "Commander"},
+        {"type": "exact", "value": "General"},
+        {"type": "exact", "value": "Marshal"},
+        {"type": "exact", "value": "Warlord"},
+        {"type": "exact", "value": "Field Marshal"},
+        {"type": "exact", "value": "High Warlord"},
+        {"type": "exact", "value": "Grand Marshal"},
+
+        # Rated PvP Season Tiers
+        {"type": "prefix", "value": "Combatant I"},
+        {"type": "prefix", "value": "Combatant II"},
+        {"type": "prefix", "value": "Challenger I"},
+        {"type": "prefix", "value": "Challenger II"},
+        {"type": "prefix", "value": "Rival I"},
+        {"type": "prefix", "value": "Rival II"},
+        {"type": "prefix", "value": "Duelist"},
+        {"type": "prefix", "value": "Elite"},
+        {"type": "prefix", "value": "Gladiator"},
+        {"type": "prefix", "value": "Legend"},
+
+        # R1 Titles
+        {"type": "prefix", "value": "Hero of the "},
+        {"type": "prefix", "value": "Primal Gladiator"},
+        {"type": "prefix", "value": "Wild Gladiator"},
+        {"type": "prefix", "value": "Warmongering Gladiator"},
+        {"type": "prefix", "value": "Vindictive Gladiator"},
+        {"type": "prefix", "value": "Fearless Gladiator"},
+        {"type": "prefix", "value": "Cruel Gladiator"},
+        {"type": "prefix", "value": "Ferocious Gladiator"},
+        {"type": "prefix", "value": "Fierce Gladiator"},
+        {"type": "prefix", "value": "Demonic Gladiator"},
+        {"type": "prefix", "value": "Sinister Gladiator"},
+        {"type": "prefix", "value": "Notorious Gladiator"},
+        {"type": "prefix", "value": "Corrupted Gladiator"},
+        {"type": "prefix", "value": "Unchained Gladiator"},
+        {"type": "prefix", "value": "Cosmic Gladiator"},
+        {"type": "prefix", "value": "Eternal Gladiator"},
+        {"type": "prefix", "value": "Crimson Gladiator"},
+        {"type": "prefix", "value": "Obsidian Gladiator"},
+        {"type": "prefix", "value": "Draconic Gladiator"},
+        {"type": "prefix", "value": "Seasoned Gladiator"},
+        {"type": "prefix", "value": "Prized"},
+    ]
 
     for achievement in index.get("achievements", []):
         name = achievement.get("name", "")
-        if any(k in name for k in KEYWORDS):
-            matches[achievement["id"]] = name
+        for kw in KEYWORDS:
+            if kw["type"] == "exact" and name == kw["value"]:
+                matches[achievement["id"]] = name
+                break
+            elif kw["type"] == "prefix" and name.startswith(kw["value"]):
+                matches[achievement["id"]] = name
+                break
 
     print(f"[DEBUG] Total PvP keyword matches: {len(matches)}")
     return matches
@@ -250,7 +255,7 @@ async def process_characters(characters):
         semaphore = asyncio.Semaphore(10)
 
         async def process_one(char):
-            print(f"[DEBUG] Processing: {char['name']}-{char['realm']}")
+#            print(f"[DEBUG] Processing: {char['name']}-{char['realm']}")
             async with semaphore:
                 name, realm, guid = char["name"].lower(), char["realm"].lower(), char["id"]
                 char_key = f"{name}-{realm}"
@@ -265,13 +270,13 @@ async def process_characters(characters):
                     aid = a["id"]
                     name = a.get("achievement", {}).get("name")
                     if not name:
-                        print(f"{RED}[ERROR] Missing achievement name for ID {aid}{RESET}")
+#                        print(f"{RED}[ERROR] Missing achievement name for ID {aid}{RESET}")
                         continue
                     if name in pvp_names_set:
                         matched.append((aid, name))
                         print(f"{GREEN}[MATCH] {char_key}: {name}{RESET}")
                     else:
-                        print(f"{YELLOW}[MISS]  {char_key}: {name}{RESET}")
+#                        print(f"{YELLOW}[MISS]  {char_key}: {name}{RESET}")
 
                 matches = matched
 
