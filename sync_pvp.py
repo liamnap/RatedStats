@@ -151,20 +151,71 @@ async def get_pvp_achievements(session, headers):
     index = await fetch(session, url, headers)
     matches = {}
 
-    KEYWORDS = [
-        "Scout", "Grunt", "Sergeant", "Senior Sergeant", "First Sergeant",
-        "Stone Guard", "Blood Guard", "Legionnaire", "Centurion", "Champion",
-        "Lieutenant General", "General", "Warlord", "High Warlord",
-        "Private", "Corporal", "Knight", "Knight-Lieutenant", "Knight-Captain",
-        "Knight-Champion", "Lieutenant Commander", "Commander", "Marshal", "Field Marshal", "Grand Marshal",
-        "Combatant I", "Combatant II",
-        "Challenger I", "Challenger II",
-        "Rival I", "Rival II",
-        "Duelist", "Elite",
-        "Gladiator", "Legend",
-        "Hero of the Horde", "Hero of the Alliance",
-        "Prized"
-    ]
+	KEYWORDS = [
+		# Main Achievements
+		{"type": "exact", "value": "Scout"},
+		{"type": "exact", "value": "Private"},
+		{"type": "exact", "value": "Grunt"},
+		{"type": "exact", "value": "Corporal"},
+		{"type": "exact", "value": "Sergeant"}, 					# Both factions use Sergeant
+		{"type": "exact", "value": "Senior Sergeant"},
+		{"type": "exact", "value": "Master Sergeant"},
+		{"type": "exact", "value": "First Sergeant"},
+		{"type": "exact", "value": "Sergeant Major"},
+		{"type": "exact", "value": "Stone Guard"},
+		{"type": "exact", "value": "Knight"},
+		{"type": "exact", "value": "Blood Guard"},
+		{"type": "exact", "value": "Knight-Lieutenant"},
+		{"type": "exact", "value": "Legionnaire"},
+		{"type": "exact", "value": "Knight-Captain"},
+		{"type": "exact", "value": "Centurion"},
+		{"type": "exact", "value": "Knight-Champion"},
+		{"type": "exact", "value": "Champion"},
+		{"type": "exact", "value": "Lieutenant Commander"},
+		{"type": "exact", "value": "Lieutenant General"},
+		{"type": "exact", "value": "Commander"},
+		{"type": "exact", "value": "General"},
+		{"type": "exact", "value": "Marshal"},
+		{"type": "exact", "value": "Warlord"},
+		{"type": "exact", "value": "Field Marshal"},
+		{"type": "exact", "value": "High Warlord"},
+		{"type": "exact", "value": "Grand Marshal"},
+	
+		# Rated PvP Season Tiers
+		{"type": "prefix", "value": "Combatant I"},
+		{"type": "prefix", "value": "Combatant II"},
+		{"type": "prefix", "value": "Challenger I"},
+		{"type": "prefix", "value": "Challenger II"},
+		{"type": "prefix", "value": "Rival I"},
+		{"type": "prefix", "value": "Rival II"},
+		{"type": "prefix", "value": "Duelist"},
+		{"type": "prefix", "value": "Elite"},
+		{"type": "prefix", "value": "Gladiator"},
+		{"type": "prefix", "value": "Legend"},
+	
+		# R1 Titles
+		{"type": "prefix", "value": "Hero of the "},   				# Hero of the X
+		{"type": "prefix", "value": "Primal Gladiator"},      		# WoD S1
+		{"type": "prefix", "value": "Wild Gladiator"},        		# WoD S2
+		{"type": "prefix", "value": "Warmongering Gladiator"},		# WoD S3
+		{"type": "prefix", "value": "Vindictive Gladiator"}   		# Legion S1
+		{"type": "prefix", "value": "Fearless Gladiator"},      	# Legion S2
+		{"type": "prefix", "value": "Cruel Gladiator"},         	# Legion S3
+		{"type": "prefix", "value": "Ferocious Gladiator"},     	# Legion S4
+		{"type": "prefix", "value": "Fierce Gladiator"},        	# Legion S5
+		{"type": "prefix", "value": "Demonic Gladiator"},       	# Legion S6–7
+		{"type": "prefix", "value": "Sinister Gladiator"},      	# BFA S1
+		{"type": "prefix", "value": "Notorious Gladiator"},     	# BFA S2
+		{"type": "prefix", "value": "Corrupted Gladiator"},     	# BFA S4
+		{"type": "prefix", "value": "Unchained Gladiator"},     	# SL S2
+		{"type": "prefix", "value": "Cosmic Gladiator"},        	# SL S3
+		{"type": "prefix", "value": "Eternal Gladiator"},       	# SL S4
+		{"type": "prefix", "value": "Crimson Gladiator"},       	# DF S1
+		{"type": "prefix", "value": "Obsidian Gladiator"},      	# DF S2
+		{"type": "prefix", "value": "Draconic Gladiator"},      	# DF S3
+		{"type": "prefix", "value": "Seasoned Gladiator"},      	# DF S4 
+		{"type": "prefix", "value": "Prized"},         				# Prized X
+	}
 
     for achievement in index.get("achievements", []):
         name = achievement.get("name", "")
