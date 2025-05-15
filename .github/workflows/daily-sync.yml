@@ -34,6 +34,11 @@ jobs:
       - name: Run PvP Sync for ${{ matrix.region }}
         run: python sync_pvp.py
 
+      - uses: actions/checkout@v3
+        with:
+          ref: dev
+          fetch-depth: 0
+
       - name: Commit results
         run: |
           git config user.name "GitHub Action"
