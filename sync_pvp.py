@@ -255,10 +255,32 @@ async def get_character_achievements(session, headers, realm, name):
             return None
         return await r.json()
 
+# Check region files for lookup
+import re
+
+def load_existing_characters():
+    if not OUTFILE.exists():
+        return {}
+
+    with OUTFILE.open("r", encoding="utf-8") as f:
+        content = f.read()
+
+    entries = re.findall(r'\{ character = "([^"]+)", guid = (\d+)(.*?)\},', content, re.DOTALL)
+    characters = {}
+    for char_name, guid, rest in entries:
+        matches = re.findall(r'id(\d+) = (\d+), name\1 = "(.*?)"', rest)
+        characters[char_name] = {
+            "guid": int(guid),
+            "achievements": {int(aid): name for _, aid, name in matches}
+        }
+    return characters
+
+
 # MAIN
 async def process_characters(characters):
     token = get_access_token(REGION)
     headers = {"Authorization": f"Bearer {token}"}
+    existing_data = load_existing_characters()
 
     timeout = aiohttp.ClientTimeout(total=15)
     async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -296,10 +318,14 @@ async def process_characters(characters):
                 if not matches:
                     return None
 
-                entry = {"character": char_key, "guid": guid}
-                for i, (aid, aname) in enumerate(matches, 1):
-                    entry[f"id{i}"] = aid
-                    entry[f"name{i}"] = aname
+		existing = existing_data.get(char_key, {"guid": guid, "achievements": {}})
+		existing["guid"] = guid  # Update in case it's changed
+		for aid, aname in matches:
+		    if aid not in existing["achievements"]:
+		        existing["achievements"][aid] = aname
+
+		existing_data[char_key] = existing
+
                 print(f"[OK] {char_key} - {len(matches)}")
                 return json.dumps(entry, separators=(",", ":"))
 
