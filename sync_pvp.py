@@ -289,45 +289,36 @@ async def process_characters(characters):
         print(f"[FINAL DEBUG] PvP achievement keywords loaded: {len(pvp_names_set)}")
         semaphore = asyncio.Semaphore(10)
 
-        async def process_one(char):
-#            print(f"[DEBUG] Processing: {char['name']}-{char['realm']}")
-            async with semaphore:
-                name, realm, guid = char["name"].lower(), char["realm"].lower(), char["id"]
-                char_key = f"{name}-{realm}"
-                data = await get_character_achievements(session, headers, realm, name)
-                if not data:
-                    return None
-                earned = data.get("achievements", [])
-#                print(f"[DEBUG] {char_key} has {len(earned)} achievements")
-
-                matched = []
-                for a in earned:
-                    aid = a["id"]
-                    name = a.get("achievement", {}).get("name")
-                    if not name:
-#                        print(f"{RED}[ERROR] Missing achievement name for ID {aid}{RESET}")
-                        continue
-                    if name in pvp_names_set:
-                        matched.append((aid, name))
-                        print(f"{GREEN}[MATCH] {char_key}: {name}{RESET}")
-#                    else:
-#                        print(f"{YELLOW}[MISS]  {char_key}: {name}{RESET}")
-
-                matches = matched
-
-                if not matches:
-                    return None
-
-		existing = existing_data.get(char_key, {"guid": guid, "achievements": {}})
-		existing["guid"] = guid  # Update in case it's changed
-		for aid, aname in matches:
-		    if aid not in existing["achievements"]:
-		        existing["achievements"][aid] = aname
-
-		existing_data[char_key] = existing
-
-                print(f"[OK] {char_key} - {len(matches)}")
-                return json.dumps(entry, separators=(",", ":"))
+	async def process_one(char):
+		async with semaphore:
+			name, realm, guid = char["name"].lower(), char["realm"].lower(), char["id"]
+			char_key = f"{name}-{realm}"
+			data = await get_character_achievements(session, headers, realm, name)
+			if not data:
+				return
+			earned = data.get("achievements", [])
+	
+			matched = []
+			for a in earned:
+				aid = a["id"]
+				name = a.get("achievement", {}).get("name")
+				if not name:
+					continue
+				if name in pvp_names_set:
+					matched.append((aid, name))
+					print(f"{GREEN}[MATCH] {char_key}: {name}{RESET}")
+	
+			if not matched:
+				return
+	
+			existing = existing_data.get(char_key, {"guid": guid, "achievements": {}})
+			existing["guid"] = guid
+			for aid, aname in matched:
+				if aid not in existing["achievements"]:
+					existing["achievements"][aid] = aname
+			existing_data[char_key] = existing
+	
+			print(f"[OK] {char_key} - {len(matched)}")
 
         from asyncio import as_completed
 
