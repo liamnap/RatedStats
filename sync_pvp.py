@@ -57,18 +57,12 @@ def get_available_brackets(region, season_id):
     resp = requests.get(url, headers=headers)
     if not resp.ok:
         raise RuntimeError(f"[FAIL] Unable to fetch PvP leaderboard index for season {season_id}: {resp.status_code}")
-    
+
     data = resp.json()
     leaderboards = data.get("leaderboards", [])
 
-    # Define the only brackets we want to use
-    allowed_brackets = {
-        "2v2",
-        "3v3",
-        "rbg",
-        "shuffle-overall",
-        "blitz-overall"
-    }
+    # Bracket types to collect (based on substring or prefix logic)
+    include_prefixes = ("2v2", "3v3", "rbg", "shuffle-", "blitz-")
 
     brackets = []
     for entry in leaderboards:
@@ -76,10 +70,10 @@ def get_available_brackets(region, season_id):
         if not href:
             continue
         bracket = urlparse(href).path.rstrip("/").split("/")[-1]
-        if bracket in allowed_brackets:
+        if bracket.startswith(include_prefixes):
             brackets.append(bracket)
 
-    print(f"[INFO] Filtered brackets this season: {', '.join(brackets)}")
+    print(f"[INFO] Valid brackets for season {season_id}: {', '.join(brackets)}")
     return brackets
 
 PVP_SEASON_ID = get_current_pvp_season_id(REGION)
