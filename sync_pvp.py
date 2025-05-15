@@ -193,41 +193,41 @@ async def get_pvp_achievements(session, headers):
         {"type": "prefix", "value": "Gladiator"},
         {"type": "prefix", "value": "Legend"},
 
-		# Special Achievements
-		{"type": "prefix", "value": "Three's Company"},   			# 2700 3v3
+	# Special Achievements
+	{"type": "prefix", "value": "Three's Company"},   			# 2700 3v3
 		
-		# R1 Titles
-		{"type": "prefix", "value": "Hero of the Horde"},
-		{"type": "prefix", "value": "Hero of the Alliance"},
-		{"type": "prefix", "value": "Primal Gladiator"},      		# WoD S1
-		{"type": "prefix", "value": "Wild Gladiator"},        		# WoD S2
-		{"type": "prefix", "value": "Warmongering Gladiator"},		# WoD S3
-		{"type": "prefix", "value": "Vindictive Gladiator"},   		# Legion S1
-		{"type": "prefix", "value": "Fearless Gladiator"},      	# Legion S2
-		{"type": "prefix", "value": "Cruel Gladiator"},         	# Legion S3
-		{"type": "prefix", "value": "Ferocious Gladiator"},     	# Legion S4
-		{"type": "prefix", "value": "Fierce Gladiator"},        	# Legion S5
-		{"type": "prefix", "value": "Demonic Gladiator"},       	# Legion S6–7
-		{"type": "prefix", "value": "Dread Gladiator"},     	 	# BFA S1
-		{"type": "prefix", "value": "Sinister Gladiator"},      	# BFA S2
-		{"type": "prefix", "value": "Notorious Gladiator"},     	# BFA S3
-		{"type": "prefix", "value": "Corrupted Gladiator"},     	# BFA S4
-		{"type": "prefix", "value": "Sinful Gladiator"},     		# SL S1
-		{"type": "prefix", "value": "Unchained Gladiator"},     	# SL S2
-		{"type": "prefix", "value": "Cosmic Gladiator"},        	# SL S3
-		{"type": "prefix", "value": "Eternal Gladiator"},       	# SL S4
-		{"type": "prefix", "value": "Crimson Gladiator"},       	# DF S1
-		{"type": "prefix", "value": "Obsidian Gladiator"},      	# DF S2
-		{"type": "prefix", "value": "Draconic Gladiator"},      	# DF S3
-		{"type": "prefix", "value": "Seasoned Gladiator"},      	# DF S4
-		{"type": "prefix", "value": "Forged Warlord:"},         	# TWW S1 Horde RBGB R1
-		{"type": "prefix", "value": "Forged Marshal:"},         	# TWW S1 Alliance RBGB R1
-		{"type": "prefix", "value": "Forged Legend:"},         		# TWW S1 SS R1
-		{"type": "prefix", "value": "Forged Gladiator:"},         	# TWW S1 3v3 R1
-		{"type": "prefix", "value": "Prized Warlord:"},         	# TWW S2 Horde RBGB R1
-		{"type": "prefix", "value": "Prized Marshal:"},         	# TWW S2 Alliance RBGB R1
-		{"type": "prefix", "value": "Prized Legend:"},         		# TWW S2 SS R1
-		{"type": "prefix", "value": "Prized Gladiator:"},         	# TWW S2 3v3 R1
+	# R1 Titles
+	{"type": "prefix", "value": "Hero of the Horde"},
+	{"type": "prefix", "value": "Hero of the Alliance"},
+	{"type": "prefix", "value": "Primal Gladiator"},      		# WoD S1
+	{"type": "prefix", "value": "Wild Gladiator"},        		# WoD S2
+	{"type": "prefix", "value": "Warmongering Gladiator"},		# WoD S3
+	{"type": "prefix", "value": "Vindictive Gladiator"},   		# Legion S1
+	{"type": "prefix", "value": "Fearless Gladiator"},      	# Legion S2
+	{"type": "prefix", "value": "Cruel Gladiator"},         	# Legion S3
+	{"type": "prefix", "value": "Ferocious Gladiator"},     	# Legion S4
+	{"type": "prefix", "value": "Fierce Gladiator"},        	# Legion S5
+	{"type": "prefix", "value": "Demonic Gladiator"},       	# Legion S6–7
+	{"type": "prefix", "value": "Dread Gladiator"},     	 	# BFA S1
+	{"type": "prefix", "value": "Sinister Gladiator"},      	# BFA S2
+	{"type": "prefix", "value": "Notorious Gladiator"},     	# BFA S3
+	{"type": "prefix", "value": "Corrupted Gladiator"},     	# BFA S4
+	{"type": "prefix", "value": "Sinful Gladiator"},     		# SL S1
+	{"type": "prefix", "value": "Unchained Gladiator"},     	# SL S2
+	{"type": "prefix", "value": "Cosmic Gladiator"},        	# SL S3
+	{"type": "prefix", "value": "Eternal Gladiator"},       	# SL S4
+	{"type": "prefix", "value": "Crimson Gladiator"},       	# DF S1
+	{"type": "prefix", "value": "Obsidian Gladiator"},      	# DF S2
+	{"type": "prefix", "value": "Draconic Gladiator"},      	# DF S3
+	{"type": "prefix", "value": "Seasoned Gladiator"},      	# DF S4
+	{"type": "prefix", "value": "Forged Warlord:"},         	# TWW S1 Horde RBGB R1
+	{"type": "prefix", "value": "Forged Marshal:"},         	# TWW S1 Alliance RBGB R1
+	{"type": "prefix", "value": "Forged Legend:"},         		# TWW S1 SS R1
+	{"type": "prefix", "value": "Forged Gladiator:"},         	# TWW S1 3v3 R1
+	{"type": "prefix", "value": "Prized Warlord:"},         	# TWW S2 Horde RBGB R1
+	{"type": "prefix", "value": "Prized Marshal:"},         	# TWW S2 Alliance RBGB R1
+	{"type": "prefix", "value": "Prized Legend:"},         		# TWW S2 SS R1
+	{"type": "prefix", "value": "Prized Gladiator:"},         	# TWW S2 3v3 R1
 	}
 
     for achievement in index.get("achievements", []):
