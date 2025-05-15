@@ -345,25 +345,20 @@ async def process_characters(characters):
         lines = [r for r in results if r]
         lines.sort(key=lambda l: json.loads(l)["character"])
 
-        print(f"[FINAL DEBUG] Number of matched entries to write: {len(lines)}")
-        with open(OUTFILE, "w", encoding="utf-8") as f:
-            f.write(f'-- File: RatedStats/achiev/region_{REGION}.lua\n')
-            f.write("local achievements = {\n")
-            for line in lines:
-                obj = json.loads(line)
-                parts = [f'character = "{obj["character"]}", guid = {obj["guid"]}']
-                for i in range(1, 100):
-                    id_key = f"id{i}"
-                    name_key = f"name{i}"
-                    if id_key in obj and name_key in obj:
-                        name = obj[name_key].replace('"', '\\"')
-                        parts.append(f'id{i} = {obj[id_key]}, name{i} = "{name}"')
-                    else:
-                        break
-                lua_line = "    { " + ", ".join(parts) + " },\n"
-                f.write(lua_line)
-            f.write("}\n\n")
-            f.write(f"{REGION_VAR} = achievements\n")
+	print(f"[FINAL DEBUG] Total characters in merged set: {len(existing_data)}")
+	with open(OUTFILE, "w", encoding="utf-8") as f:
+	    f.write(f'-- File: RatedStats/achiev/region_{REGION}.lua\n')
+    	f.write("local achievements = {\n")
+    	for char_key in sorted(existing_data.keys()):
+        	obj = existing_data[char_key]
+        	parts = [f'character = "{char_key}", guid = {obj["guid"]}']
+        	for i, (aid, name) in enumerate(sorted(obj["achievements"].items()), 1):
+            	name = name.replace('"', '\\"')
+            	parts.append(f'id{i} = {aid}, name{i} = "{name}"')
+        	lua_line = "    { " + ", ".join(parts) + " },\n"
+        	f.write(lua_line)
+    	f.write("}\n\n")
+    	f.write(f"{REGION_VAR} = achievements\n")
 
 # RUN
 if __name__ == "__main__":
