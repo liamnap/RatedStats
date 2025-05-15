@@ -228,7 +228,7 @@ async def get_pvp_achievements(session, headers):
 	{"type": "prefix", "value": "Prized Marshal:"},         	# TWW S2 Alliance RBGB R1
 	{"type": "prefix", "value": "Prized Legend:"},         		# TWW S2 SS R1
 	{"type": "prefix", "value": "Prized Gladiator:"},         	# TWW S2 3v3 R1
-	}
+    ]
 
     for achievement in index.get("achievements", []):
         name = achievement.get("name", "")
