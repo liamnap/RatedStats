@@ -300,6 +300,7 @@ async def process_characters(characters):
         sem = asyncio.Semaphore(10)
         total = len(characters)
         completed = 0
+	last_pct = -1
 
         async def process_one(char):
             async with sem:
@@ -331,10 +332,11 @@ async def process_characters(characters):
                 print(f"[DEBUG] Error: {e}")
             completed += 1
             pct = completed / total * 100
-            # print progress only when percentage integer increases
+            # print once per integer‐percent tick
+            curr_pct = int(pct)
             if curr_pct != last_pct:
                 last_pct = curr_pct
-                print(f"Scanned {completed} of {total} characters ({pct:.1f}% complete)") {completed} of {total} characters ({pct:.1f}% complete)")
+                print(f"Scanned {completed} of {total} characters ({pct:.1f}% complete)")
 		    
     print(f"[DEBUG] Total characters in merged set: {len(existing_data)}")
 
