@@ -158,22 +158,22 @@ async def fetch_with_rate_limit(session, url, headers, max_retries=5):
     for attempt in range(1, max_retries + 1):
         await per_sec.acquire()
         await per_hour.acquire()
-            async with session.get(url, headers=headers) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    url_cache[url] = data
-                    return data
+        async with session.get(url, headers=headers) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                url_cache[url] = data
+                return data
 
-                if resp.status == 429:
-                    # try Retry-After or exponential backoff
-                    ra = resp.headers.get("Retry-After")
-                    wait = float(ra) if ra else 2 ** attempt
-                    print(f"[WARN] 429 on {url}, retrying in {wait:.1f}s (attempt {attempt})")
-                    await asyncio.sleep(wait)
-                    continue
+            if resp.status == 429:
+                # try Retry-After or exponential backoff
+                ra = resp.headers.get("Retry-After")
+                wait = float(ra) if ra else 2 ** attempt
+                print(f"[WARN] 429 on {url}, retrying in {wait:.1f}s (attempt {attempt})")
+                await asyncio.sleep(wait)
+                continue
 
-                # any other error is fatal
-                resp.raise_for_status()
+            # any other error is fatal
+            resp.raise_for_status()
 
     raise RuntimeError(f"fetch failed for {url} after {max_retries} retries")
 
