@@ -26,7 +26,7 @@ LOCALES = {
 LOCALE = LOCALES.get(REGION, "en_US")
 
 # AUTH
-def get_access_token():
+def get_access_token(region):
     client_id = os.environ["BLIZZARD_CLIENT_ID"]
     client_secret = os.environ["BLIZZARD_CLIENT_SECRET"]
     url = f"https://us.battle.net/oauth/token"
@@ -38,7 +38,7 @@ def get_access_token():
     resp.raise_for_status()
     return resp.json()["access_token"]
 
-def get_current_pvp_season_id():
+def get_current_pvp_season_id(region):
     url = f"https://{region}.api.blizzard.com/data/wow/pvp-season/index?namespace=dynamic-{region}&locale=en_US"
     token = get_access_token(region)
     headers = {"Authorization": f"Bearer {token}"}
@@ -76,7 +76,7 @@ def get_available_brackets(region, season_id):
     print(f"[INFO] Valid brackets for season {season_id}: {', '.join(brackets)}")
     return brackets
 
-PVP_SEASON_ID = get_current_pvp_season_id()
+PVP_SEASON_ID = get_current_pvp_season_id(region)
 BRACKETS = get_available_brackets(REGION, PVP_SEASON_ID)
 
 # STATIC NAMESPACE
@@ -347,7 +347,7 @@ async def process_characters(characters):
 
 # RUN
 if __name__ == "__main__":
-    token = get_access_token()
+    token = get_access_token(region)
     headers = {"Authorization": f"Bearer {token}"}
     chars = get_characters_from_leaderboards(REGION, headers, PVP_SEASON_ID, BRACKETS)
     print(f"[FINAL DEBUG] Characters fetched: {len(chars)}")
