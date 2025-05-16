@@ -113,10 +113,6 @@ def get_characters_from_leaderboards(region, headers, season_id, brackets):
             c = entry.get("character")
             if not c or c["id"] in seen:
                 continue
-            # TEMP: only include Advidance-Wrathbringer
-#            print(f"[DEBUG] Checking character: {c['name']} - {c['realm']['slug']}")
-#            if not (c["name"].lower() == "avidance" and c["realm"]["slug"].lower() == "wrathbringer"):
-#                continue
 
             seen[c["id"]] = {
                 "id": c["id"],
@@ -316,8 +312,11 @@ async def process_characters(characters):
                 print(f"[DEBUG] Error: {e}")
             completed += 1
             pct = completed / total * 100
-            print(f"Scanned {completed} of {total} characters ({pct:.1f}% complete)")
-
+            # print progress only when percentage integer increases
+            if curr_pct != last_pct:
+                last_pct = curr_pct
+                print(f"Scanned {completed} of {total} characters ({pct:.1f}% complete)") {completed} of {total} characters ({pct:.1f}% complete)")
+		    
     print(f"[DEBUG] Total characters in merged set: {len(existing_data)}")
 
     # 2) Build any-achievement fingerprint and alt_map
