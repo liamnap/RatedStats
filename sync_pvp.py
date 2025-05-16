@@ -300,7 +300,7 @@ async def process_characters(characters):
         sem = asyncio.Semaphore(10)
         total = len(characters)
         completed = 0
-	last_pct = -1
+        last_pct = -1
 
         async def process_one(char):
             async with sem:
