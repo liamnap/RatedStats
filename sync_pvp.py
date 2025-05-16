@@ -157,7 +157,7 @@ async def fetch_with_rate_limit(session, url, headers, max_retries=5):
 
     for attempt in range(1, max_retries + 1):
         await per_sec.acquire()
-	await per_hour.acquire()
+        await per_hour.acquire()
             async with session.get(url, headers=headers) as resp:
                 if resp.status == 200:
                     data = await resp.json()
