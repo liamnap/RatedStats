@@ -275,69 +275,80 @@ async def process_characters(characters):
     headers = {"Authorization": f"Bearer {token}"}
     existing_data = load_existing_characters()
 
+    # 1) Fetch PvP achievements keywords
     timeout = aiohttp.ClientTimeout(total=15)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         pvp_achievements = await get_pvp_achievements(session, headers)
         pvp_names_set = set(pvp_achievements.values())
-        print(f"[FINAL DEBUG] PvP achievement keywords loaded: {len(pvp_names_set)}")
-        semaphore = asyncio.Semaphore(10)
+        print(f"[DEBUG] PvP keywords loaded: {len(pvp_names_set)}")
+
+        sem = asyncio.Semaphore(10)
+        total = len(characters)
+        completed = 0
 
         async def process_one(char):
-            async with semaphore:
-                name, realm, guid = char["name"].lower(), char["realm"].lower(), char["id"]
-                char_key = f"{name}-{realm}"
+            async with sem:
+                name = char["name"].lower()
+                realm = char["realm"].lower()
+                guid = char["id"]
+                key = f"{name}-{realm}"
                 data = await get_character_achievements(session, headers, realm, name)
                 if not data:
                     return
                 earned = data.get("achievements", [])
-
-                matched = []
-                for a in earned:
-                    aid = a["id"]
-                    name = a.get("achievement", {}).get("name")
-                    if not name:
-                        continue
-                    if name in pvp_names_set:
-                        matched.append((aid, name))
-                        print(f"{GREEN}[MATCH] {char_key}: {name}{RESET}")
-
-                if not matched:
+                if not earned:
                     return
+                entry = existing_data.get(key, {"guid": guid, "achievements": {}})
+                entry["guid"] = guid
+                for ach in earned:
+                    aid = ach["id"]
+                    aname = ach.get("achievement", {}).get("name")
+                    if aname and aid not in entry["achievements"]:
+                        entry["achievements"][aid] = aname
+                existing_data[key] = entry
 
-                existing = existing_data.get(char_key, {"guid": guid, "achievements": {}})
-                existing["guid"] = guid
-                for aid, aname in matched:
-                    if aid not in existing["achievements"]:
-                        existing["achievements"][aid] = aname
-                existing_data[char_key] = existing
-
-                print(f"[OK] {char_key} - {len(matched)}")
-
-        from asyncio import as_completed
-
+        # schedule tasks and track progress
         tasks = [process_one(c) for c in characters.values()]
-        results = []
-
-        for coro in as_completed(tasks):
+        for coro in asyncio.as_completed(tasks):
             try:
                 await coro
             except Exception as e:
-                print(f"[ERROR] Character task failed: {e}")
+                print(f"[DEBUG] Error: {e}")
+            completed += 1
+            pct = completed / total * 100
+            print(f"Scanned {completed} of {total} characters ({pct:.1f}% complete)")
 
-        print(f"[FINAL DEBUG] Total characters in merged set: {len(existing_data)}")
-        with open(OUTFILE, "w", encoding="utf-8") as f:
-            f.write(f'-- File: RatedStats/achiev/region_{REGION}.lua\n')
-            f.write("local achievements = {\n")
-            for char_key in sorted(existing_data.keys()):
-                obj = existing_data[char_key]
-                parts = [f'character = "{char_key}", guid = {obj["guid"]}']
-                for i, (aid, name) in enumerate(sorted(obj["achievements"].items()), 1):
-                    name = name.replace('"', '\\"')
-                    parts.append(f'id{i} = {aid}, name{i} = "{name}"')
-                lua_line = "    { " + ", ".join(parts) + " },\n"
-                f.write(lua_line)
-            f.write("}\n\n")
-            f.write(f"{REGION_VAR} = achievements\n")
+    print(f"[DEBUG] Total characters in merged set: {len(existing_data)}")
+
+    # 2) Build any-achievement fingerprint and alt_map
+    from itertools import combinations
+    fingerprint_any = {char: set(data['achievements'].keys()) for char, data in existing_data.items()}
+    alt_map = {char: [] for char in fingerprint_any}
+    for a, b in combinations(fingerprint_any, 2):
+        if fingerprint_any[a] & fingerprint_any[b]:
+            alt_map[a].append(b)
+            alt_map[b].append(a)
+
+    # 3) Write single-line Lua entries with inline alts
+    with open(OUTFILE, "w", encoding="utf-8") as f:
+        f.write(f'-- File: RatedStats/achiev/region_{REGION}.lua
+')
+        f.write("local achievements = {
+")
+        for key in sorted(existing_data):
+            obj = existing_data[key]
+            alts = alt_map.get(key, [])
+            alts_str = '{' + ','.join(f'"{alt}"' for alt in alts) + '}'
+            parts = [f'character="{key}"', f'alts={alts_str}', f'guid={obj["guid"]}']
+            for i, (aid, aname) in enumerate(sorted(obj["achievements"].items()), 1):
+                esc = aname.replace('"', '\"')
+                parts.extend([f'id{i}={aid}', f'name{i}="{esc}"'])
+            f.write('    { ' + ', '.join(parts) + ' },
+')
+        f.write("}
+")
+        f.write(f"{REGION_VAR} = achievements
+")
 
 # RUN
 if __name__ == "__main__":
