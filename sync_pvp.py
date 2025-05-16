@@ -76,7 +76,7 @@ def get_available_brackets(region, season_id):
     print(f"[INFO] Valid brackets for season {season_id}: {', '.join(brackets)}")
     return brackets
 
-PVP_SEASON_ID = get_current_pvp_season_id(region)
+PVP_SEASON_ID = get_current_pvp_season_id(REGION)
 BRACKETS = get_available_brackets(REGION, PVP_SEASON_ID)
 
 # STATIC NAMESPACE
