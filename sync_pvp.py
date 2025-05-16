@@ -347,7 +347,7 @@ async def process_characters(characters):
 
 # RUN
 if __name__ == "__main__":
-    token = get_access_token(region)
+    token = get_access_token(REGION)
     headers = {"Authorization": f"Bearer {token}"}
     chars = get_characters_from_leaderboards(REGION, headers, PVP_SEASON_ID, BRACKETS)
     print(f"[FINAL DEBUG] Characters fetched: {len(chars)}")
