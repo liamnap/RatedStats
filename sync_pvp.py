@@ -4,6 +4,7 @@ import asyncio
 import aiohttp
 import requests
 from pathlib import Path
+from aiolimiter import AsyncLimiter
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
 RED = "\033[91m"
