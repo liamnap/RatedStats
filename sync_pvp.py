@@ -4,7 +4,6 @@ import asyncio
 import aiohttp
 import requests
 from pathlib import Path
-from aiolimiter import AsyncLimiter
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
 RED = "\033[91m"
@@ -25,6 +24,23 @@ LOCALES = {
     "tw": "zh_TW"
 }
 LOCALE = LOCALES.get(REGION, "en_US")
+
+class RateLimiter:
+    def __init__(self, max_calls: int, period: float):
+        self.max_calls = max_calls
+        self.period = period
+        self.calls = []
+
+    async def acquire(self):
+        now = asyncio.get_event_loop().time()
+        # drop old calls outside our window
+        self.calls = [t for t in self.calls if now - t < self.period]
+        if len(self.calls) >= self.max_calls:
+            wait = self.period - (now - self.calls[0])
+            await asyncio.sleep(wait)
+            now = asyncio.get_event_loop().time()
+            self.calls = [t for t in self.calls if now - t < self.period]
+        self.calls.append(now)
 
 # AUTH
 def get_access_token(region):
@@ -130,8 +146,8 @@ def get_characters_from_leaderboards(region, headers, season_id, brackets):
 
 # rate-limiters and cache
 
-per_sec  = AsyncLimiter(100,   1)     # 100 requests / 1 second
-per_hour = AsyncLimiter(36000, 3600)  # 36_000 requests / 3600 seconds
+per_sec  = RateLimiter(100,   1)     # 100 requests / 1 second
+per_hour = RateLimiter(36000, 3600)  # 36_000 requests / 3600 seconds
 url_cache: dict = {}
 
 async def fetch_with_rate_limit(session, url, headers, max_retries=5):
@@ -140,7 +156,8 @@ async def fetch_with_rate_limit(session, url, headers, max_retries=5):
         return url_cache[url]
 
     for attempt in range(1, max_retries + 1):
-        async with per_sec, per_hour:
+        await per_sec.acquire()
+	await per_hour.acquire()
             async with session.get(url, headers=headers) as resp:
                 if resp.status == 200:
                     data = await resp.json()
