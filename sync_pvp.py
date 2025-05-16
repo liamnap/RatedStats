@@ -26,7 +26,7 @@ LOCALES = {
 LOCALE = LOCALES.get(REGION, "en_US")
 
 # AUTH
-def get_access_token(region):
+def get_access_token():
     client_id = os.environ["BLIZZARD_CLIENT_ID"]
     client_secret = os.environ["BLIZZARD_CLIENT_SECRET"]
     url = f"https://us.battle.net/oauth/token"
@@ -331,28 +331,23 @@ async def process_characters(characters):
 
     # 3) Write single-line Lua entries with inline alts
     with open(OUTFILE, "w", encoding="utf-8") as f:
-        f.write(f'-- File: RatedStats/achiev/region_{REGION}.lua
-')
-        f.write("local achievements = {
-")
+        f.write(f'-- File: RatedStats/achiev/region_{REGION}.lua\n')
+        f.write("local achievements = {\n")
         for key in sorted(existing_data):
             obj = existing_data[key]
             alts = alt_map.get(key, [])
             alts_str = '{' + ','.join(f'"{alt}"' for alt in alts) + '}'
             parts = [f'character="{key}"', f'alts={alts_str}', f'guid={obj["guid"]}']
             for i, (aid, aname) in enumerate(sorted(obj["achievements"].items()), 1):
-                esc = aname.replace('"', '\"')
+                esc = aname.replace('"', '\\"')
                 parts.extend([f'id{i}={aid}', f'name{i}="{esc}"'])
-            f.write('    { ' + ', '.join(parts) + ' },
-')
-        f.write("}
-")
-        f.write(f"{REGION_VAR} = achievements
-")
+            f.write('    { ' + ', '.join(parts) + ' },\n')
+        f.write("}\n")
+        f.write(f"{REGION_VAR} = achievements\n")
 
 # RUN
 if __name__ == "__main__":
-    token = get_access_token(REGION)
+    token = get_access_token()
     headers = {"Authorization": f"Bearer {token}"}
     chars = get_characters_from_leaderboards(REGION, headers, PVP_SEASON_ID, BRACKETS)
     print(f"[FINAL DEBUG] Characters fetched: {len(chars)}")
