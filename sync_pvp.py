@@ -127,18 +127,42 @@ def get_characters_from_leaderboards(region, headers, season_id, brackets):
     print(f"[DEBUG] Character sample size: {len(limited)}")
     return limited
 
-# FETCH WRAPPER
-async def fetch(session, url, headers):
-    async with session.get(url, headers=headers) as r:
-        if r.status != 200:
-            print(f"[FAIL] {url} - {r.status}")
-            return {}
-        return await r.json()
+# rate-limiters and cache
+
+per_sec  = AsyncLimiter(100,   1)     # 100 requests / 1 second
+per_hour = AsyncLimiter(36000, 3600)  # 36_000 requests / 3600 seconds
+url_cache: dict = {}
+
+async def fetch_with_rate_limit(session, url, headers, max_retries=5):
+    # return immediately if already fetched
+    if url in url_cache:
+        return url_cache[url]
+
+    for attempt in range(1, max_retries + 1):
+        async with per_sec, per_hour:
+            async with session.get(url, headers=headers) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    url_cache[url] = data
+                    return data
+
+                if resp.status == 429:
+                    # try Retry-After or exponential backoff
+                    ra = resp.headers.get("Retry-After")
+                    wait = float(ra) if ra else 2 ** attempt
+                    print(f"[WARN] 429 on {url}, retrying in {wait:.1f}s (attempt {attempt})")
+                    await asyncio.sleep(wait)
+                    continue
+
+                # any other error is fatal
+                resp.raise_for_status()
+
+    raise RuntimeError(f"fetch failed for {url} after {max_retries} retries")
 
 # PVP ACHIEVEMENTS
 async def get_pvp_achievements(session, headers):
     url = f"{API_BASE}/data/wow/achievement/index?namespace={NAMESPACE_STATIC}&locale=en_US"
-    index = await fetch(session, url, headers)
+    index = await fetch_with_rate_limit(session, url, headers)
     matches = {}
 
     KEYWORDS = [
@@ -236,14 +260,9 @@ async def get_pvp_achievements(session, headers):
 # CHAR ACHIEVEMENTS
 async def get_character_achievements(session, headers, realm, name):
     url = f"{API_BASE}/profile/wow/character/{realm}/{name.lower()}/achievements?namespace={NAMESPACE_PROFILE}&locale={LOCALE}"
-    async with session.get(url, headers=headers) as r:
-        if r.status == 404:
-            # Character profile doesn't exist — likely private or inactive
-            return None
-        elif r.status != 200:
-            print(f"[FAIL] {url} - {r.status}")
-            return None
-        return await r.json()
+    data = await fetch_with_rate_limit(session, url, headers)
+    # fetch returns {} on 429 exhaust or raises on other errors
+    return data or None
 
 # Check region files for lookup
 import re
