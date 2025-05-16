@@ -38,7 +38,7 @@ def get_access_token():
     resp.raise_for_status()
     return resp.json()["access_token"]
 
-def get_current_pvp_season_id(region):
+def get_current_pvp_season_id():
     url = f"https://{region}.api.blizzard.com/data/wow/pvp-season/index?namespace=dynamic-{region}&locale=en_US"
     token = get_access_token(region)
     headers = {"Authorization": f"Bearer {token}"}
