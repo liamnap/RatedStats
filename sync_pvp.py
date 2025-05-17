@@ -5,7 +5,6 @@ import aiohttp
 import requests
 import time
 from pathlib import Path
-from asyncio import RetryCharacter  # <-- nope, we’ll define it
 from asyncio import TimeoutError, CancelledError, create_task, as_completed, shield
 
 # custom exception to signal “please retry this char later”
