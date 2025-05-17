@@ -377,9 +377,8 @@ async def process_characters(characters):
                 completed += 1
                 pct = completed / total * 100
                 curr_pct = int(pct)
-                if curr_pct != last_pct:
-                    last_pct = curr_pct
-                    print(f"Scanned {completed} of {total} characters ({pct:.1f}% complete)")
+                if completed % 100 == 0:
+                    print(f"[HEARTBEAT] processed {completed} so far…", flush=True)
 
     # session is closed here
     print(f"[DEBUG] Total characters in merged set: {len(existing_data)}")
