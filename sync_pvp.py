@@ -375,10 +375,11 @@ async def process_characters(characters):
                 print(f"{RED}[ERROR] Character task failed: {e}{RESET}")
             else:
                 completed += 1
-                pct = completed / total * 100
-                curr_pct = int(pct)
-                if completed % 100 == 0:
-                    print(f"[HEARTBEAT] processed {completed} so far {curr_pct}%", flush=True)
+                now = time.time()
+                # if more than 60 seconds have passed since last heartbeat:
+                if now - last_hb > 60:
+                   print(f"[HEARTBEAT] {completed}/{total} done ({(completed/total*100):.1f}%)", flush=True)
+                   last_hb = now
 
     # session is closed here
     print(f"[DEBUG] Total characters in merged set: {len(existing_data)}")
