@@ -392,7 +392,16 @@ async def process_characters(characters):
                     completed += 1
                     now = time.time()
                     if now - last_hb > 60:
-                        print(f"[HEARTBEAT] {completed}/{total} done ({(completed/total*100):.1f}%)", flush=True)
+                        # DEBUG: show how many calls in the last window and compute req/sec
+                        calls_in_window = len(per_sec.calls)
+                        current_rate = calls_in_window / per_sec.period
+                        print(
+                            f"[HEARTBEAT] {completed}/{total} done "
+                            f"({(completed/total*100):.1f}%), "
+                            f"rate {current_rate:.1f} req/s "
+                            f"({calls_in_window}/{per_sec.max_calls} in last {per_sec.period}s)",
+                            flush=True
+                        )
                         last_hb = now
 
             if retry_list:
