@@ -345,7 +345,7 @@ async def process_characters(characters):
                 try:
                     data = await get_character_achievements(session, headers, realm, name)
                 except (TimeoutError, aiohttp.ClientError) as e:
-                    print(f"{YELLOW}[WARN] network error {e!r} on {key}, skipping{RESET}")
+#                    print(f"{YELLOW}[WARN] network error {e!r} on {key}, skipping{RESET}")
                     return
 
                 if not data:
