@@ -165,18 +165,24 @@ async def fetch_with_rate_limit(session, url, headers, max_retries=5):
         if waited > 0:
             print(f"{YELLOW}[RATE] waited {waited:.3f}s before calling {url}{RESET}")
 
-        async with session.get(url, headers=headers) as resp:
-            if resp.status == 200:
-                data = await resp.json()
-                url_cache[url] = data
-                return data
-
-            if resp.status == 429:
-                ra = resp.headers.get("Retry-After")
-                backoff = float(ra) if ra else 2 ** attempt
-                print(f"{YELLOW}[WARN] 429 on {url}, retrying in {backoff:.1f}s (attempt {attempt}){RESET}")
-                await asyncio.sleep(backoff)
-                continue
+        try:
+            async with session.get(url, headers=headers) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    url_cache[url] = data
+                    return data
+                if resp.status == 429:
+                    ra = resp.headers.get("Retry-After")
+                    backoff = float(ra) if ra else 2 ** attempt
+                    print(f"{YELLOW}[WARN] 429 on {url}, retrying in {backoff:.1f}s (attempt {attempt}){RESET}")
+                    await asyncio.sleep(backoff)
+                    continue
+                resp.raise_for_status()
+        except (asyncio.TimeoutError, asyncio.CancelledError) as e:
+            backoff = 2 ** attempt
+            print(f"{YELLOW}[WARN] timeout/cancelled on {url}, retrying in {backoff}s (attempt {attempt}){RESET}")
+            await asyncio.sleep(backoff)
+            continue
 
             resp.raise_for_status()
 
