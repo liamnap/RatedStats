@@ -364,24 +364,26 @@ async def process_characters(characters):
                         entry["achievements"][aid] = aname
                 existing_data[key] = entry
 
-    # schedule tasks and track progress as shielded Tasks
-    tasks = [ create_task(process_one(c)) for c in characters.values() ]
+        # schedule tasks and track progress as shielded Tasks
+        tasks = [ create_task(process_one(c)) for c in characters.values() ]
 
-    for finished in as_completed(tasks):
-        try:
-            # shield prevents an external cancellation from bubbling in
-            await shield(finished)
-        except CancelledError:
-            print(f"{YELLOW}[WARN] A character task was cancelled, skipping{RESET}")
-        except Exception as e:
-            print(f"{RED}[ERROR] Character task failed: {e}{RESET}")
-        else:
-            completed += 1
-            pct = completed / total * 100
-            curr_pct = int(pct)
-            if curr_pct != last_pct:
-                last_pct = curr_pct
-                print(f"Scanned {completed} of {total} characters ({pct:.1f}% complete)")
+        for finished in as_completed(tasks):
+            try:
+                # shield prevents an external cancellation from bubbling in
+                await shield(finished)
+            except CancelledError:
+                print(f"{YELLOW}[WARN] A character task was cancelled, skipping{RESET}")
+            except Exception as e:
+                print(f"{RED}[ERROR] Character task failed: {e}{RESET}")
+            else:
+                completed += 1
+                pct = completed / total * 100
+                curr_pct = int(pct)
+                if curr_pct != last_pct:
+                    last_pct = curr_pct
+                    print(f"Scanned {completed} of {total} characters ({pct:.1f}% complete)")
+
+    # now the `async with` is over, `session` closes here
 		    
     print(f"[DEBUG] Total characters in merged set: {len(existing_data)}")
 
