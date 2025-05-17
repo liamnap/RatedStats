@@ -322,11 +322,10 @@ async def process_characters(characters):
     existing_data = load_existing_characters()
 
     # 1) Fetch PvP achievements keywords
-    timeout = aiohttp.ClientTimeout(total=None, sock_connect=None, sock_read=None)
+    timeout = aiohttp.ClientTimeout(total=None)  # no socket limits
     async with aiohttp.ClientSession(timeout=timeout) as session:
         pvp_achievements = await get_pvp_achievements(session, headers)
-        pvp_names_set = set(pvp_achievements.values())
-        print(f"[DEBUG] PvP keywords loaded: {len(pvp_names_set)}")
+        print(f"[DEBUG] PvP keywords loaded: {len(pvp_achievements)}")
 
         sem = asyncio.Semaphore(10)
         total = len(characters)
@@ -340,14 +339,12 @@ async def process_characters(characters):
                 guid = char["id"]
                 key = f"{name}-{realm}"
 
-                # fetch and handle timeouts/404s/429s inside fetch_with_rate_limit
+                # fetch + retry + 429/backoff all in fetch_with_rate_limit
                 try:
                     data = await get_character_achievements(session, headers, realm, name)
-                    except (asyncio.CancelledError, asyncio.TimeoutError, aiohttp.ClientError) as e:
-                        backoff = 2 ** attempt
-                        print(f"{YELLOW}[WARN] network error {e!r} on {url}, retrying in {backoff}s (#{attempt}){RESET}")
-                        await asyncio.sleep(backoff)
-                        continue
+                except (CancelledError, TimeoutError, aiohttp.ClientError) as e:
+                    print(f"{YELLOW}[WARN] network error {e!r} on {key}, skipping{RESET}")
+                    return
 
                 if not data:
                     return
@@ -365,11 +362,12 @@ async def process_characters(characters):
                         entry["achievements"][aid] = aname
                 existing_data[key] = entry
 
-        # kick off all tasks while session is still open
+        # fire off all tasks while the session is open
         tasks = [create_task(process_one(c)) for c in characters.values()]
 
         for finished in as_completed(tasks):
             try:
+                # shield prevents outside cancellation from killing your per-character work
                 await shield(finished)
             except CancelledError:
                 print(f"{YELLOW}[WARN] A character task was cancelled, skipping{RESET}")
@@ -383,7 +381,7 @@ async def process_characters(characters):
                     last_pct = curr_pct
                     print(f"Scanned {completed} of {total} characters ({pct:.1f}% complete)")
 
-    # session is closed here, guaranteed all requests are done
+    # session is closed here
     print(f"[DEBUG] Total characters in merged set: {len(existing_data)}")
 
     # 2) Build fingerprint & alt_map
@@ -401,8 +399,7 @@ async def process_characters(characters):
         f.write("local achievements = {\n")
         for key in sorted(existing_data):
             obj = existing_data[key]
-            alts = alt_map.get(key, [])
-            alts_str = "{" + ",".join(f'"{alt}"' for alt in alts) + "}"
+            alts_str = "{" + ",".join(f'"{alt}"' for alt in alt_map[key]) + "}"
             parts = [f'character="{key}"', f'alts={alts_str}', f'guid={obj["guid"]}']
             for i, (aid, aname) in enumerate(sorted(obj["achievements"].items()), 1):
                 esc = aname.replace('"', '\\"')
