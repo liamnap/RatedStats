@@ -387,13 +387,15 @@ async def process_characters(characters):
 
         # ── multi-pass **with batching** so we never schedule 100K+ tasks at once ──
         remaining      = list(characters.values())
+        # debug: show what our rate‐limits actually are
+        print(f"[DEBUG] Rate limits: {per_sec.max_calls}/sec, {per_hour.max_calls}/{per_hour.period}s")
         retry_interval = 60     # seconds before each retry pass
         BATCH_SIZE     = 5000   # tweak as needed—keeps the loop sane
 
         while remaining:
             retry_list = []
 
-            # calculate total number of batches for this pass
+            # process in batches of BATCH_SIZE
             total_batches = (len(remaining) + BATCH_SIZE - 1) // BATCH_SIZE
             for batch_num, offset in enumerate(range(0, len(remaining), BATCH_SIZE), start=1):
                 batch = remaining[offset:offset + BATCH_SIZE]
@@ -419,7 +421,8 @@ async def process_characters(characters):
                                 f"[HEARTBEAT] batch {batch_num}/{total_batches} | "
                                 f"{completed}/{total} done ({(completed/total*100):.1f}%), "
                                 f"sec_rate={sec_calls/per_sec.period:.1f}/s ({sec_calls}/{per_sec.max_calls}), "
-                                f"hourly={hr_calls}/{per_hour.max_calls}",
+                                f"hourly={hr_calls}/{per_hour.max_calls}/{per_hour.period}s, "
+                                f"batch_size={len(batch)}, remaining={len(remaining)}",
                                 flush=True
                             )
                             last_hb = now
