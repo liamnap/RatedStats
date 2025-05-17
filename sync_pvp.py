@@ -13,6 +13,10 @@ class RetryCharacter(Exception):
         super().__init__(f"Retry {char['name']}-{char['realm']}")
         self.char = char
 
+# new exception: signal “rate-limited, retry later” without blocking
+class RateLimitExceeded(Exception):
+    pass
+
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
 RED = "\033[91m"
@@ -179,11 +183,8 @@ async def fetch_with_rate_limit(session, url, headers, max_retries=5):
                     url_cache[url] = data
                     return data
                 if resp.status == 429 or 500 <= resp.status < 600:
-                    ra = resp.headers.get("Retry-After")
-                    backoff = float(ra) if ra else 2 ** attempt
-                    print(f"{YELLOW}[WARN] 429 on {url}, retrying in {backoff:.1f}s (attempt {attempt}){RESET}")
-                    await asyncio.sleep(backoff)
-                    continue
+                    # immediately bail out so outer loop re-queues this char
+                    raise RateLimitExceeded(f"{resp.status} on {url}")
                 resp.raise_for_status()
         except (asyncio.TimeoutError) as e:
             backoff = 2 ** attempt
@@ -348,10 +349,9 @@ async def process_characters(characters):
                 try:
                     data = await get_character_achievements(session, headers, realm, name)
                 except (TimeoutError, aiohttp.ClientError):
-                    # temporary network hiccup, skip this char this pass
-                    return
-                except RuntimeError as e:
-                    # our fetch_with_rate_limit gives RuntimeError after max_retries → queue for retry
+                    return  # skip transient network errors this pass
+                except RateLimitExceeded:
+                    # hit 429/5xx → re-queue on next sweep
                     raise RetryCharacter(char)
 
                 if not data:
