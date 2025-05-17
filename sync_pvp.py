@@ -421,4 +421,8 @@ if __name__ == "__main__":
     else:
         print("[FINAL DEBUG] No characters matched.")
 
-    asyncio.run(process_characters(chars))
+    try:
+        asyncio.run(process_characters(chars))
+    except CancelledError:
+        # swallow any leftover “operation was canceled” so the script exits cleanly
+        print(f"{YELLOW}[WARN] Top-level run was cancelled, exiting.{RESET}")
