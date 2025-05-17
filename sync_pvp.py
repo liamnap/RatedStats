@@ -339,16 +339,22 @@ async def process_characters(characters):
                 realm = char["realm"].lower()
                 guid = char["id"]
                 key = f"{name}-{realm}"
+
+                # catch timeouts/cancels on the fetch
                 try:
                     data = await get_character_achievements(session, headers, realm, name)
                 except (CancelledError, TimeoutError):
                     print(f"{YELLOW}[WARN] fetch for {key} timed out or was cancelled, skipping{RESET}")
                     return
-        if not data:
-            return
+
+                # no data → nothing to do
+                if not data:
+                    return
+
                 earned = data.get("achievements", [])
                 if not earned:
                     return
+
                 entry = existing_data.get(key, {"guid": guid, "achievements": {}})
                 entry["guid"] = guid
                 for ach in earned:
