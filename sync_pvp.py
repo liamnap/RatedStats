@@ -4,6 +4,8 @@ import asyncio
 import aiohttp
 import requests
 from pathlib import Path
+from asyncio import CancelledError, TimeoutError, create_task, as_completed, shield
+
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
 RED = "\033[91m"
@@ -162,7 +164,7 @@ async def fetch_with_rate_limit(session, url, headers, max_retries=5):
         await per_sec.acquire()
         await per_hour.acquire()
         waited = asyncio.get_event_loop().time() - start
-        if waited > 0:
+        if waited > 0.1:
             print(f"{YELLOW}[RATE] waited {waited:.3f}s before calling {url}{RESET}")
 
         try:
@@ -337,9 +339,13 @@ async def process_characters(characters):
                 realm = char["realm"].lower()
                 guid = char["id"]
                 key = f"{name}-{realm}"
-                data = await get_character_achievements(session, headers, realm, name)
-                if not data:
+                try:
+                    data = await get_character_achievements(session, headers, realm, name)
+                except (CancelledError, TimeoutError):
+                    print(f"{YELLOW}[WARN] fetch for {key} timed out or was cancelled, skipping{RESET}")
                     return
+        if not data:
+            return
                 earned = data.get("achievements", [])
                 if not earned:
                     return
@@ -352,16 +358,20 @@ async def process_characters(characters):
                         entry["achievements"][aid] = aname
                 existing_data[key] = entry
 
-        # schedule tasks and track progress
-        tasks = [process_one(c) for c in characters.values()]
-        for coro in asyncio.as_completed(tasks):
-            try:
-                await coro
-            except Exception as e:
-                print(f"[DEBUG] Error: {e}")
+    # schedule tasks and track progress as shielded Tasks
+    tasks = [ create_task(process_one(c)) for c in characters.values() ]
+
+    for finished in as_completed(tasks):
+        try:
+            # shield prevents an external cancellation from bubbling in
+            await shield(finished)
+        except CancelledError:
+            print(f"{YELLOW}[WARN] A character task was cancelled, skipping{RESET}")
+        except Exception as e:
+            print(f"{RED}[ERROR] Character task failed: {e}{RESET}")
+        else:
             completed += 1
             pct = completed / total * 100
-            # print once per integer‐percent tick
             curr_pct = int(pct)
             if curr_pct != last_pct:
                 last_pct = curr_pct
