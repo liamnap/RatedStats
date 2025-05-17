@@ -392,8 +392,7 @@ async def process_characters(characters):
 
         while remaining:
             retry_list = []
-            # process in batches of BATCH_SIZE
-            for offset in range(0, len(remaining), BATCH_SIZE):
+
             # calculate total number of batches for this pass
             total_batches = (len(remaining) + BATCH_SIZE - 1) // BATCH_SIZE
             for batch_num, offset in enumerate(range(0, len(remaining), BATCH_SIZE), start=1):
