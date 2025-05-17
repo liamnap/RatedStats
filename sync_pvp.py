@@ -5,7 +5,7 @@ import aiohttp
 import requests
 import time
 from pathlib import Path
-from asyncio import TimeoutError, create_task, as_completed, shield
+from asyncio import TimeoutError, CancelledError, create_task, as_completed, shield
 
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
@@ -369,8 +369,12 @@ async def process_characters(characters):
             try:
                 # shield prevents outside cancellation from killing your per-character work
                 await shield(finished)
-            except Exception as e:
-                print(f"{RED}[ERROR] Character task failed: {e}{RESET}")
+            except CancelledError as e:
+                 # swallow OS-level cancellations and keep going
+                 print(f"{YELLOW}[WARN] Task was cancelled: {e}{RESET}")
+                 continue
+             except Exception as e:
+                 print(f"{RED}[ERROR] Character task failed: {e}{RESET}")
             else:
                 completed += 1
                 now = time.time()
