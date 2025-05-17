@@ -468,7 +468,7 @@ if __name__ == "__main__":
     chars = get_characters_from_leaderboards(REGION, headers, PVP_SEASON_ID, BRACKETS)
     print(f"[FINAL DEBUG] Characters fetched: {len(chars)}")
     if chars:
-        print("[FINAL DEBUG] Characters found:", list(chars.values())[0])
+#        print("[FINAL DEBUG] Characters found:", list(chars.values())[0])
     else:
         print("[FINAL DEBUG] No characters matched.")
 
