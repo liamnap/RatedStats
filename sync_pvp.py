@@ -4,6 +4,7 @@ import asyncio
 import aiohttp
 import requests
 import time
+import collections
 from pathlib import Path
 from asyncio import TimeoutError, CancelledError, create_task, as_completed, shield
 
@@ -157,10 +158,15 @@ def get_characters_from_leaderboards(region, headers, season_id, brackets):
     print(f"[DEBUG] Character sample size: {len(limited)}")
     return limited
 
-# rate-limiters and cache
-
-# per runner
-per_sec  = RateLimiter(100,   1)      # 25 req / 1 second
+#–– US needs both a per-second cap *and* a per-hour cap,
+#    but we never want to actually *wait* on the hour window—
+#    we want to queue any “hourly full” chars
+if REGION == "us":
+    per_sec   = RateLimiter(25,   1)      # Blizzard’s per-second ceiling
+    per_hour  = RateLimiter(10000,3600)   # US per-hour ceiling
+else:
+    per_sec   = RateLimiter(100,  1)
+    per_hour  = RateLimiter(1_000_000, 3600)
 url_cache: dict = {}
 
 async def fetch_with_rate_limit(session, url, headers, max_retries=5):
@@ -170,7 +176,16 @@ async def fetch_with_rate_limit(session, url, headers, max_retries=5):
 
     for attempt in range(1, max_retries+1):
         # block until both per-sec and per-hour allow us through
-        start = asyncio.get_event_loop().time()
+        #–– track hourly usage, but don’t block on it
+        now = asyncio.get_event_loop().time()
+        per_hour.calls = [t for t in per_hour.calls if now - t < per_hour.period]
+        if len(per_hour.calls) >= per_hour.max_calls:
+            # hit the hourly cap → queue this char rather than stall
+            raise RateLimitExceeded(f"hourly cap hit on {url}")
+        per_hour.calls.append(now)
+
+        #–– throttle to per-second
+        start = now
         await per_sec.acquire()
         waited = asyncio.get_event_loop().time() - start
         if waited > 1:
@@ -392,14 +407,14 @@ async def process_characters(characters):
                     completed += 1
                     now = time.time()
                     if now - last_hb > 60:
-                        # DEBUG: show how many calls in the last window and compute req/sec
-                        calls_in_window = len(per_sec.calls)
-                        current_rate = calls_in_window / per_sec.period
+                        #–– also dump our instantaneous rates
+                        sec_calls = len(per_sec.calls)
+                        hr_calls  = len(per_hour.calls)
                         print(
                             f"[HEARTBEAT] {completed}/{total} done "
                             f"({(completed/total*100):.1f}%), "
-                            f"rate {current_rate:.1f} req/s "
-                            f"({calls_in_window}/{per_sec.max_calls} in last {per_sec.period}s)",
+                            f"sec_rate={sec_calls/per_sec.period:.1f}/s ({sec_calls}/{per_sec.max_calls}), "
+                            f"hourly={hr_calls}/{per_hour.max_calls}",
                             flush=True
                         )
                         last_hb = now
