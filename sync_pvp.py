@@ -161,12 +161,14 @@ def get_characters_from_leaderboards(region, headers, season_id, brackets):
 #–– US needs both a per-second cap *and* a per-hour cap,
 #    but we never want to actually *wait* on the hour window—
 #    we want to queue any “hourly full” chars
+NUM_RUNNERS = 4
 if REGION == "us":
-    per_sec   = RateLimiter(25,   1)      # Blizzard’s per-second ceiling
-    per_hour  = RateLimiter(10000,3600)   # US per-hour ceiling
+    per_sec  = RateLimiter(25  // NUM_RUNNERS, 1)      # e.g. ~6 req/sec each
+    per_hour = RateLimiter(100000 // NUM_RUNNERS, 3600) # 2 500 req/hr each
 else:
-    per_sec   = RateLimiter(100,  1)
-    per_hour  = RateLimiter(1_000_000, 3600)
+    per_sec  = RateLimiter(100,  1)
+    per_hour = RateLimiter(1_000_000, 3600)
+
 url_cache: dict = {}
 
 async def fetch_with_rate_limit(session, url, headers, max_retries=5):
