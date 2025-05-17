@@ -151,7 +151,6 @@ def get_characters_from_leaderboards(region, headers, season_id, brackets):
 
 # per runner
 per_sec  = RateLimiter(25,   1)      # 25 req / 1 second
-per_hour = RateLimiter(9000, 3600)   #  9 000 req / 3600 seconds
 url_cache: dict = {}
 
 async def fetch_with_rate_limit(session, url, headers, max_retries=5):
@@ -163,7 +162,6 @@ async def fetch_with_rate_limit(session, url, headers, max_retries=5):
         # block until both per-sec and per-hour allow us through
         start = asyncio.get_event_loop().time()
         await per_sec.acquire()
-        await per_hour.acquire()
         waited = asyncio.get_event_loop().time() - start
         if waited > 0.1:
             print(f"{YELLOW}[RATE] waited {waited:.3f}s before calling {url}{RESET}")
