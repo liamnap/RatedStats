@@ -340,14 +340,13 @@ async def process_characters(characters):
                 guid = char["id"]
                 key = f"{name}-{realm}"
 
-                # catch timeouts/cancels on the fetch
+                # fetch and handle timeouts/404s/429s inside fetch_with_rate_limit
                 try:
                     data = await get_character_achievements(session, headers, realm, name)
                 except (CancelledError, TimeoutError):
-                    print(f"{YELLOW}[WARN] fetch for {key} timed out or was cancelled, skipping{RESET}")
+                    print(f"{YELLOW}[WARN] fetch for {key} timed out or cancelled, skipping{RESET}")
                     return
 
-                # no data → nothing to do
                 if not data:
                     return
 
@@ -364,12 +363,11 @@ async def process_characters(characters):
                         entry["achievements"][aid] = aname
                 existing_data[key] = entry
 
-        # schedule tasks and track progress as shielded Tasks
-        tasks = [ create_task(process_one(c)) for c in characters.values() ]
+        # kick off all tasks while session is still open
+        tasks = [create_task(process_one(c)) for c in characters.values()]
 
         for finished in as_completed(tasks):
             try:
-                # shield prevents an external cancellation from bubbling in
                 await shield(finished)
             except CancelledError:
                 print(f"{YELLOW}[WARN] A character task was cancelled, skipping{RESET}")
@@ -383,33 +381,32 @@ async def process_characters(characters):
                     last_pct = curr_pct
                     print(f"Scanned {completed} of {total} characters ({pct:.1f}% complete)")
 
-    # now the `async with` is over, `session` closes here
-		    
+    # session is closed here, guaranteed all requests are done
     print(f"[DEBUG] Total characters in merged set: {len(existing_data)}")
 
-    # 2) Build any-achievement fingerprint and alt_map
+    # 2) Build fingerprint & alt_map
     from itertools import combinations
-    fingerprint_any = {char: set(data['achievements'].keys()) for char, data in existing_data.items()}
-    alt_map = {char: [] for char in fingerprint_any}
+    fingerprint_any = {ch: set(d["achievements"].keys()) for ch, d in existing_data.items()}
+    alt_map = {ch: [] for ch in fingerprint_any}
     for a, b in combinations(fingerprint_any, 2):
         if fingerprint_any[a] & fingerprint_any[b]:
             alt_map[a].append(b)
             alt_map[b].append(a)
 
-    # 3) Write single-line Lua entries with inline alts
+    # 3) Write out Lua file
     with open(OUTFILE, "w", encoding="utf-8") as f:
         f.write(f'-- File: RatedStats/achiev/region_{REGION}.lua\n')
         f.write("local achievements = {\n")
         for key in sorted(existing_data):
             obj = existing_data[key]
             alts = alt_map.get(key, [])
-            alts_str = '{' + ','.join(f'"{alt}"' for alt in alts) + '}'
+            alts_str = "{" + ",".join(f'"{alt}"' for alt in alts) + "}"
             parts = [f'character="{key}"', f'alts={alts_str}', f'guid={obj["guid"]}']
             for i, (aid, aname) in enumerate(sorted(obj["achievements"].items()), 1):
                 esc = aname.replace('"', '\\"')
                 parts.extend([f'id{i}={aid}', f'name{i}="{esc}"'])
-            f.write('    { ' + ', '.join(parts) + ' },\n')
-        f.write("}\n")
+            f.write("    { " + ", ".join(parts) + " },\n")
+        f.write("}\n\n")
         f.write(f"{REGION_VAR} = achievements\n")
 
 # RUN
