@@ -173,7 +173,7 @@ async def fetch_with_rate_limit(session, url, headers, max_retries=5):
                     data = await resp.json()
                     url_cache[url] = data
                     return data
-                if resp.status == 429:
+                if resp.status == 429 or 500 <= resp.status < 600:
                     ra = resp.headers.get("Retry-After")
                     backoff = float(ra) if ra else 2 ** attempt
                     print(f"{YELLOW}[WARN] 429 on {url}, retrying in {backoff:.1f}s (attempt {attempt}){RESET}")
