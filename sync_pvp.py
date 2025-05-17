@@ -4,7 +4,7 @@ import asyncio
 import aiohttp
 import requests
 from pathlib import Path
-from asyncio import CancelledError, TimeoutError, create_task, as_completed, shield
+from asyncio import TimeoutError, create_task, as_completed, shield
 
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
@@ -180,9 +180,9 @@ async def fetch_with_rate_limit(session, url, headers, max_retries=5):
                     await asyncio.sleep(backoff)
                     continue
                 resp.raise_for_status()
-        except (asyncio.TimeoutError, asyncio.CancelledError) as e:
+        except (asyncio.TimeoutError) as e:
             backoff = 2 ** attempt
-            print(f"{YELLOW}[WARN] timeout/cancelled on {url}, retrying in {backoff}s (attempt {attempt}){RESET}")
+            print(f"{YELLOW}[WARN] timeout on {url}, retrying in {backoff}s (attempt {attempt}){RESET}")
             await asyncio.sleep(backoff)
             continue
 
@@ -342,7 +342,7 @@ async def process_characters(characters):
                 # fetch + retry + 429/backoff all in fetch_with_rate_limit
                 try:
                     data = await get_character_achievements(session, headers, realm, name)
-                except (CancelledError, TimeoutError, aiohttp.ClientError) as e:
+                except (TimeoutError, aiohttp.ClientError) as e:
                     print(f"{YELLOW}[WARN] network error {e!r} on {key}, skipping{RESET}")
                     return
 
@@ -369,8 +369,6 @@ async def process_characters(characters):
             try:
                 # shield prevents outside cancellation from killing your per-character work
                 await shield(finished)
-            except CancelledError:
-                print(f"{YELLOW}[WARN] A character task was cancelled, skipping{RESET}")
             except Exception as e:
                 print(f"{RED}[ERROR] Character task failed: {e}{RESET}")
             else:
