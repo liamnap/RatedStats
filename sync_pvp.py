@@ -332,6 +332,7 @@ async def process_characters(characters):
         total = len(characters)
         completed = 0
         last_pct = -1
+        last_hb = time.time()
 
         async def process_one(char):
             async with sem:
