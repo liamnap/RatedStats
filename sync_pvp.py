@@ -146,18 +146,24 @@ def get_characters_from_leaderboards(region, headers, season_id, brackets):
 
 # rate-limiters and cache
 
-per_sec  = RateLimiter(100,   1)     # 100 requests / 1 second
-per_hour = RateLimiter(36000, 3600)  # 36_000 requests / 3600 seconds
+# per runner
+per_sec  = RateLimiter(25,   1)      # 25 req / 1 second
+per_hour = RateLimiter(9000, 3600)   #  9 000 req / 3600 seconds
 url_cache: dict = {}
 
 async def fetch_with_rate_limit(session, url, headers, max_retries=5):
-    # return immediately if already fetched
+    # hit the cache first
     if url in url_cache:
         return url_cache[url]
 
-    for attempt in range(1, max_retries + 1):
-        # simple throttle: 0.1s pause → ~10 requests/sec
-        await asyncio.sleep(0.1)
+    for attempt in range(1, max_retries+1):
+        # block until both per-sec and per-hour allow us through
+        start = asyncio.get_event_loop().time()
+        await per_sec.acquire()
+        await per_hour.acquire()
+        waited = asyncio.get_event_loop().time() - start
+        if waited > 0:
+            print(f"{YELLOW}[RATE] waited {waited:.3f}s before calling {url}{RESET}")
 
         async with session.get(url, headers=headers) as resp:
             if resp.status == 200:
@@ -166,14 +172,12 @@ async def fetch_with_rate_limit(session, url, headers, max_retries=5):
                 return data
 
             if resp.status == 429:
-                # exponential back-off or Retry-After header
                 ra = resp.headers.get("Retry-After")
-                wait = float(ra) if ra else 2 ** attempt
-                print(f"{YELLOW}[WARN] 429 on {url}, retrying in {wait:.1f}s (attempt {attempt}){RESET}")
-                await asyncio.sleep(wait)
+                backoff = float(ra) if ra else 2 ** attempt
+                print(f"{YELLOW}[WARN] 429 on {url}, retrying in {backoff:.1f}s (attempt {attempt}){RESET}")
+                await asyncio.sleep(backoff)
                 continue
 
-            # all other statuses are fatal
             resp.raise_for_status()
 
     raise RuntimeError(f"fetch failed for {url} after {max_retries} retries")
