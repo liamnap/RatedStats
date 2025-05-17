@@ -314,7 +314,7 @@ async def process_characters(characters):
     existing_data = load_existing_characters()
 
     # 1) Fetch PvP achievements keywords
-    timeout = aiohttp.ClientTimeout(total=15)
+    timeout = aiohttp.ClientTimeout(total=None, sock_connect=5, sock_read=10)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         pvp_achievements = await get_pvp_achievements(session, headers)
         pvp_names_set = set(pvp_achievements.values())
