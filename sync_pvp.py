@@ -322,7 +322,7 @@ async def process_characters(characters):
     existing_data = load_existing_characters()
 
     # 1) Fetch PvP achievements keywords
-    timeout = aiohttp.ClientTimeout(total=None, sock_connect=5, sock_read=10)
+    timeout = aiohttp.ClientTimeout(total=None, sock_connect=None, sock_read=None)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         pvp_achievements = await get_pvp_achievements(session, headers)
         pvp_names_set = set(pvp_achievements.values())
@@ -343,9 +343,11 @@ async def process_characters(characters):
                 # fetch and handle timeouts/404s/429s inside fetch_with_rate_limit
                 try:
                     data = await get_character_achievements(session, headers, realm, name)
-                except (CancelledError, TimeoutError):
-                    print(f"{YELLOW}[WARN] fetch for {key} timed out or cancelled, skipping{RESET}")
-                    return
+                    except (asyncio.CancelledError, asyncio.TimeoutError, aiohttp.ClientError) as e:
+                        backoff = 2 ** attempt
+                        print(f"{YELLOW}[WARN] network error {e!r} on {url}, retrying in {backoff}s (#{attempt}){RESET}")
+                        await asyncio.sleep(backoff)
+                        continue
 
                 if not data:
                     return
