@@ -156,30 +156,25 @@ async def fetch_with_rate_limit(session, url, headers, max_retries=5):
         return url_cache[url]
 
     for attempt in range(1, max_retries + 1):
-        # acquire both rate-limit “tickets”
-        await per_sec.acquire()
-        await per_hour.acquire()
-        try:
-            async with session.get(url, headers=headers) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    url_cache[url] = data
-                    return data
+        # simple throttle: 0.1s pause → ~10 requests/sec
+        await asyncio.sleep(0.1)
 
-                if resp.status == 429:
-                    # exponential backoff or Retry-After
-                    ra = resp.headers.get("Retry-After")
-                    wait = float(ra) if ra else 2 ** attempt
-                    print(f"[WARN] 429 on {url}, retrying in {wait:.1f}s (attempt {attempt})")
-                    await asyncio.sleep(wait)
-                    continue
+        async with session.get(url, headers=headers) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                url_cache[url] = data
+                return data
 
-                # any other error is fatal
-                resp.raise_for_status()
-        finally:
-            # **very important** to give back our permits
-            per_sec.release()
-            per_hour.release()
+            if resp.status == 429:
+                # exponential back-off or Retry-After header
+                ra = resp.headers.get("Retry-After")
+                wait = float(ra) if ra else 2 ** attempt
+                print(f"{YELLOW}[WARN] 429 on {url}, retrying in {wait:.1f}s (attempt {attempt}){RESET}")
+                await asyncio.sleep(wait)
+                continue
+
+            # all other statuses are fatal
+            resp.raise_for_status()
 
     raise RuntimeError(f"fetch failed for {url} after {max_retries} retries")
 
