@@ -5,7 +5,14 @@ import aiohttp
 import requests
 import time
 from pathlib import Path
+from asyncio import RetryCharacter  # <-- nope, we’ll define it
 from asyncio import TimeoutError, CancelledError, create_task, as_completed, shield
+
+# custom exception to signal “please retry this char later”
+class RetryCharacter(Exception):
+    def __init__(self, char):
+        super().__init__(f"Retry {char['name']}-{char['realm']}")
+        self.char = char
 
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
@@ -329,7 +336,6 @@ async def process_characters(characters):
         sem = asyncio.Semaphore(10)
         total = len(characters)
         completed = 0
-        last_pct = -1
         last_hb = time.time()
 
         async def process_one(char):
@@ -339,12 +345,15 @@ async def process_characters(characters):
                 guid = char["id"]
                 key = f"{name}-{realm}"
 
-                # fetch + retry + 429/backoff all in fetch_with_rate_limit
+                # fetch + retry/backoff inside fetch_with_rate_limit, but if it finally fails we raise RetryCharacter
                 try:
                     data = await get_character_achievements(session, headers, realm, name)
-                except (TimeoutError, aiohttp.ClientError) as e:
-#                    print(f"{YELLOW}[WARN] network error {e!r} on {key}, skipping{RESET}")
+                except (TimeoutError, aiohttp.ClientError):
+                    # temporary network hiccup, skip this char this pass
                     return
+                except RuntimeError as e:
+                    # our fetch_with_rate_limit gives RuntimeError after max_retries → queue for retry
+                    raise RetryCharacter(char)
 
                 if not data:
                     return
@@ -362,26 +371,37 @@ async def process_characters(characters):
                         entry["achievements"][aid] = aname
                 existing_data[key] = entry
 
-        # fire off all tasks while the session is open
-        tasks = [create_task(process_one(c)) for c in characters.values()]
+        # ── multi-pass: retry any chars that exhausted retries (likely 429) until none left ──
+        remaining = list(characters.values())
+        retry_interval = 60  # wait this many seconds before each retry pass
 
-        for finished in as_completed(tasks):
-            try:
-                # shield prevents outside cancellation from killing your per-character work
-                await shield(finished)
-            except CancelledError as e:
-                 # swallow OS-level cancellations and keep going
-                 print(f"{YELLOW}[WARN] Task was cancelled: {e}{RESET}")
-                 continue
-            except Exception as e:
-                 print(f"{RED}[ERROR] Character task failed: {e}{RESET}")
+        while remaining:
+            retry_list = []
+            tasks = [create_task(process_one(c)) for c in remaining]
+
+            for finished in as_completed(tasks):
+                try:
+                    await shield(finished)
+                except CancelledError:
+                    continue
+                except RetryCharacter as rc:
+                    retry_list.append(rc.char)
+                except Exception as e:
+                    print(f"{RED}[ERROR] Character task failed: {e}{RESET}")
+                    continue
+                else:
+                    completed += 1
+                    now = time.time()
+                    if now - last_hb > 60:
+                        print(f"[HEARTBEAT] {completed}/{total} done ({(completed/total*100):.1f}%)", flush=True)
+                        last_hb = now
+
+            if retry_list:
+                print(f"{YELLOW}[INFO] Retrying {len(retry_list)} chars after {retry_interval}s{RESET}")
+                await asyncio.sleep(retry_interval)
+                remaining = retry_list
             else:
-                completed += 1
-                now = time.time()
-                # if more than 60 seconds have passed since last heartbeat:
-                if now - last_hb > 60:
-                   print(f"[HEARTBEAT] {completed}/{total} done ({(completed/total*100):.1f}%)", flush=True)
-                   last_hb = now
+                break
 
     # session is closed here
     print(f"[DEBUG] Total characters in merged set: {len(existing_data)}")
