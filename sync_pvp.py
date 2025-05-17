@@ -373,7 +373,7 @@ async def process_characters(characters):
                  # swallow OS-level cancellations and keep going
                  print(f"{YELLOW}[WARN] Task was cancelled: {e}{RESET}")
                  continue
-             except Exception as e:
+            except Exception as e:
                  print(f"{RED}[ERROR] Character task failed: {e}{RESET}")
             else:
                 completed += 1
