@@ -437,7 +437,7 @@ async def process_characters(characters):
         # debug: show what our rate‐limits actually are
         print(f"[DEBUG] Rate limits: {per_sec.max_calls}/sec, {per_hour.max_calls}/{per_hour.period}s")
         retry_interval = 60     # seconds before each retry pass
-        BATCH_SIZE     = 5000   # tweak as needed—keeps the loop sane
+        BATCH_SIZE     = 1000   # tweak as needed—keeps the loop sane
 
         while remaining:
             retry_list = []
