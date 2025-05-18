@@ -546,6 +546,9 @@ async def process_characters(characters):
     # session is closed here
     print("[DEBUG] Writing Lua file from SQLite rows …")
 
+    # make sure achiev/ exists no matter which branch we're on
+    OUTFILE.parent.mkdir(parents=True, exist_ok=True)
+
     with open(OUTFILE, "w", encoding="utf-8") as f:
         f.write(f'-- File: RatedStats/achiev/region_{REGION}.lua\n')
         f.write("local achievements = {\n")
