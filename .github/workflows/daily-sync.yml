@@ -29,7 +29,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install aiohttp requests
+          pip install aiohttp requests psutil
 
       - name: Run PvP Sync for ${{ matrix.region }}
         run: python sync_pvp.py
