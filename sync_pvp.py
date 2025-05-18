@@ -209,26 +209,9 @@ async def fetch_with_rate_limit(session, url, headers, max_retries: int = 5):
     if url in url_cache:
         return url_cache[url]
 
-    # grab a slot **before** opening the socket
+    # grab one token from each limiter *once*
     await asyncio.gather(per_sec.acquire(), per_hour.acquire())
 	
-    for attempt in range(1, max_retries+1):
-        # block until both per-sec and per-hour allow us through
-        #–– track hourly usage, but don’t block on it
-        now = asyncio.get_event_loop().time()
-        per_hour.calls = [t for t in per_hour.calls if now - t < per_hour.period]
-        if len(per_hour.calls) >= per_hour.max_calls:
-            # hit the hourly cap → queue this char rather than stall
-            raise RateLimitExceeded(f"hourly cap hit on {url}")
-        per_hour.calls.append(now)
-
-        #–– throttle to per-second
-        start = now
-        await per_sec.acquire()
-        waited = asyncio.get_event_loop().time() - start
-        if waited > 1:
-            print(f"{YELLOW}[RATE] waited {waited:.3f}s before calling {url}{RESET}")
-
         try:
             async with session.get(url, headers=headers) as resp:
                 if resp.status == 200:
