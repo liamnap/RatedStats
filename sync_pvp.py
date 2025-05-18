@@ -485,13 +485,14 @@ async def process_characters(characters):
                                 f"{completed}/{total} done ({(completed/total*100):.1f}%), "
                                 f"sec_rate={sec_calls/per_sec.period:.1f}/s "
                                 f"avg60={avg_60s:.1f}/s "
-                                f"cap={per_sec.max_calls}/s, "                                f"hourly={hr_calls}/{per_hour.max_calls}/{per_hour.period}s, "
+                                f"cap={per_sec.max_calls}/s, "                                
+				f"hourly={hr_calls}/{per_hour.max_calls}/{per_hour.period}s, "
                                 f"batch_size={len(batch)}, remaining={remaining_left}, "
                                 f"remaining_calls={remaining_calls}, "
                                 f"elapsed={int(elapsed)}s, "
-                                f"ETA={_fmt_duration(int(eta_sec)) if eta_sec is not None else '–'} "
-                                f"(~{eta_when}) ",
-				f"pending={pending}, "
+                                f"ETA={_fmt_duration(int(eta_sec)) if eta_sec is not None else '–'}, "
+                                f"(~{eta_when}), "
+				f"pending={pending} ",
                                 flush=True
                             )
                             last_hb = now
