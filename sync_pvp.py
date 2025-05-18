@@ -394,7 +394,7 @@ async def process_characters(characters):
         pvp_achievements = await get_pvp_achievements(session, headers)
         print(f"[DEBUG] PvP keywords loaded: {len(pvp_achievements)}")
 
-        SEM_CAPACITY = 6                 
+        SEM_CAPACITY = 10                 
         sem = asyncio.Semaphore(SEM_CAPACITY)
         total = len(characters)
         completed = 0
