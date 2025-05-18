@@ -35,15 +35,22 @@ def _fmt_duration(sec: int) -> str:
     return " ".join(parts)
 
 # --------------------------------------------------------------------------
-# GLOBAL-WIDE API-CALL ACCOUNTING
+#   CALL COUNTERS
 # --------------------------------------------------------------------------
-CALLS_DONE   = 0              # incremented every time we really hit the API
-TOTAL_CALLS  = None           # set once we know how many calls the run will need
+CALLS_DONE   = 0                     # incremented every time we really hit the API
+TOTAL_CALLS  = None                  # set once we know how many calls the run will need
+
+# keep timestamps of the last 60 s for a rolling average
+from collections import deque
+CALL_TIMES: deque[float] = deque()   # append(time.time()) in _bump_calls()
 
 # helper: increment safely
 def _bump_calls():
-    global CALLS_DONE
-    CALLS_DONE += 1
+    now = time.time()
+    CALL_TIMES.append(now)
+    # purge anything older than 60 s
+    while CALL_TIMES and now - CALL_TIMES[0] > 60:
+        CALL_TIMES.popleft()
 
 # custom exception to signal “please retry this char later”
 class RetryCharacter(Exception):
@@ -199,7 +206,7 @@ def get_characters_from_leaderboards(region, headers, season_id, brackets):
 # Battle.net hard caps at ~20 req/s *per public IP* and ~100 k req/day.
 # Four runners share the same IP, so stay conservative.
 NUM_RUNNERS = 4
-per_sec  = RateLimiter(50 // NUM_RUNNERS, 1)      # 12 req/s each runner max
+per_sec  = RateLimiter(100 // NUM_RUNNERS, 1)
 per_hour = RateLimiter(75_000 // NUM_RUNNERS, 3600)
 url_cache: dict[str, dict] = {}                   # simple in-memory GET cache
 # ------------------------------------------------------------------------
@@ -440,8 +447,9 @@ async def process_characters(characters):
                         completed += 1
                         now = time.time()
                         if now - last_hb > 60:
-                            sec_calls = len(per_sec.calls)
-                            hr_calls  = len(per_hour.calls)
+                            sec_calls = len(per_sec.calls)          # in-flight 1-s bucket
+                            hr_calls  = len(per_hour.calls)         # running 1-h bucket
+                            avg_60s   = len(CALL_TIMES) / 60        # rolling 60-s average
 
                             # ── ETA maths ─────────────────────────────
                             elapsed   = now - start_time            # seconds so far
@@ -469,8 +477,9 @@ async def process_characters(characters):
                             print(
                                 f"[HEARTBEAT] batch {batch_num}/{total_batches} | "
                                 f"{completed}/{total} done ({(completed/total*100):.1f}%), "
-                                f"sec_rate={sec_calls/per_sec.period:.1f}/s ({sec_calls}/{per_sec.max_calls}), "
-                                f"hourly={hr_calls}/{per_hour.max_calls}/{per_hour.period}s, "
+                                f"sec_rate={sec_calls/per_sec.period:.1f}/s "
+                                f"avg60={avg_60s:.1f}/s "
+                                f"cap={per_sec.max_calls}/s, "                                f"hourly={hr_calls}/{per_hour.max_calls}/{per_hour.period}s, "
                                 f"batch_size={len(batch)}, remaining={remaining_left}, "
                                 f"remaining_calls={remaining_calls}, "
                                 f"elapsed={int(elapsed)}s, "
