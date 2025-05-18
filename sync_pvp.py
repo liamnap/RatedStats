@@ -452,7 +452,8 @@ async def process_characters(characters):
                         now = time.time()
                         if now - last_hb > 10:
                             ts = time.strftime("%H:%M:%S", time.localtime(now)) 
-                            pending = sem._value
+                            inflight = SEM_CAPACITY - sem._value    # holding permits
+                            queued   = len(sem._waiters)            # waiting for permits
                             sec_calls = len(per_sec.calls)          # in-flight 1-s bucket
                             hr_calls  = len(per_hour.calls)         # running 1-h bucket
                             avg_60s   = len(CALL_TIMES) / 60        # rolling 60-s average
@@ -481,10 +482,10 @@ async def process_characters(characters):
                                     eta_when = ">9999-01-01"
 
                             print(
-                                f"[{ts}] [HEARTBEAT] batch {batch_num}/{total_batches} | "
+                                f"[{ts}] [HEARTBEAT] batch {batch_num}/{total_batches} |, "
                                 f"{completed}/{total} done ({(completed/total*100):.1f}%), "
-                                f"sec_rate={sec_calls/per_sec.period:.1f}/s "
-                                f"avg60={avg_60s:.1f}/s "
+                                f"sec_rate={sec_calls/per_sec.period:.1f}/s, "
+                                f"avg60={avg_60s:.1f}/s, "
                                 f"cap={per_sec.max_calls}/s, "                                
 				f"hourly={hr_calls}/{per_hour.max_calls}/{per_hour.period}s, "
                                 f"batch_size={len(batch)}, remaining={remaining_left}, "
@@ -492,7 +493,7 @@ async def process_characters(characters):
                                 f"elapsed={int(elapsed)}s, "
                                 f"ETA={_fmt_duration(int(eta_sec)) if eta_sec is not None else '–'}, "
                                 f"(~{eta_when}), "
-				f"pending={pending} ",
+				f"inflight={inflight}, queued={queued}",
                                 flush=True
                             )
                             last_hb = now
