@@ -478,6 +478,7 @@ async def process_characters(characters):
 
                             print(
                                 f"[HEARTBEAT] batch {batch_num}/{total_batches} | "
+				f"{time}, "
                                 f"{completed}/{total} done ({(completed/total*100):.1f}%), "
                                 f"sec_rate={sec_calls/per_sec.period:.1f}/s "
                                 f"avg60={avg_60s:.1f}/s "
