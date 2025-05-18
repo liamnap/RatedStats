@@ -1,5 +1,7 @@
 import os
 import json
+import sqlite
+import tempfile
 import asyncio
 import aiohttp
 import requests
@@ -360,25 +362,32 @@ async def get_character_achievements(session, headers, realm, name):
     # fetch returns {} on 429 exhaust or raises on other errors
     return data or None
 
-# Check region files for lookup
-import re
+# --------------------------------------------------------------------------
+#  Disk-backed per-character store (SQLite, lives in /tmp)
+# --------------------------------------------------------------------------
+DB_PATH = Path(tempfile.gettempdir()) / f"achiev_{REGION}.db"
+db = sqlite3.connect(DB_PATH)
+db.execute("""
+    CREATE TABLE IF NOT EXISTS char_data (
+        key      TEXT PRIMARY KEY,
+        guid     INTEGER,
+        ach_json TEXT
+    )
+""")
+db.commit()
 
-def load_existing_characters():
-    if not OUTFILE.exists():
-        return {}
+def db_upsert(key: str, guid: int, ach_dict: dict[int, str]) -> None:
+    db.execute(
+        "INSERT OR REPLACE INTO char_data (key, guid, ach_json) VALUES (?,?,?)",
+        (key, guid, json.dumps(ach_dict, separators=(',', ':')))
+    )
 
-    with OUTFILE.open("r", encoding="utf-8") as f:
-        content = f.read()
+def db_iter_rows():
+    cur = db.execute("SELECT key, guid, ach_json FROM char_data ORDER BY key")
+    for key, guid, ach_json in cur:
+        yield key, guid, json.loads(ach_json)
 
-    entries = re.findall(r'\{ character = "([^"]+)", guid = (\d+)(.*?)\},', content, re.DOTALL)
-    characters = {}
-    for char_name, guid, rest in entries:
-        matches = re.findall(r'id(\d+) = (\d+), name\1 = "(.*?)"', rest)
-        characters[char_name] = {
-            "guid": int(guid),
-            "achievements": {int(aid): name for _, aid, name in matches}
-        }
-    return characters
+# --------------------------------------------------------------------------
 
 # MAIN
 async def process_characters(characters):
@@ -423,14 +432,13 @@ async def process_characters(characters):
                 if not earned:
                     return
 
-                entry = existing_data.get(key, {"guid": guid, "achievements": {}})
-                entry["guid"] = guid
-                for ach in earned:
-                    aid = ach["id"]
-                    aname = ach.get("achievement", {}).get("name")
-                    if aname and aid not in entry["achievements"]:
-                        entry["achievements"][aid] = aname
-                existing_data[key] = entry
+                ach_dict = {
+                    ach["id"]: ach.get("achievement", {}).get("name")
+                    for ach in earned
+                    if ach.get("achievement", {}).get("name")
+                }
+                if ach_dict:
+                    db_upsert(key, guid, ach_dict)
 
         # ── multi-pass **with batching** so we never schedule 100K+ tasks at once ──
         remaining      = list(characters.values())
@@ -517,6 +525,9 @@ async def process_characters(characters):
                             )
                             last_hb = now
 
+            # ── drop cached JSON to keep RAM flat ──
+            url_cache.clear()
+
             if retry_list:
                 print(f"{YELLOW}[INFO] Retrying {len(retry_list)} after {retry_interval}s{RESET}")
                 await asyncio.sleep(retry_interval)
@@ -525,31 +536,21 @@ async def process_characters(characters):
                 break
 
     # session is closed here
-    print(f"[DEBUG] Total characters in merged set: {len(existing_data)}")
+    print("[DEBUG] Writing Lua file from SQLite rows …")
 
-    # 2) Build fingerprint & alt_map
-    from itertools import combinations
-    fingerprint_any = {ch: set(d["achievements"].keys()) for ch, d in existing_data.items()}
-    alt_map = {ch: [] for ch in fingerprint_any}
-    for a, b in combinations(fingerprint_any, 2):
-        if fingerprint_any[a] & fingerprint_any[b]:
-            alt_map[a].append(b)
-            alt_map[b].append(a)
-
-    # 3) Write out Lua file
     with open(OUTFILE, "w", encoding="utf-8") as f:
         f.write(f'-- File: RatedStats/achiev/region_{REGION}.lua\n')
         f.write("local achievements = {\n")
-        for key in sorted(existing_data):
-            obj = existing_data[key]
-            alts_str = "{" + ",".join(f'"{alt}"' for alt in alt_map[key]) + "}"
-            parts = [f'character="{key}"', f'alts={alts_str}', f'guid={obj["guid"]}']
-            for i, (aid, aname) in enumerate(sorted(obj["achievements"].items()), 1):
+        for key, guid, ach_map in db_iter_rows():
+            parts = [f'character="{key}"', f'guid={guid}']
+            for i, (aid, aname) in enumerate(sorted(ach_map.items()), 1):
                 esc = aname.replace('"', '\\"')
                 parts.extend([f'id{i}={aid}', f'name{i}="{esc}"'])
             f.write("    { " + ", ".join(parts) + " },\n")
         f.write("}\n\n")
         f.write(f"{REGION_VAR} = achievements\n")
+
+    db.close()
 
 # RUN
 if __name__ == "__main__":
