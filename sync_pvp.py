@@ -11,6 +11,7 @@ from asyncio import TimeoutError, CancelledError, create_task, as_completed, shi
 
 # --------------------------------------------------------------------------
 # Record when the run began (monotonic avoids wall-clock jumps)
+UTC = datetime.timezone.utc
 start_time = time.monotonic()
 #---------------------------------------------------------------------------
 
@@ -428,11 +429,20 @@ async def process_characters(characters):
                             # ── ETA maths ─────────────────────────────
                             elapsed   = now - start_time            # seconds so far
                             remaining = total - completed
-                            eta_sec   = (elapsed / completed * remaining) if completed else 0
-                            eta_when  = (
-                                datetime.datetime.utcnow()
-                                + datetime.timedelta(seconds=eta_sec)
-                            ).replace(microsecond=0).isoformat() + "Z" if completed else "calculating…"
+                            eta_sec   = (elapsed / completed * remaining) if completed else None
+
+                            # ── robust ETA ──
+                            if eta_sec is None or eta_sec > 315_576_000:   # >10 years? forget it
+                                eta_when = "calculating…"
+                            else:
+                                try:
+                                    eta_when_dt = (
+                                        datetime.datetime.now(UTC)
+                                        + datetime.timedelta(seconds=int(eta_sec))
+                                    )
+                                    eta_when = eta_when_dt.isoformat(timespec="seconds")
+                                except OverflowError:
+                                    eta_when = ">9999-01-01"
 
                             print(
                                 f"[HEARTBEAT] batch {batch_num}/{total_batches} | "
@@ -441,7 +451,8 @@ async def process_characters(characters):
                                 f"hourly={hr_calls}/{per_hour.max_calls}/{per_hour.period}s, "
                                 f"batch_size={len(batch)}, remaining={len(remaining)}, "
                                 f"elapsed={int(elapsed)}s, "
-                                f"ETA={int(eta_sec)}s (~{eta_when})",
+                                f"ETA={int(eta_sec) if eta_sec is not None else '–'}s "
+                                f"(~{eta_when})",
                                 flush=True
                             )
                             last_hb = now
