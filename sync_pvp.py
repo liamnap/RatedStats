@@ -428,8 +428,8 @@ async def process_characters(characters):
 
                             # ── ETA maths ─────────────────────────────
                             elapsed   = now - start_time            # seconds so far
-                            remaining = total - completed
-                            eta_sec   = (elapsed / completed * remaining) if completed else None
+                            remaining_count = total - completed
+                            eta_sec   = (elapsed / completed * remaining_count) if completed else None
 
                             # ── robust ETA ──
                             if eta_sec is None or eta_sec > 315_576_000:   # >10 years? forget it
