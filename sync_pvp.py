@@ -15,6 +15,25 @@ UTC = datetime.timezone.utc
 start_time = time.time()
 #---------------------------------------------------------------------------
 
+# --------------------------------------------------------------------------
+# Helper – pretty-print an integer number of seconds as
+# “2y 5w 3d 4h 17s”, omitting zero units.
+# --------------------------------------------------------------------------
+def _fmt_duration(sec: int) -> str:
+    if sec <= 0:
+        return "0s"
+    parts = []
+    yr,  sec = divmod(sec, 31_557_600)     # 365.25 d
+    if yr:  parts.append(f"{yr}y")
+    wk,  sec = divmod(sec, 604_800)        # 7 d
+    if wk:  parts.append(f"{wk}w")
+    day, sec = divmod(sec, 86_400)
+    if day: parts.append(f"{day}d")
+    hr,  sec = divmod(sec, 3_600)
+    if hr:  parts.append(f"{hr}h")
+    if sec: parts.append(f"{sec}s")
+    return " ".join(parts)
+
 # custom exception to signal “please retry this char later”
 class RetryCharacter(Exception):
     def __init__(self, char):
@@ -439,8 +458,9 @@ async def process_characters(characters):
                                     eta_when_dt = (
                                         datetime.datetime.now(UTC)
                                         + datetime.timedelta(seconds=int(eta_sec))
-                                    )
-                                    eta_when = eta_when_dt.isoformat(timespec="seconds")
+                                    ).replace(minute=0, second=0, microsecond=0)
+                                    # show rounded-to-hour: “YYYY-MM-DD HH:00Z”
+                                    eta_when = eta_when_dt.strftime("%Y-%m-%d %H:00Z")
                                 except OverflowError:
                                     eta_when = ">9999-01-01"
 
@@ -451,7 +471,7 @@ async def process_characters(characters):
                                 f"hourly={hr_calls}/{per_hour.max_calls}/{per_hour.period}s, "
                                 f"batch_size={len(batch)}, remaining={len(remaining_left)}, "
                                 f"elapsed={int(elapsed)}s, "
-                                f"ETA={int(eta_sec) if eta_sec is not None else '–'}s "
+                                f"ETA={_fmt_duration(int(eta_sec)) if eta_sec is not None else '–'} "
                                 f"(~{eta_when})",
                                 flush=True
                             )
