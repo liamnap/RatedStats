@@ -11,7 +11,7 @@ from asyncio import TimeoutError, CancelledError, create_task, as_completed, shi
 
 # --------------------------------------------------------------------------
 # Record when the run began (monotonic avoids wall-clock jumps)
-START_TIME = time.monotonic()
+start_time = time.monotonic()
 #---------------------------------------------------------------------------
 
 # custom exception to signal “please retry this char later”
