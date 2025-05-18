@@ -452,7 +452,7 @@ async def process_characters(characters):
                         now = time.time()
                         if now - last_hb > 10:
                             ts = time.strftime("%H:%M:%S", time.localtime(now)) 
-			    pending = sem._value
+                            pending = sem._value
                             sec_calls = len(per_sec.calls)          # in-flight 1-s bucket
                             hr_calls  = len(per_hour.calls)         # running 1-h bucket
                             avg_60s   = len(CALL_TIMES) / 60        # rolling 60-s average
