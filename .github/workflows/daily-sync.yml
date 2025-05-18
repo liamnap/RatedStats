@@ -7,22 +7,22 @@ on:
 
 jobs:
   sync:
-    permissions:
-      contents: write
     runs-on: ubuntu-latest
-
     strategy:
       matrix:
         region: [us, eu, kr, tw]
 
-    env:
-      BLIZZARD_CLIENT_ID: ${{ secrets.BLIZZARD_CLIENT_ID }}
-      BLIZZARD_CLIENT_SECRET: ${{ secrets.BLIZZARD_CLIENT_SECRET }}
-      REGION: ${{ matrix.region }}
-
     steps:
+      # 1. full-depth checkout so we can switch branches
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0      # needed for git checkout later
 
+      # 2. move onto the dev branch
+      - name: Checkout dev branch
+        run: git checkout dev
+
+      # 3. set up Python environment
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -33,19 +33,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install aiohttp requests psutil
 
+      # 4. run the sync *on the dev work-tree*
       - name: Run PvP Sync for ${{ matrix.region }}
+        env:
+          BLIZZARD_CLIENT_ID:     ${{ secrets.BLIZZARD_CLIENT_ID }}
+          BLIZZARD_CLIENT_SECRET: ${{ secrets.BLIZZARD_CLIENT_SECRET }}
+          REGION:                 ${{ matrix.region }}
         run: python sync_pvp.py
 
-      - uses: actions/checkout@v3
-        with:
-          ref: dev
-          fetch-depth: 0
-
+      # 5. commit back to dev
       - name: Commit results
         run: |
-          git config user.name "GitHub Action"
+          git config user.name  "GitHub Action"
           git config user.email "action@github.com"
-          git pull origin dev --rebase --autostash
           git add achiev/region_*.lua
-          git commit -m "PvP sync update for ${{ env.REGION }}" || echo "No changes to commit"
+          git commit -m "PvP sync update for ${{ matrix.region }}" || echo "No changes to commit"
           git push origin dev
