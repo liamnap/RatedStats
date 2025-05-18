@@ -158,60 +158,56 @@ def get_characters_from_leaderboards(region, headers, season_id, brackets):
     print(f"[DEBUG] Character sample size: {len(limited)}")
     return limited
 
-#–– US needs both a per-second cap *and* a per-hour cap,
-#    but we never want to actually *wait* on the hour window—
-#    we want to queue any “hourly full” chars
-NUM_RUNNERS = 4
-if REGION == "us":
-    per_sec  = RateLimiter(25  // NUM_RUNNERS, 1)      # e.g. ~6 req/sec each
-    per_hour = RateLimiter(100000 // NUM_RUNNERS, 3600) # 2 500 req/hr each
-else:
-    per_sec  = RateLimiter(100,  1)
-    per_hour = RateLimiter(1_000_000, 3600)
+# --- Rate-limit configuration -------------------------------------------
+# Battle.net hard caps at ~20 req/s *per public IP* and ~100 k req/day.
+# Four runners share the same IP, so stay conservative.
+per_sec  = RateLimiter(50 // NUM_RUNNERS, 1)      # 12 req/s each runner max
+per_hour = RateLimiter(75_000 // NUM_RUNNERS, 3600)
+url_cache: dict[str, dict] = {}                   # simple in-memory GET cache
+# ------------------------------------------------------------------------
 
-url_cache: dict = {}
-
-async def fetch_with_rate_limit(session, url, headers, max_retries=5):
+async def fetch_with_rate_limit(session, url, headers, max_retries: int = 5):
     # hit the cache first
     if url in url_cache:
         return url_cache[url]
 
-    for attempt in range(1, max_retries+1):
-        # block until both per-sec and per-hour allow us through
-        #–– track hourly usage, but don’t block on it
-        now = asyncio.get_event_loop().time()
-        per_hour.calls = [t for t in per_hour.calls if now - t < per_hour.period]
-        if len(per_hour.calls) >= per_hour.max_calls:
-            # hit the hourly cap → queue this char rather than stall
-            raise RateLimitExceeded(f"hourly cap hit on {url}")
-        per_hour.calls.append(now)
+    async with per_sec, per_hour:      # <= open socket *after* limiter passes
+        for attempt in range(1, max_retries+1):
+            # block until both per-sec and per-hour allow us through
+            #–– track hourly usage, but don’t block on it
+            now = asyncio.get_event_loop().time()
+            per_hour.calls = [t for t in per_hour.calls if now - t < per_hour.period]
+            if len(per_hour.calls) >= per_hour.max_calls:
+                # hit the hourly cap → queue this char rather than stall
+                raise RateLimitExceeded(f"hourly cap hit on {url}")
+            per_hour.calls.append(now)
 
-        #–– throttle to per-second
-        start = now
-        await per_sec.acquire()
-        waited = asyncio.get_event_loop().time() - start
-        if waited > 1:
-            print(f"{YELLOW}[RATE] waited {waited:.3f}s before calling {url}{RESET}")
+            #–– throttle to per-second
+            start = now
+            await per_sec.acquire()
+            waited = asyncio.get_event_loop().time() - start
+            if waited > 1:
+                print(f"{YELLOW}[RATE] waited {waited:.3f}s before calling {url}{RESET}")
 
-        try:
-            async with session.get(url, headers=headers) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    url_cache[url] = data
-                    return data
-                if resp.status == 429 or 500 <= resp.status < 600:
-                    # immediately bail out so outer loop re-queues this char
-                    raise RateLimitExceeded(f"{resp.status} on {url}")
+            try:
+                async with session.get(url, headers=headers) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        url_cache[url] = data
+                        return data
+                    if resp.status == 429 or 500 <= resp.status < 600:
+                        # immediately bail out so outer loop re-queues this char
+                        raise RateLimitExceeded(f"{resp.status} on {url}")
+                    resp.raise_for_status()
+            except (asyncio.TimeoutError) as e:
+                backoff = 2 ** attempt
+                print(f"{YELLOW}[WARN] timeout on {url}, retrying in {backoff}s (attempt {attempt}){RESET}")
+                await asyncio.sleep(backoff)
+                continue
+
                 resp.raise_for_status()
-        except (asyncio.TimeoutError) as e:
-            backoff = 2 ** attempt
-            print(f"{YELLOW}[WARN] timeout on {url}, retrying in {backoff}s (attempt {attempt}){RESET}")
-            await asyncio.sleep(backoff)
-            continue
 
-            resp.raise_for_status()
-
-    raise RuntimeError(f"fetch failed for {url} after {max_retries} retries")
+        raise RuntimeError(f"fetch failed for {url} after {max_retries} retries")
 
 # PVP ACHIEVEMENTS
 async def get_pvp_achievements(session, headers):
