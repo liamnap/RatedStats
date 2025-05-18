@@ -450,7 +450,7 @@ async def process_characters(characters):
                     else:
                         completed += 1
                         now = time.time()
-                        if now - last_hb > 60:
+                        if now - last_hb > 10:
                             ts = time.strftime("%H:%M:%S", time.localtime(now)) 
                             sec_calls = len(per_sec.calls)          # in-flight 1-s bucket
                             hr_calls  = len(per_hour.calls)         # running 1-h bucket
