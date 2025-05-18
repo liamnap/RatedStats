@@ -384,7 +384,8 @@ async def process_characters(characters):
         pvp_achievements = await get_pvp_achievements(session, headers)
         print(f"[DEBUG] PvP keywords loaded: {len(pvp_achievements)}")
 
-        sem = asyncio.Semaphore(6)
+        SEM_CAPACITY = 6                 
+        sem = asyncio.Semaphore(SEM_CAPACITY)
         total = len(characters)
         completed = 0
         last_hb = time.time()
@@ -482,16 +483,16 @@ async def process_characters(characters):
                                     eta_when = ">9999-01-01"
 
                             print(
-                                f"[{ts}] [HEARTBEAT] batch {batch_num}/{total_batches} |, "
+                                f"[{ts}] [HEARTBEAT] batch {batch_num}/{total_batches} | "
                                 f"{completed}/{total} done ({(completed/total*100):.1f}%), "
-                                f"sec_rate={sec_calls/per_sec.period:.1f}/s, "
-                                f"avg60={avg_60s:.1f}/s, "
+                                f"sec_rate={sec_calls/per_sec.period:.1f}/s "
+                                f"avg60={avg_60s:.1f}/s "
                                 f"cap={per_sec.max_calls}/s, "                                
 				f"hourly={hr_calls}/{per_hour.max_calls}/{per_hour.period}s, "
                                 f"batch_size={len(batch)}, remaining={remaining_left}, "
                                 f"remaining_calls={remaining_calls}, "
-                                f"elapsed={int(elapsed)}s, "
-                                f"ETA={_fmt_duration(int(eta_sec)) if eta_sec is not None else '–'}, "
+                                f"elapsed={_fmt_duration(int(elapsed))}, "
+                                f"ETA={_fmt_duration(int(eta_sec)) if eta_sec is not None else '–'} "
                                 f"(~{eta_when}), "
 				f"inflight={inflight}, queued={queued}",
                                 flush=True
