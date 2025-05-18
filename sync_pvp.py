@@ -211,25 +211,26 @@ async def fetch_with_rate_limit(session, url, headers, max_retries: int = 5):
 
     # grab one token from each limiter *once*
     await asyncio.gather(per_sec.acquire(), per_hour.acquire())
-	
+
+    for attempt in range(1, max_retries + 1):
         try:
             async with session.get(url, headers=headers) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     url_cache[url] = data
-                    _bump_calls()          # ← count the successful call
+                    _bump_calls()                 # count the successful call
                     return data
                 if resp.status == 429 or 500 <= resp.status < 600:
-                    # immediately bail out so outer loop re-queues this char
+                    # let caller re-queue this character
                     raise RateLimitExceeded(f"{resp.status} on {url}")
                 resp.raise_for_status()
-        except (asyncio.TimeoutError) as e:
+
+        except asyncio.TimeoutError:
             backoff = 2 ** attempt
-            print(f"{YELLOW}[WARN] timeout on {url}, retrying in {backoff}s (attempt {attempt}){RESET}")
+            print(f"{YELLOW}[WARN] timeout on {url}, retrying in {backoff}s "
+                  f"(attempt {attempt}){RESET}")
             await asyncio.sleep(backoff)
             continue
-
-            resp.raise_for_status()
 
     raise RuntimeError(f"fetch failed for {url} after {max_retries} retries")
 
