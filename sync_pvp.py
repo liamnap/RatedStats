@@ -8,6 +8,7 @@ import requests
 import time
 import datetime
 import collections
+import gc
 from pathlib import Path
 from asyncio import TimeoutError, CancelledError, create_task, as_completed, shield
 try:
