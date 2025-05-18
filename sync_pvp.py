@@ -12,7 +12,7 @@ from asyncio import TimeoutError, CancelledError, create_task, as_completed, shi
 # --------------------------------------------------------------------------
 # Record when the run began (monotonic avoids wall-clock jumps)
 UTC = datetime.timezone.utc
-start_time = time.monotonic()
+start_time = time.time()
 #---------------------------------------------------------------------------
 
 # custom exception to signal “please retry this char later”
@@ -428,8 +428,8 @@ async def process_characters(characters):
 
                             # ── ETA maths ─────────────────────────────
                             elapsed   = now - start_time            # seconds so far
-                            remaining_count = total - completed
-                            eta_sec   = (elapsed / completed * remaining_count) if completed else None
+                            remaining_left = total - completed
+                            eta_sec   = (elapsed / completed * remaining_left) if completed else None
 
                             # ── robust ETA ──
                             if eta_sec is None or eta_sec > 315_576_000:   # >10 years? forget it
@@ -449,7 +449,7 @@ async def process_characters(characters):
                                 f"{completed}/{total} done ({(completed/total*100):.1f}%), "
                                 f"sec_rate={sec_calls/per_sec.period:.1f}/s ({sec_calls}/{per_sec.max_calls}), "
                                 f"hourly={hr_calls}/{per_hour.max_calls}/{per_hour.period}s, "
-                                f"batch_size={len(batch)}, remaining={len(remaining)}, "
+                                f"batch_size={len(batch)}, remaining={len(remaining_left)}, "
                                 f"elapsed={int(elapsed)}s, "
                                 f"ETA={int(eta_sec) if eta_sec is not None else '–'}s "
                                 f"(~{eta_when})",
