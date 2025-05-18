@@ -1,6 +1,6 @@
 import os
 import json
-import sqlite
+import sqlite3
 import tempfile
 import asyncio
 import aiohttp
