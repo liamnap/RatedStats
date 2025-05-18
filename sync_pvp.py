@@ -175,43 +175,42 @@ async def fetch_with_rate_limit(session, url, headers, max_retries: int = 5):
     # grab a slot **before** opening the socket
     await asyncio.gather(per_sec.acquire(), per_hour.acquire())
 	
-    async with per_sec, per_hour:      # <= open socket *after* limiter passes
-        for attempt in range(1, max_retries+1):
-            # block until both per-sec and per-hour allow us through
-            #–– track hourly usage, but don’t block on it
-            now = asyncio.get_event_loop().time()
-            per_hour.calls = [t for t in per_hour.calls if now - t < per_hour.period]
-            if len(per_hour.calls) >= per_hour.max_calls:
-                # hit the hourly cap → queue this char rather than stall
-                raise RateLimitExceeded(f"hourly cap hit on {url}")
-            per_hour.calls.append(now)
+    for attempt in range(1, max_retries+1):
+        # block until both per-sec and per-hour allow us through
+        #–– track hourly usage, but don’t block on it
+        now = asyncio.get_event_loop().time()
+        per_hour.calls = [t for t in per_hour.calls if now - t < per_hour.period]
+        if len(per_hour.calls) >= per_hour.max_calls:
+            # hit the hourly cap → queue this char rather than stall
+            raise RateLimitExceeded(f"hourly cap hit on {url}")
+        per_hour.calls.append(now)
 
-            #–– throttle to per-second
-            start = now
-            await per_sec.acquire()
-            waited = asyncio.get_event_loop().time() - start
-            if waited > 1:
-                print(f"{YELLOW}[RATE] waited {waited:.3f}s before calling {url}{RESET}")
+        #–– throttle to per-second
+        start = now
+        await per_sec.acquire()
+        waited = asyncio.get_event_loop().time() - start
+        if waited > 1:
+            print(f"{YELLOW}[RATE] waited {waited:.3f}s before calling {url}{RESET}")
 
-            try:
-                async with session.get(url, headers=headers) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        url_cache[url] = data
-                        return data
-                    if resp.status == 429 or 500 <= resp.status < 600:
-                        # immediately bail out so outer loop re-queues this char
-                        raise RateLimitExceeded(f"{resp.status} on {url}")
-                    resp.raise_for_status()
-            except (asyncio.TimeoutError) as e:
-                backoff = 2 ** attempt
-                print(f"{YELLOW}[WARN] timeout on {url}, retrying in {backoff}s (attempt {attempt}){RESET}")
-                await asyncio.sleep(backoff)
-                continue
-
+        try:
+            async with session.get(url, headers=headers) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    url_cache[url] = data
+                    return data
+                if resp.status == 429 or 500 <= resp.status < 600:
+                    # immediately bail out so outer loop re-queues this char
+                    raise RateLimitExceeded(f"{resp.status} on {url}")
                 resp.raise_for_status()
+        except (asyncio.TimeoutError) as e:
+            backoff = 2 ** attempt
+            print(f"{YELLOW}[WARN] timeout on {url}, retrying in {backoff}s (attempt {attempt}){RESET}")
+            await asyncio.sleep(backoff)
+            continue
 
-        raise RuntimeError(f"fetch failed for {url} after {max_retries} retries")
+            resp.raise_for_status()
+
+    raise RuntimeError(f"fetch failed for {url} after {max_retries} retries")
 
 # PVP ACHIEVEMENTS
 async def get_pvp_achievements(session, headers):
