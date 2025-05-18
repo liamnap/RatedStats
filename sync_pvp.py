@@ -8,6 +8,10 @@ import datetime
 import collections
 from pathlib import Path
 from asyncio import TimeoutError, CancelledError, create_task, as_completed, shield
+try:
+    import psutil            # for CPU / RAM telemetry
+except ImportError:
+    psutil = None
 
 # --------------------------------------------------------------------------
 # Record when the run began (monotonic avoids wall-clock jumps)
@@ -41,6 +45,8 @@ def _fmt_duration(sec: int) -> str:
 # --------------------------------------------------------------------------
 CALLS_DONE   = 0                     # incremented every time we really hit the API
 TOTAL_CALLS  = None                  # set once we know how many calls the run will need
+# 429 tracker
+HTTP_429_QUEUED = 0
 
 # keep timestamps of the last 60 s for a rolling average
 from collections import deque
@@ -231,8 +237,12 @@ async def fetch_with_rate_limit(session, url, headers, max_retries: int = 5):
                     url_cache[url] = data
                     _bump_calls()                 # count the successful call
                     return data
-                if resp.status == 429 or 500 <= resp.status < 600:
-                    # let caller re-queue this character
+                if resp.status == 429:
+                    # track & re-queue on next sweep
+                    global HTTP_429_QUEUED
+                    HTTP_429_QUEUED += 1
+                    raise RateLimitExceeded("429 Too Many Requests")
+                if 500 <= resp.status < 600:
                     raise RateLimitExceeded(f"{resp.status} on {url}")
                 resp.raise_for_status()
 
@@ -453,9 +463,14 @@ async def process_characters(characters):
                         now = time.time()
                         if now - last_hb > 10:
                             ts = time.strftime("%H:%M:%S", time.localtime(now)) 
-                            inflight = SEM_CAPACITY - sem._value    # coroutines in flight
-                            waiters  = len(sem._waiters)            # coroutines blocked on sem
-                            backlog  = len(remaining)              # chars still to visit (incl. retries)
+                            inflight = SEM_CAPACITY - sem._value
+                            waiters  = len(sem._waiters)
+                            backlog  = len(remaining)
+
+                            # runner telemetry (psutil may be missing)
+                            cpu_pct = f"{psutil.cpu_percent():.0f}%" if psutil else "n/a"
+                            ram_pct = f"{psutil.virtual_memory().percent:.0f}%" if psutil else "n/a"
+
                             sec_calls = len(per_sec.calls)          # in-flight 1-s bucket
                             hr_calls  = len(per_hour.calls)         # running 1-h bucket
                             avg_60s   = len(CALL_TIMES) / 60        # rolling 60-s average
@@ -495,8 +510,9 @@ async def process_characters(characters):
                                 f"elapsed={_fmt_duration(int(elapsed))}, "
                                 f"ETA={_fmt_duration(int(eta_sec)) if eta_sec is not None else '–'} "
                                 f"(~{eta_when}), "
-                                f"inflight={inflight}, waiters={waiters}, "
-                                f"backlog={backlog}",
+                                f"inflight={inflight}, waiters={waiters}, backlog={backlog}, "
+                                f"429_queued={HTTP_429_QUEUED}, "
+                                f"cpu={cpu_pct}, ram={ram_pct}",
                                 flush=True
                             )
                             last_hb = now
