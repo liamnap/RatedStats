@@ -172,6 +172,9 @@ async def fetch_with_rate_limit(session, url, headers, max_retries: int = 5):
     if url in url_cache:
         return url_cache[url]
 
+    # grab a slot **before** opening the socket
+    await asyncio.gather(per_sec.acquire(), per_hour.acquire())
+	
     async with per_sec, per_hour:      # <= open socket *after* limiter passes
         for attempt in range(1, max_retries+1):
             # block until both per-sec and per-hour allow us through
