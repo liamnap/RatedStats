@@ -453,8 +453,9 @@ async def process_characters(characters):
                         now = time.time()
                         if now - last_hb > 10:
                             ts = time.strftime("%H:%M:%S", time.localtime(now)) 
-                            inflight = SEM_CAPACITY - sem._value    # holding permits
-                            queued   = len(sem._waiters)            # waiting for permits
+                            inflight = SEM_CAPACITY - sem._value    # coroutines in flight
+                            waiters  = len(sem._waiters)            # coroutines blocked on sem
+                            backlog  = len(remaining)              # chars still to visit (incl. retries)
                             sec_calls = len(per_sec.calls)          # in-flight 1-s bucket
                             hr_calls  = len(per_hour.calls)         # running 1-h bucket
                             avg_60s   = len(CALL_TIMES) / 60        # rolling 60-s average
@@ -494,7 +495,8 @@ async def process_characters(characters):
                                 f"elapsed={_fmt_duration(int(elapsed))}, "
                                 f"ETA={_fmt_duration(int(eta_sec)) if eta_sec is not None else '–'} "
                                 f"(~{eta_when}), "
-				f"inflight={inflight}, queued={queued}",
+                                f"inflight={inflight}, waiters={waiters}, "
+                                f"backlog={backlog}",
                                 flush=True
                             )
                             last_hb = now
