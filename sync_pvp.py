@@ -393,7 +393,6 @@ def db_iter_rows():
 async def process_characters(characters):
     token = get_access_token(REGION)
     headers = {"Authorization": f"Bearer {token}"}
-    existing_data = load_existing_characters()
 
     # 1) Fetch PvP achievements keywords
     timeout = aiohttp.ClientTimeout(total=None)  # no socket limits
