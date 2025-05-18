@@ -46,6 +46,8 @@ CALL_TIMES: deque[float] = deque()   # append(time.time()) in _bump_calls()
 
 # helper: increment safely
 def _bump_calls():
+    global CALLS_DONE
+    CALLS_DONE += 1
     now = time.time()
     CALL_TIMES.append(now)
     # purge anything older than 60 s
