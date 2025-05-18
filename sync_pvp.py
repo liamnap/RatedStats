@@ -161,6 +161,7 @@ def get_characters_from_leaderboards(region, headers, season_id, brackets):
 # --- Rate-limit configuration -------------------------------------------
 # Battle.net hard caps at ~20 req/s *per public IP* and ~100 k req/day.
 # Four runners share the same IP, so stay conservative.
+NUM_RUNNERS = 4
 per_sec  = RateLimiter(50 // NUM_RUNNERS, 1)      # 12 req/s each runner max
 per_hour = RateLimiter(75_000 // NUM_RUNNERS, 3600)
 url_cache: dict[str, dict] = {}                   # simple in-memory GET cache
