@@ -34,6 +34,17 @@ def _fmt_duration(sec: int) -> str:
     if sec: parts.append(f"{sec}s")
     return " ".join(parts)
 
+# --------------------------------------------------------------------------
+# GLOBAL-WIDE API-CALL ACCOUNTING
+# --------------------------------------------------------------------------
+CALLS_DONE   = 0              # incremented every time we really hit the API
+TOTAL_CALLS  = None           # set once we know how many calls the run will need
+
+# helper: increment safely
+def _bump_calls():
+    global CALLS_DONE
+    CALLS_DONE += 1
+
 # custom exception to signal “please retry this char later”
 class RetryCharacter(Exception):
     def __init__(self, char):
@@ -223,6 +234,7 @@ async def fetch_with_rate_limit(session, url, headers, max_retries: int = 5):
                 if resp.status == 200:
                     data = await resp.json()
                     url_cache[url] = data
+                    _bump_calls()          # ← count the successful call
                     return data
                 if resp.status == 429 or 500 <= resp.status < 600:
                     # immediately bail out so outer loop re-queues this char
@@ -372,6 +384,8 @@ async def process_characters(characters):
     # 1) Fetch PvP achievements keywords
     timeout = aiohttp.ClientTimeout(total=None)  # no socket limits
     async with aiohttp.ClientSession(timeout=timeout) as session:
+        global TOTAL_CALLS
+        TOTAL_CALLS = len(characters) + 1
         pvp_achievements = await get_pvp_achievements(session, headers)
         print(f"[DEBUG] PvP keywords loaded: {len(pvp_achievements)}")
 
@@ -447,19 +461,23 @@ async def process_characters(characters):
 
                             # ── ETA maths ─────────────────────────────
                             elapsed   = now - start_time            # seconds so far
-                            remaining_left = total - completed
-                            eta_sec   = (elapsed / completed * remaining_left) if completed else None
+                            remaining_left  = total - completed
+                            remaining_calls = TOTAL_CALLS - CALLS_DONE if TOTAL_CALLS else None
+                            eta_sec = (
+                                elapsed / CALLS_DONE * remaining_calls
+                            ) if CALLS_DONE and remaining_calls is not None else None
 
                             # ── robust ETA ──
-                            if eta_sec is None or eta_sec > 315_576_000:   # >10 years? forget it
+                            TEN_YEARS_SEC = 315_576_000                    # 10 years
+                            if eta_sec is None or eta_sec > TEN_YEARS_SEC:
                                 eta_when = "calculating…"
                             else:
                                 try:
                                     eta_when_dt = (
                                         datetime.datetime.now(UTC)
                                         + datetime.timedelta(seconds=int(eta_sec))
-                                    ).replace(minute=0, second=0, microsecond=0)
-                                    # show rounded-to-hour: “YYYY-MM-DD HH:00Z”
+                                    )
+                                    # show “YYYY-MM-DD HH:MMZ”
                                     eta_when = eta_when_dt.strftime("%Y-%m-%d %H:%MZ")
                                 except OverflowError:
                                     eta_when = ">9999-01-01"
@@ -470,6 +488,7 @@ async def process_characters(characters):
                                 f"sec_rate={sec_calls/per_sec.period:.1f}/s ({sec_calls}/{per_sec.max_calls}), "
                                 f"hourly={hr_calls}/{per_hour.max_calls}/{per_hour.period}s, "
                                 f"batch_size={len(batch)}, remaining={remaining_left}, "
+                                f"remaining_calls={remaining_calls}, "
                                 f"elapsed={int(elapsed)}s, "
                                 f"ETA={_fmt_duration(int(eta_sec)) if eta_sec is not None else '–'} "
                                 f"(~{eta_when})",
