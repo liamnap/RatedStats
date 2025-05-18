@@ -224,11 +224,16 @@ url_cache: dict[str, dict] = {}                   # simple in-memory GET cache
 # ------------------------------------------------------------------------
 
 async def fetch_with_rate_limit(session, url, headers, max_retries: int = 5):
-    # hit the cache first
-    if url in url_cache:
-        return url_cache[url]
+    # --- cache only static endpoints ------------------------------------
+    cacheable = (
+        "profile/wow/character" not in url           # character calls
+        and "oauth"             not in url           # token
+    )
 
-    # grab one token from each limiter *once*
+    if cacheable and url in url_cache:
+        return url_cache[url]
+    # --------------------------------------------------------------------
+
     await asyncio.gather(per_sec.acquire(), per_hour.acquire())
 
     for attempt in range(1, max_retries + 1):
@@ -236,8 +241,9 @@ async def fetch_with_rate_limit(session, url, headers, max_retries: int = 5):
             async with session.get(url, headers=headers) as resp:
                 if resp.status == 200:
                     data = await resp.json()
-                    url_cache[url] = data
-                    _bump_calls()                 # count the successful call
+                    if cacheable:
+                        url_cache[url] = data        # store only if wanted
+                    _bump_calls()
                     return data
                 if resp.status == 429:
                     # track & re-queue on next sweep
@@ -469,6 +475,8 @@ async def process_characters(characters):
                         completed += 1
                         now = time.time()
                         if now - last_hb > 10:
+                            url_cache.clear()          # drop JSON blobs
+                            gc.collect()               # force-GC, keeps the runner tidy
                             ts = time.strftime("%H:%M:%S", time.localtime(now)) 
                             inflight = SEM_CAPACITY - sem._value
                             waiters  = len(sem._waiters)
