@@ -4,9 +4,15 @@ import asyncio
 import aiohttp
 import requests
 import time
+import datetime
 import collections
 from pathlib import Path
 from asyncio import TimeoutError, CancelledError, create_task, as_completed, shield
+
+# --------------------------------------------------------------------------
+# Record when the run began (monotonic avoids wall-clock jumps)
+START_TIME = time.monotonic()
+#---------------------------------------------------------------------------
 
 # custom exception to signal “please retry this char later”
 class RetryCharacter(Exception):
@@ -418,12 +424,24 @@ async def process_characters(characters):
                         if now - last_hb > 60:
                             sec_calls = len(per_sec.calls)
                             hr_calls  = len(per_hour.calls)
+
+                            # ── ETA maths ─────────────────────────────
+                            elapsed   = now - start_time            # seconds so far
+                            remaining = total - completed
+                            eta_sec   = (elapsed / completed * remaining) if completed else 0
+                            eta_when  = (
+                                datetime.datetime.utcnow()
+                                + datetime.timedelta(seconds=eta_sec)
+                            ).replace(microsecond=0).isoformat() + "Z" if completed else "calculating…"
+
                             print(
                                 f"[HEARTBEAT] batch {batch_num}/{total_batches} | "
                                 f"{completed}/{total} done ({(completed/total*100):.1f}%), "
                                 f"sec_rate={sec_calls/per_sec.period:.1f}/s ({sec_calls}/{per_sec.max_calls}), "
                                 f"hourly={hr_calls}/{per_hour.max_calls}/{per_hour.period}s, "
-                                f"batch_size={len(batch)}, remaining={len(remaining)}",
+                                f"batch_size={len(batch)}, remaining={len(remaining)}, "
+                                f"elapsed={int(elapsed)}s, "
+                                f"ETA={int(eta_sec)}s (~{eta_when})",
                                 flush=True
                             )
                             last_hb = now
