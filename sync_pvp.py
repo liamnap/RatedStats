@@ -31,6 +31,8 @@ def _fmt_duration(sec: int) -> str:
     if day: parts.append(f"{day}d")
     hr,  sec = divmod(sec, 3_600)
     if hr:  parts.append(f"{hr}h")
+    mn,  sec = divmod(sec, 60)        
+    if mn:  parts.append(f"{mn}m")    
     if sec: parts.append(f"{sec}s")
     return " ".join(parts)
 
@@ -449,6 +451,7 @@ async def process_characters(characters):
                         completed += 1
                         now = time.time()
                         if now - last_hb > 60:
+                            ts = time.strftime("%H:%M:%S", time.localtime(now)) 
                             sec_calls = len(per_sec.calls)          # in-flight 1-s bucket
                             hr_calls  = len(per_hour.calls)         # running 1-h bucket
                             avg_60s   = len(CALL_TIMES) / 60        # rolling 60-s average
@@ -477,8 +480,7 @@ async def process_characters(characters):
                                     eta_when = ">9999-01-01"
 
                             print(
-                                f"[HEARTBEAT] batch {batch_num}/{total_batches} | "
-				f"{time}, "
+                                f"[{ts}] [HEARTBEAT] batch {batch_num}/{total_batches} | "
                                 f"{completed}/{total} done ({(completed/total*100):.1f}%), "
                                 f"sec_rate={sec_calls/per_sec.period:.1f}/s "
                                 f"avg60={avg_60s:.1f}/s "
