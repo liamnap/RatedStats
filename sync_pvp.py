@@ -384,7 +384,7 @@ async def process_characters(characters):
         pvp_achievements = await get_pvp_achievements(session, headers)
         print(f"[DEBUG] PvP keywords loaded: {len(pvp_achievements)}")
 
-        sem = asyncio.Semaphore(10)
+        sem = asyncio.Semaphore(6)
         total = len(characters)
         completed = 0
         last_hb = time.time()
@@ -452,6 +452,7 @@ async def process_characters(characters):
                         now = time.time()
                         if now - last_hb > 10:
                             ts = time.strftime("%H:%M:%S", time.localtime(now)) 
+			    pending = sem._value
                             sec_calls = len(per_sec.calls)          # in-flight 1-s bucket
                             hr_calls  = len(per_hour.calls)         # running 1-h bucket
                             avg_60s   = len(CALL_TIMES) / 60        # rolling 60-s average
@@ -489,7 +490,8 @@ async def process_characters(characters):
                                 f"remaining_calls={remaining_calls}, "
                                 f"elapsed={int(elapsed)}s, "
                                 f"ETA={_fmt_duration(int(eta_sec)) if eta_sec is not None else '–'} "
-                                f"(~{eta_when})",
+                                f"(~{eta_when}) ",
+				f"pending={pending}, "
                                 flush=True
                             )
                             last_hb = now
