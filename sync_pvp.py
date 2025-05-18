@@ -460,7 +460,7 @@ async def process_characters(characters):
                                         + datetime.timedelta(seconds=int(eta_sec))
                                     ).replace(minute=0, second=0, microsecond=0)
                                     # show rounded-to-hour: “YYYY-MM-DD HH:00Z”
-                                    eta_when = eta_when_dt.strftime("%Y-%m-%d %H:00Z")
+                                    eta_when = eta_when_dt.strftime("%Y-%m-%d %H:%MZ")
                                 except OverflowError:
                                     eta_when = ">9999-01-01"
 
