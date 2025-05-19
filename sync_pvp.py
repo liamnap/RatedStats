@@ -308,9 +308,9 @@ async def get_pvp_achievements(session, headers):
         {"type": "prefix", "value": "Rival I"},
         {"type": "prefix", "value": "Rival II"},
         {"type": "prefix", "value": "Duelist"},
-        {"type": "prefix", "value": "Elite"},
-        {"type": "prefix", "value": "Gladiator"},
-        {"type": "prefix", "value": "Legend"},
+        {"type": "prefix", "value": "Elite:"},
+        {"type": "prefix", "value": "Gladiator:"},
+        {"type": "prefix", "value": "Legend:"},
 
 	# Special Achievements
 	{"type": "prefix", "value": "Three's Company"},   			# 2700 3v3
