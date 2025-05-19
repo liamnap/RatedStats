@@ -313,7 +313,7 @@ async def get_pvp_achievements(session, headers):
         {"type": "prefix", "value": "Legend:"},
 
 	# Special Achievements
-	{"type": "prefix", "value": "Three's Company"},   			# 2700 3v3
+	{"type": "prefix", "value": "Three's Company: 2700"},   			# 2700 3v3
 		
 	# R1 Titles
 	{"type": "prefix", "value": "Hero of the Horde"},
