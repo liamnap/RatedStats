@@ -604,7 +604,7 @@ async def process_characters(characters):
         f.write(f'-- File: RatedStats/achiev/region_{REGION}.lua\n')
         f.write("local achievements = {\n")
         for key, guid, ach_map in db_iter_rows():
-	    if key not in roots:
+            if key not in roots:
                 continue
             alts_str = "{" + ",".join(f'"{alt}"' for alt in alt_map.get(key, [])) + "}"
             parts = [f'character="{key}"', f'alts={alts_str}', f'guid={guid}']
