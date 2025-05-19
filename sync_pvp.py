@@ -439,9 +439,9 @@ async def process_characters(characters):
                     return
 
                 ach_dict = {
-                    ach["id"]: ach.get("achievement", {}).get("name")
+                    ach["id"]: ach["achievement"]["name"]
                     for ach in earned
-                    if ach.get("achievement", {}).get("name")
+                    if ach["id"] in pvp_achievements     # ← keep only the titles you care about
                 }
                 if ach_dict:
                     db_upsert(key, guid, ach_dict)
