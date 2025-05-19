@@ -48,4 +48,4 @@ jobs:
           git config user.email "action@github.com"
           git add achiev/region_*.lua
           git commit -m "PvP sync update for ${{ matrix.region }}" || echo "No changes to commit"
-          git push origin dev
+          git push --force-with-lease origin dev
