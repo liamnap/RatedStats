@@ -425,6 +425,7 @@ def seed_db_from_lua(lua_path: Path) -> dict[str, dict]:
         name, realm = char_key.split("-", 1)
         rows[char_key] = {"id": guid, "name": name, "realm": realm}
 
+    db.commit()
     return rows
 
 # MAIN
@@ -574,6 +575,7 @@ async def process_characters(characters):
             else:
                 break
 
+        db.commit()
         # -------------------------------------------------
         # 2)  Build a simple alt map from the rows in SQLite
         # -------------------------------------------------
