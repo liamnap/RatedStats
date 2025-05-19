@@ -9,6 +9,7 @@ import time
 import datetime
 import collections
 import gc
+import re
 from pathlib import Path
 from asyncio import TimeoutError, CancelledError, create_task, as_completed, shield
 try:
@@ -396,6 +397,30 @@ def db_iter_rows():
 
 # --------------------------------------------------------------------------
 
+# --- after the CREATE TABLE … db.commit() lines --------------------------
+def seed_db_from_lua(lua_path: Path) -> None:
+    """Parse an existing region_*.lua and insert its rows into SQLite."""
+    if not lua_path.exists():
+        return                        # first run / file not yet committed
+
+    txt = lua_path.read_text(encoding="utf-8")
+    row_rx = re.compile(r'\{[^{]*?character\s*=\s*"([^"]+)"[^}]*?\}', re.S)
+    ach_rx = re.compile(r'id(\d+)\s*=\s*(\d+),\s*name\1\s*=\s*"([^"]+)"')
+    guid_rx = re.compile(r'guid\s*=\s*(\d+)')
+
+    for row in row_rx.finditer(txt):
+        block = row.group(0)
+        char_key = row.group(1)
+        guid_m   = guid_rx.search(block)
+        if not guid_m:
+            continue
+        guid = int(guid_m.group(1))
+        ach_dict = {int(aid): name for _, aid, name in ach_rx.findall(block)}
+        db_upsert(char_key, guid, ach_dict)
+
+seed_db_from_lua(OUTFILE)     # <-- call it here
+
+
 # MAIN
 async def process_characters(characters):
     token = get_access_token(REGION)
@@ -520,7 +545,7 @@ async def process_characters(characters):
                                 f"sec_rate={sec_calls/per_sec.period:.1f}/s "
                                 f"avg60={avg_60s:.1f}/s "
                                 f"cap={per_sec.max_calls}/s, "                                
-				f"hourly={hr_calls}/{per_hour.max_calls}/{per_hour.period}s, "
+                				f"hourly={hr_calls}/{per_hour.max_calls}/{per_hour.period}s, "
                                 f"batch_size={len(batch)}, remaining={remaining_left}, "
                                 f"remaining_calls={remaining_calls}, "
                                 f"elapsed={_fmt_duration(int(elapsed))}, "
@@ -543,6 +568,20 @@ async def process_characters(characters):
             else:
                 break
 
+        # -------------------------------------------------
+        # 2)  Build a simple alt map from the rows in SQLite
+        # -------------------------------------------------
+        from itertools import combinations
+
+        fingerprints = {key: set(ach_map.keys())
+                        for key, guid, ach_map in db_iter_rows()}
+
+        alt_map = {k: [] for k in fingerprints}
+        for a, b in combinations(fingerprints, 2):
+            if fingerprints[a] & fingerprints[b]:          # share ≥1 PvP achievement
+                alt_map[a].append(b)
+                alt_map[b].append(a)
+	
     # session is closed here
     print("[DEBUG] Writing Lua file from SQLite rows …")
 
@@ -553,7 +592,8 @@ async def process_characters(characters):
         f.write(f'-- File: RatedStats/achiev/region_{REGION}.lua\n')
         f.write("local achievements = {\n")
         for key, guid, ach_map in db_iter_rows():
-            parts = [f'character="{key}"', f'guid={guid}']
+            alts_str = "{" + ",".join(f'"{alt}"' for alt in alt_map.get(key, [])) + "}"
+            parts = [f'character="{key}"', f'alts={alts_str}', f'guid={guid}']
             for i, (aid, aname) in enumerate(sorted(ach_map.items()), 1):
                 esc = aname.replace('"', '\\"')
                 parts.extend([f'id{i}={aid}', f'name{i}="{esc}"'])
