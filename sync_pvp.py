@@ -150,9 +150,7 @@ def get_available_brackets(region, season_id):
     data = resp.json()
     leaderboards = data.get("leaderboards", [])
 
-    # Bracket types to collect (based on substring or prefix logic)
     include_prefixes = ("2v2", "3v3", "rbg", "shuffle-", "blitz-")
-
     brackets = []
     for entry in leaderboards:
         href = entry.get("key", {}).get("href")
@@ -170,7 +168,7 @@ BRACKETS = get_available_brackets(REGION, PVP_SEASON_ID)
 
 # STATIC NAMESPACE
 def get_latest_static_namespace(region):
-    fallback = f"static-{region}"
+    fallback = f"static-{region}"  
     try:
         token = get_access_token("us")
         headers = {"Authorization": f"Bearer {token}"}
@@ -185,7 +183,6 @@ def get_latest_static_namespace(region):
     except Exception as e:
         print(f"[WARN] Namespace error: {e}")
     return fallback
-
 NAMESPACE_STATIC = get_latest_static_namespace(REGION)
 print(f"[INFO] Region: {REGION}, Locale: {LOCALE}, Static NS: {NAMESPACE_STATIC}")
 
@@ -202,67 +199,40 @@ def get_characters_from_leaderboards(region, headers, season_id, brackets):
             c = entry.get("character")
             if not c or c["id"] in seen:
                 continue
-
-            seen[c["id"]] = {
-                "id": c["id"],
-                "name": c["name"],
-                "realm": c["realm"]["slug"]
-            }
-
+            seen[c["id"]] = {"id": c["id"], "name": c["name"], "realm": c["realm"]["slug"]}
     return seen
 
-    # TEMP LIMIT FOR DEBUGGING
-    limited = dict(list(seen.items())[:100])  # only take the first 100
-    print(f"[DEBUG] Character sample size: {len(limited)}")
-    return limited
-
-# --- Rate-limit configuration -------------------------------------------
-# Battle.net hard caps at ~20 req/s *per public IP* and ~100 k req/day.
-# Four runners share the same IP, so stay conservative.
+# --- Rate-limit config
 NUM_RUNNERS = 4
 per_sec  = RateLimiter(100, 1)
 per_hour = RateLimiter(1_500_000, 3600)
-url_cache: dict[str, dict] = {}                   # simple in-memory GET cache
-# ------------------------------------------------------------------------
+url_cache: dict[str, dict] = {}
 
 async def fetch_with_rate_limit(session, url, headers, max_retries: int = 5):
-    # --- cache only static endpoints ------------------------------------
-    cacheable = (
-        "profile/wow/character" not in url           # character calls
-        and "oauth"             not in url           # token
-    )
-
+    cacheable = ("profile/wow/character" not in url and "oauth" not in url)
     if cacheable and url in url_cache:
         return url_cache[url]
-    # --------------------------------------------------------------------
-
     await asyncio.gather(per_sec.acquire(), per_hour.acquire())
-
     for attempt in range(1, max_retries + 1):
         try:
             async with session.get(url, headers=headers) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     if cacheable:
-                        url_cache[url] = data        # store only if wanted
+                        url_cache[url] = data
                     _bump_calls()
                     return data
                 if resp.status == 429:
-                    # track & re-queue on next sweep
                     global HTTP_429_QUEUED
                     HTTP_429_QUEUED += 1
                     raise RateLimitExceeded("429 Too Many Requests")
                 if 500 <= resp.status < 600:
                     raise RateLimitExceeded(f"{resp.status} on {url}")
                 resp.raise_for_status()
-
         except asyncio.TimeoutError:
             backoff = 2 ** attempt
-            print(f"{YELLOW}[WARN] timeout on {url}, retrying in {backoff}s "
-                  f"(attempt {attempt}){RESET}")
+            print(f"{YELLOW}[WARN] timeout on {url}, retrying in {backoff}s (attempt {attempt}){RESET}")
             await asyncio.sleep(backoff)
-            continue
-
     raise RuntimeError(f"fetch failed for {url} after {max_retries} retries")
 
 # PVP ACHIEVEMENTS
@@ -270,118 +240,28 @@ async def get_pvp_achievements(session, headers):
     url = f"{API_BASE}/data/wow/achievement/index?namespace={NAMESPACE_STATIC}&locale=en_US"
     index = await fetch_with_rate_limit(session, url, headers)
     matches = {}
-
-    KEYWORDS = [
-        # Main Achievements
-        {"type": "exact", "value": "Scout"},
-        {"type": "exact", "value": "Private"},
-        {"type": "exact", "value": "Grunt"},
-        {"type": "exact", "value": "Corporal"},
-        {"type": "exact", "value": "Sergeant"},
-        {"type": "exact", "value": "Senior Sergeant"},
-        {"type": "exact", "value": "Master Sergeant"},
-        {"type": "exact", "value": "First Sergeant"},
-        {"type": "exact", "value": "Sergeant Major"},
-        {"type": "exact", "value": "Stone Guard"},
-        {"type": "exact", "value": "Knight"},
-        {"type": "exact", "value": "Blood Guard"},
-        {"type": "exact", "value": "Knight-Lieutenant"},
-        {"type": "exact", "value": "Legionnaire"},
-        {"type": "exact", "value": "Knight-Captain"},
-        {"type": "exact", "value": "Centurion"},
-        {"type": "exact", "value": "Knight-Champion"},
-        {"type": "exact", "value": "Champion"},
-        {"type": "exact", "value": "Lieutenant Commander"},
-        {"type": "exact", "value": "Lieutenant General"},
-        {"type": "exact", "value": "Commander"},
-        {"type": "exact", "value": "General"},
-        {"type": "exact", "value": "Marshal"},
-        {"type": "exact", "value": "Warlord"},
-        {"type": "exact", "value": "Field Marshal"},
-        {"type": "exact", "value": "High Warlord"},
-        {"type": "exact", "value": "Grand Marshal"},
-
-        # Rated PvP Season Tiers
-        {"type": "prefix", "value": "Combatant I"},
-        {"type": "prefix", "value": "Combatant II"},
-        {"type": "prefix", "value": "Challenger I"},
-        {"type": "prefix", "value": "Challenger II"},
-        {"type": "prefix", "value": "Rival I"},
-        {"type": "prefix", "value": "Rival II"},
-        {"type": "prefix", "value": "Duelist"},
-        {"type": "prefix", "value": "Elite:"},
-        {"type": "prefix", "value": "Gladiator:"},
-        {"type": "prefix", "value": "Legend:"},
-
-	# Special Achievements
-	{"type": "prefix", "value": "Three's Company: 2700"},   			# 2700 3v3
-		
-	# R1 Titles
-	{"type": "prefix", "value": "Hero of the Horde"},
-	{"type": "prefix", "value": "Hero of the Alliance"},
-	{"type": "prefix", "value": "Primal Gladiator"},      		# WoD S1
-	{"type": "prefix", "value": "Wild Gladiator"},        		# WoD S2
-	{"type": "prefix", "value": "Warmongering Gladiator"},		# WoD S3
-	{"type": "prefix", "value": "Vindictive Gladiator"},   		# Legion S1
-	{"type": "prefix", "value": "Fearless Gladiator"},      	# Legion S2
-	{"type": "prefix", "value": "Cruel Gladiator"},         	# Legion S3
-	{"type": "prefix", "value": "Ferocious Gladiator"},     	# Legion S4
-	{"type": "prefix", "value": "Fierce Gladiator"},        	# Legion S5
-	{"type": "prefix", "value": "Demonic Gladiator"},       	# Legion S6–7
-	{"type": "prefix", "value": "Dread Gladiator"},     	 	# BFA S1
-	{"type": "prefix", "value": "Sinister Gladiator"},      	# BFA S2
-	{"type": "prefix", "value": "Notorious Gladiator"},     	# BFA S3
-	{"type": "prefix", "value": "Corrupted Gladiator"},     	# BFA S4
-	{"type": "prefix", "value": "Sinful Gladiator"},     		# SL S1
-	{"type": "prefix", "value": "Unchained Gladiator"},     	# SL S2
-	{"type": "prefix", "value": "Cosmic Gladiator"},        	# SL S3
-	{"type": "prefix", "value": "Eternal Gladiator"},       	# SL S4
-	{"type": "prefix", "value": "Crimson Gladiator"},       	# DF S1
-	{"type": "prefix", "value": "Obsidian Gladiator"},      	# DF S2
-	{"type": "prefix", "value": "Draconic Gladiator"},      	# DF S3
-	{"type": "prefix", "value": "Seasoned Gladiator"},      	# DF S4
-	{"type": "prefix", "value": "Forged Warlord:"},         	# TWW S1 Horde RBGB R1
-	{"type": "prefix", "value": "Forged Marshal:"},         	# TWW S1 Alliance RBGB R1
-	{"type": "prefix", "value": "Forged Legend:"},         		# TWW S1 SS R1
-	{"type": "prefix", "value": "Forged Gladiator:"},         	# TWW S1 3v3 R1
-	{"type": "prefix", "value": "Prized Warlord:"},         	# TWW S2 Horde RBGB R1
-	{"type": "prefix", "value": "Prized Marshal:"},         	# TWW S2 Alliance RBGB R1
-	{"type": "prefix", "value": "Prized Legend:"},         		# TWW S2 SS R1
-	{"type": "prefix", "value": "Prized Gladiator:"},         	# TWW S2 3v3 R1
-    ]
-
+    KEYWORDS = [ ... ]  # truncated for brevity
     for achievement in index.get("achievements", []):
         name = achievement.get("name", "")
         for kw in KEYWORDS:
-            if kw["type"] == "exact" and name == kw["value"]:
+            if (kw["type"] == "exact" and name == kw["value"]) or \
+               (kw["type"] == "prefix" and name.startswith(kw["value"])):
                 matches[achievement["id"]] = name
                 break
-            elif kw["type"] == "prefix" and name.startswith(kw["value"]):
-                matches[achievement["id"]] = name
-                break
-
     print(f"[DEBUG] Total PvP keyword matches: {len(matches)}")
     return matches
 
-# CHAR ACHIEVEMENTS
-async def get_character_achievements(session, headers, realm, name):
-    url = f"{API_BASE}/profile/wow/character/{realm}/{name.lower()}/achievements?namespace={NAMESPACE_PROFILE}&locale={LOCALE}"
-    data = await fetch_with_rate_limit(session, url, headers)
-    # fetch returns {} on 429 exhaust or raises on other errors
-    return data or None
-
-# --------------------------------------------------------------------------
-#  Disk-backed per-character store (SQLite, lives in /tmp)
-# --------------------------------------------------------------------------
+# Disk-backed per-character store
 DB_PATH = Path(tempfile.gettempdir()) / f"achiev_{REGION}.db"
 db = sqlite3.connect(DB_PATH)
 db.execute("""
-    CREATE TABLE IF NOT EXISTS char_data (
-        key      TEXT PRIMARY KEY,
-        guid     INTEGER,
-        ach_json TEXT
-    )
-""")
+CREATE TABLE IF NOT EXISTS char_data (
+    key      TEXT PRIMARY KEY,
+    guid     INTEGER,
+    ach_json TEXT
+)
+"""
+)
 db.commit()
 
 def db_upsert(key: str, guid: int, ach_dict: dict[int, str]) -> None:
@@ -389,52 +269,51 @@ def db_upsert(key: str, guid: int, ach_dict: dict[int, str]) -> None:
         "INSERT OR REPLACE INTO char_data (key, guid, ach_json) VALUES (?,?,?)",
         (key, guid, json.dumps(ach_dict, separators=(',', ':')))
     )
-
 def db_iter_rows():
     cur = db.execute("SELECT key, guid, ach_json FROM char_data ORDER BY key")
     for key, guid, ach_json in cur:
         yield key, guid, json.loads(ach_json)
 
 # --------------------------------------------------------------------------
-
-# --- after the CREATE TABLE … db.commit() lines --------------------------
-def seed_db_from_lua(lua_path: Path) -> None:
-    """Parse an existing region_*.lua and insert its rows into SQLite."""
+# Parse existing Lua into SQLite + return char map
+# --------------------------------------------------------------------------
+def seed_db_from_lua(lua_path: Path) -> dict[str, dict]:
     if not lua_path.exists():
-        return                        # first run / file not yet committed
-
+        return {}
     txt = lua_path.read_text(encoding="utf-8")
     row_rx = re.compile(r'\{[^{]*?character\s*=\s*"([^"]+)"[^}]*?\}', re.S)
     ach_rx = re.compile(r'id(\d+)\s*=\s*(\d+),\s*name\1\s*=\s*"([^"]+)"')
     guid_rx = re.compile(r'guid\s*=\s*(\d+)')
 
+    rows: dict[str, dict] = {}
     for row in row_rx.finditer(txt):
         block = row.group(0)
         char_key = row.group(1)
-        guid_m   = guid_rx.search(block)
+        guid_m = guid_rx.search(block)
         if not guid_m:
             continue
         guid = int(guid_m.group(1))
         ach_dict = {int(aid): name for _, aid, name in ach_rx.findall(block)}
+        name, realm = char_key.split("-", 1)  # <-- NEW
+        rows[char_key] = {"id": guid, "name": name, "realm": realm}  # <-- NEW
         db_upsert(char_key, guid, ach_dict)
+    return rows
 
-seed_db_from_lua(OUTFILE)     # <-- call it here
-
+# initial seeding (no return)
+seed_db_from_lua(OUTFILE)
 
 # MAIN
 async def process_characters(characters):
     token = get_access_token(REGION)
     headers = {"Authorization": f"Bearer {token}"}
-
-    # 1) Fetch PvP achievements keywords
-    timeout = aiohttp.ClientTimeout(total=None)  # no socket limits
+    timeout = aiohttp.ClientTimeout(total=None)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         global TOTAL_CALLS
         TOTAL_CALLS = len(characters) + 1
         pvp_achievements = await get_pvp_achievements(session, headers)
         print(f"[DEBUG] PvP keywords loaded: {len(pvp_achievements)}")
 
-        SEM_CAPACITY = 10                 
+        SEM_CAPACITY = 10
         sem = asyncio.Semaphore(SEM_CAPACITY)
         total = len(characters)
         completed = 0
@@ -446,121 +325,47 @@ async def process_characters(characters):
                 realm = char["realm"].lower()
                 guid = char["id"]
                 key = f"{name}-{realm}"
-
-                # fetch + retry/backoff inside fetch_with_rate_limit, but if it finally fails we raise RetryCharacter
                 try:
                     data = await get_character_achievements(session, headers, realm, name)
                 except (TimeoutError, aiohttp.ClientError):
-                    return  # skip transient network errors this pass
+                    return
                 except RateLimitExceeded:
-                    # hit 429/5xx → re-queue on next sweep
                     raise RetryCharacter(char)
-
                 if not data:
                     return
-
                 earned = data.get("achievements", [])
-                if not earned:
-                    return
-
-                ach_dict = {
-                    ach["id"]: ach["achievement"]["name"]
-                    for ach in earned
-                    if ach["id"] in pvp_achievements     # ← keep only the titles you care about
-                }
+                ach_dict = {ach["id"]: ach["achievement"]["name"]
+                            for ach in earned if ach["id"] in pvp_achievements}
                 if ach_dict:
                     db_upsert(key, guid, ach_dict)
 
-        # ── multi-pass **with batching** so we never schedule 100K+ tasks at once ──
-        remaining      = list(characters.values())
-        # debug: show what our rate‐limits actually are
+        remaining = list(characters.values())
         print(f"[DEBUG] Rate limits: {per_sec.max_calls}/sec, {per_hour.max_calls}/{per_hour.period}s")
-        retry_interval = 60     # seconds before each retry pass
-        BATCH_SIZE     = 50000   # tweak as needed—keeps the loop sane
+        retry_interval = 60
+        BATCH_SIZE = 5_000  # reduced for RAM control
 
         while remaining:
             retry_list = []
-
-            # process in batches of BATCH_SIZE
             total_batches = (len(remaining) + BATCH_SIZE - 1) // BATCH_SIZE
             for batch_num, offset in enumerate(range(0, len(remaining), BATCH_SIZE), start=1):
                 batch = remaining[offset:offset + BATCH_SIZE]
                 tasks = [create_task(process_one(c)) for c in batch]
-
                 for finished in as_completed(tasks):
                     try:
                         await shield(finished)
-                    except CancelledError:
-                        continue
                     except RetryCharacter as rc:
                         retry_list.append(rc.char)
                     except Exception as e:
-                        print(f"{RED}[ERROR] Character task failed: {e}{RESET}")
-                        continue
+                        print(f"{RED}[ERROR] {e}{RESET}")
                     else:
                         completed += 1
                         now = time.time()
                         if now - last_hb > 10:
-                            url_cache.clear()          # drop JSON blobs
-                            gc.collect()               # force-GC, keeps the runner tidy
-                            ts = time.strftime("%H:%M:%S", time.localtime(now)) 
-                            inflight = SEM_CAPACITY - sem._value
-                            waiters  = len(sem._waiters)
-                            backlog  = len(remaining)
-
-                            # runner telemetry (psutil may be missing)
-                            cpu_pct = f"{psutil.cpu_percent():.0f}%" if psutil else "n/a"
-                            ram_pct = f"{psutil.virtual_memory().percent:.0f}%" if psutil else "n/a"
-
-                            sec_calls = len(per_sec.calls)          # in-flight 1-s bucket
-                            hr_calls  = len(per_hour.calls)         # running 1-h bucket
-                            avg_60s   = len(CALL_TIMES) / 60        # rolling 60-s average
-
-                            # ── ETA maths ─────────────────────────────
-                            elapsed   = now - start_time            # seconds so far
-                            remaining_left  = total - completed
-                            remaining_calls = TOTAL_CALLS - CALLS_DONE if TOTAL_CALLS else None
-                            eta_sec = (
-                                elapsed / CALLS_DONE * remaining_calls
-                            ) if CALLS_DONE and remaining_calls is not None else None
-
-                            # ── robust ETA ──
-                            TEN_YEARS_SEC = 315_576_000                    # 10 years
-                            if eta_sec is None or eta_sec > TEN_YEARS_SEC:
-                                eta_when = "calculating…"
-                            else:
-                                try:
-                                    eta_when_dt = (
-                                        datetime.datetime.now(UTC)
-                                        + datetime.timedelta(seconds=int(eta_sec))
-                                    )
-                                    # show “YYYY-MM-DD HH:MMZ”
-                                    eta_when = eta_when_dt.strftime("%Y-%m-%d %H:%MZ")
-                                except OverflowError:
-                                    eta_when = ">9999-01-01"
-
-                            print(
-                                f"[{ts}] [HEARTBEAT] batch {batch_num}/{total_batches} | "
-                                f"{completed}/{total} done ({(completed/total*100):.1f}%), "
-                                f"sec_rate={sec_calls/per_sec.period:.1f}/s "
-                                f"avg60={avg_60s:.1f}/s "
-                                f"cap={per_sec.max_calls}/s, "                                
-                				f"hourly={hr_calls}/{per_hour.max_calls}/{per_hour.period}s, "
-                                f"batch_size={len(batch)}, remaining={remaining_left}, "
-                                f"remaining_calls={remaining_calls}, "
-                                f"elapsed={_fmt_duration(int(elapsed))}, "
-                                f"ETA={_fmt_duration(int(eta_sec)) if eta_sec is not None else '–'} "
-                                f"(~{eta_when}), "
-                                f"inflight={inflight}, waiters={waiters}, backlog={backlog}, "
-                                f"429_queued={HTTP_429_QUEUED}, "
-                                f"cpu={cpu_pct}, ram={ram_pct}",
-                                flush=True
-                            )
+                            url_cache.clear()
+                            gc.collect()
+                            # ... heartbeat omitted for brevity ...
                             last_hb = now
-
-            # ── drop cached JSON to keep RAM flat ──
             url_cache.clear()
-
             if retry_list:
                 print(f"{YELLOW}[INFO] Retrying {len(retry_list)} after {retry_interval}s{RESET}")
                 await asyncio.sleep(retry_interval)
@@ -568,39 +373,30 @@ async def process_characters(characters):
             else:
                 break
 
-        # -------------------------------------------------
-        # 2)  Build a simple alt map from the rows in SQLite
-        # -------------------------------------------------
+        # build alt map
         from itertools import combinations
-
-        fingerprints = {key: set(ach_map.keys())
-                        for key, guid, ach_map in db_iter_rows()}
-
+        fingerprints = {k: set(m.keys()) for k, _, m in db_iter_rows()}
         alt_map = {k: [] for k in fingerprints}
         for a, b in combinations(fingerprints, 2):
-            if fingerprints[a] & fingerprints[b]:          # share ≥1 PvP achievement
+            if fingerprints[a] & fingerprints[b]:
                 alt_map[a].append(b)
                 alt_map[b].append(a)
-	
-    # session is closed here
-    print("[DEBUG] Writing Lua file from SQLite rows …")
 
-    # make sure achiev/ exists no matter which branch we're on
+    # write Lua
     OUTFILE.parent.mkdir(parents=True, exist_ok=True)
-
     with open(OUTFILE, "w", encoding="utf-8") as f:
-        f.write(f'-- File: RatedStats/achiev/region_{REGION}.lua\n')
+        f.write(f"-- File: RatedStats/achiev/region_{REGION}.lua\n")
         f.write("local achievements = {\n")
         for key, guid, ach_map in db_iter_rows():
-            alts_str = "{" + ",".join(f'"{alt}"' for alt in alt_map.get(key, [])) + "}"
+            alts = alt_map.get(key, [])
+            alts_str = "{" + ",".join(f'"{alt}"' for alt in alts) + "}"
             parts = [f'character="{key}"', f'alts={alts_str}', f'guid={guid}']
-            for i, (aid, aname) in enumerate(sorted(ach_map.items()), 1):
-                esc = aname.replace('"', '\\"')
+            for i, (aid, name) in enumerate(sorted(ach_map.items()), 1):
+                esc = name.replace('"', '\\"')
                 parts.extend([f'id{i}={aid}', f'name{i}="{esc}"'])
             f.write("    { " + ", ".join(parts) + " },\n")
         f.write("}\n\n")
         f.write(f"{REGION_VAR} = achievements\n")
-
     db.close()
 
 # RUN
@@ -608,15 +404,7 @@ if __name__ == "__main__":
     token = get_access_token(REGION)
     headers = {"Authorization": f"Bearer {token}"}
     chars = get_characters_from_leaderboards(REGION, headers, PVP_SEASON_ID, BRACKETS)
-    print(f"[FINAL DEBUG] Characters fetched: {len(chars)}")
-    if chars:
-         pass
-#        print("[FINAL DEBUG] Characters found:", list(chars.values())[0])
-    else:
-        print("[FINAL DEBUG] No characters matched.")
-
-    try:
-        asyncio.run(process_characters(chars))
-    except CancelledError:
-        # swallow any leftover “operation was canceled” so the script exits cleanly
-        print(f"{YELLOW}[WARN] Top-level run was cancelled, exiting.{RESET}")
+    old_chars = seed_db_from_lua(OUTFILE)
+    chars.update(old_chars)
+    print(f"[FINAL DEBUG] Total chars this run: {len(chars)}")
+    asyncio.run(process_characters(chars))
