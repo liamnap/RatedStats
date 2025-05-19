@@ -587,6 +587,12 @@ async def process_characters(characters):
             if fingerprints[a] & fingerprints[b]:          # share ≥1 PvP achievement
                 alt_map[a].append(b)
                 alt_map[b].append(a)
+
+        # ── prune out any character that only ever appears as an alt ──
+        roots = set(alt_map)               # everyone who’s an “owner”
+        for owner, alts in alt_map.items():
+            for alt in alts:
+                roots.discard(alt)         # if they’re only an alt, drop them
 	
     # session is closed here
     print("[DEBUG] Writing Lua file from SQLite rows …")
@@ -598,6 +604,8 @@ async def process_characters(characters):
         f.write(f'-- File: RatedStats/achiev/region_{REGION}.lua\n')
         f.write("local achievements = {\n")
         for key, guid, ach_map in db_iter_rows():
+	        if key not in roots:
+                continue
             alts_str = "{" + ",".join(f'"{alt}"' for alt in alt_map.get(key, [])) + "}"
             parts = [f'character="{key}"', f'alts={alts_str}', f'guid={guid}']
             for i, (aid, aname) in enumerate(sorted(ach_map.items()), 1):
