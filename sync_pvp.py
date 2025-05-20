@@ -589,11 +589,11 @@ async def process_characters(characters):
         # -------------------------------------------------
         from itertools import combinations
 
-         # only fingerprint on your PvP titles in char_data:
-         fingerprints = {
-             key: set(ach_map.keys())
-             for key, guid, ach_map in db_iter_rows()
-         }
+        # only fingerprint on your PvP titles in char_data:
+        fingerprints = {
+            key: set(ach_map.keys())
+            for key, guid, ach_map in db_iter_rows()
+        }
 
         alt_map = {k: [] for k in fingerprints}
         for a, b in combinations(fingerprints, 2):
