@@ -42,10 +42,13 @@ jobs:
         run: python sync_pvp.py
 
       # 5. commit back to dev
-      - name: Commit results
+      - name: Commit & push results
         run: |
           git config user.name  "GitHub Action"
           git config user.email "action@github.com"
           git add achiev/region_*.lua
           git commit -m "PvP sync update for ${{ matrix.region }}" || echo "No changes to commit"
+          # bring your dev branch up-to-date so push won’t be rejected:
+          git fetch origin dev
+          git rebase origin/dev
           git push --force-with-lease origin dev
