@@ -431,8 +431,8 @@ def seed_db_from_lua(lua_path: Path) -> dict[str, dict]:
 async def process_characters(characters, leaderboard_keys):
     token = get_access_token(REGION)
     headers = {"Authorization": f"Bearer {token}"}
-   # ── DEBUG: count how many db_upserts actually happen
-   inserted_count = 0
+    # ── DEBUG: count how many db_upserts actually happen
+    inserted_count = 0
 
     # 1) Fetch PvP achievements keywords
     timeout = aiohttp.ClientTimeout(total=None)  # no socket limits
