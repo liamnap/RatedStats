@@ -382,6 +382,12 @@ db.execute("""
         ach_json TEXT
     )
 """)
+db.execute("""
+    CREATE TABLE IF NOT EXISTS char_full (
+        key       TEXT PRIMARY KEY,
+        full_json TEXT
+    )
+""")         
 db.commit()
 
 def db_upsert(key: str, guid: int, ach_dict: dict[int, str]) -> None:
@@ -390,10 +396,21 @@ def db_upsert(key: str, guid: int, ach_dict: dict[int, str]) -> None:
         (key, guid, json.dumps(ach_dict, separators=(',', ':')))
     )
 
+def db_full_upsert(key: str, full_map: dict[int, int]) -> None:
+    db.execute(
+        "INSERT OR REPLACE INTO char_full (key, full_json) VALUES (?,?)",
+        (key, json.dumps(full_map, separators=(',', ':')))
+    )                            # ← NEW: helper for full map
+
 def db_iter_rows():
     cur = db.execute("SELECT key, guid, ach_json FROM char_data ORDER BY key")
     for key, guid, ach_json in cur:
         yield key, guid, json.loads(ach_json)
+
+def db_iter_full_rows():
+    cur = db.execute("SELECT key, full_json FROM char_full")
+    for key, full_json in cur:
+        yield key, json.loads(full_json)   # ← NEW: iterate full maps
 
 # --------------------------------------------------------------------------
 
@@ -470,6 +487,7 @@ async def process_characters(characters):
                 if not earned:
                     return
 
+                # (A) your existing PvP subset
                 ach_dict = {
                     ach["id"]: ach["achievement"]["name"]
                     for ach in earned
@@ -477,6 +495,14 @@ async def process_characters(characters):
                 }
                 if ach_dict:
                     db_upsert(key, guid, ach_dict)
+
+                # (B) build and store the **full** achievement→timestamp map
+                full_map = {
+                    ach["id"]: ach.get("completed_timestamp", 0)
+                    for ach in earned
+                    if "completed_timestamp" in ach
+                    }
+                db_full_upsert(key, full_map)
 
         # ── multi-pass **with batching** so we never schedule 100K+ tasks at once ──
         remaining      = list(characters.values())
@@ -581,8 +607,11 @@ async def process_characters(characters):
         # -------------------------------------------------
         from itertools import combinations
 
-        fingerprints = {key: set(ach_map.keys())
-                        for key, guid, ach_map in db_iter_rows()}
+        # use the **full** map to fingerprint
+        fingerprints = {
+            key: set(full_map.items())   # or just full_map.keys() if timestamps aren’t needed
+            for key, full_map in db_iter_full_rows()
+        }
 
         alt_map = {k: [] for k in fingerprints}
         for a, b in combinations(fingerprints, 2):
