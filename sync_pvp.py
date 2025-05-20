@@ -607,6 +607,13 @@ async def process_characters(characters, leaderboard_keys):
             alt_map[a].append(b)
             alt_map[b].append(a)
 
+        # ── DEBUG: inspect alt_map right after building it
+        total_keys = len(alt_map)
+        linked_keys = sum(1 for links in alt_map.values() if links)
+        print(f"[DEBUG] alt_map keys={total_keys}, with_links={linked_keys}")
+        for k, links in list(alt_map.items())[:3]:
+            print(f"[DEBUG] sample alt_map[{k!r}] → {len(links)} links")
+
         # ── DEBUG: show a few sample alt_map entries
         samples = list(alt_map.items())[:3]
         for key, links in samples:
