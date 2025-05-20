@@ -382,13 +382,6 @@ db.execute("""
         ach_json TEXT
     )
 """)
-db.execute("""
-    CREATE TABLE IF NOT EXISTS char_full (
-        key       TEXT PRIMARY KEY,
-        full_json TEXT
-    )
-""")         
-db.commit()
 
 def db_upsert(key: str, guid: int, ach_dict: dict[int, str]) -> None:
     db.execute(
@@ -396,21 +389,10 @@ def db_upsert(key: str, guid: int, ach_dict: dict[int, str]) -> None:
         (key, guid, json.dumps(ach_dict, separators=(',', ':')))
     )
 
-def db_full_upsert(key: str, full_map: dict[int, int]) -> None:
-    db.execute(
-        "INSERT OR REPLACE INTO char_full (key, full_json) VALUES (?,?)",
-        (key, json.dumps(full_map, separators=(',', ':')))
-    )                            # ← NEW: helper for full map
-
 def db_iter_rows():
     cur = db.execute("SELECT key, guid, ach_json FROM char_data ORDER BY key")
     for key, guid, ach_json in cur:
         yield key, guid, json.loads(ach_json)
-
-def db_iter_full_rows():
-    cur = db.execute("SELECT key, full_json FROM char_full")
-    for key, full_json in cur:
-        yield key, json.loads(full_json)   # ← NEW: iterate full maps
 
 # --------------------------------------------------------------------------
 
@@ -607,11 +589,11 @@ async def process_characters(characters):
         # -------------------------------------------------
         from itertools import combinations
 
-        # use the **full** map to fingerprint
-        fingerprints = {
-            key: set(full_map.items())   # or just full_map.keys() if timestamps aren’t needed
-            for key, full_map in db_iter_full_rows()
-        }
+         # only fingerprint on your PvP titles in char_data:
+         fingerprints = {
+             key: set(ach_map.keys())
+             for key, guid, ach_map in db_iter_rows()
+         }
 
         alt_map = {k: [] for k in fingerprints}
         for a, b in combinations(fingerprints, 2):
@@ -645,27 +627,39 @@ async def process_characters(characters):
     # make sure achiev/ exists no matter which branch we're on
     OUTFILE.parent.mkdir(parents=True, exist_ok=True)
 
-    # build a quick lookup of only those chars which actually have PvP data:
-    rows_map = {k: (g, ach) for k, g, ach in db_iter_rows()}
+    # build a lookup so we can pull guid + ach_map by key
+    rows_map = { key: (guid, ach_map)
+                 for key, guid, ach_map in db_iter_rows() }
 
+    # write out only one “root” per connected component,
+    # choosing roots that actually came from the leaderboard
     with open(OUTFILE, "w", encoding="utf-8") as f:
         f.write(f'-- File: RatedStats/achiev/region_{REGION}.lua\n')
         f.write("local achievements = {\n")
+
         for comp in groups:
-            # pick the first member of this group who actually has a row
-            members_in_data = [m for m in comp if m in rows_map]
-            if not members_in_data:
+            # pick the first member who was on the PvP leaderboard
+            real_leaders = [m for m in comp if m in leaderboard_keys]
+            if not real_leaders:
                 continue
-            root = members_in_data[0]
-            alts = [m for m in members_in_data if m != root]
+
+            root = real_leaders[0]
+            alts = [m for m in comp if m != root]
 
             guid, ach_map = rows_map[root]
-            alts_str = "{" + ",".join(f'"{alt}"' for alt in alts) + "}"
-            parts = [f'character="{root}"', f'alts={alts_str}', f'guid={guid}']
-            for i, (aid, aname) in enumerate(sorted(ach_map.items()), 1):
+            alts_str      = "{" + ",".join(f'"{alt}"' for alt in alts) + "}"
+
+            parts = [
+                f'character="{root}"',
+                f'alts={alts_str}',
+                f'guid={guid}'
+            ]
+            for i, (aid, aname) in enumerate(sorted(ach_map.items()), start=1):
                 esc = aname.replace('"', '\\"')
-                parts.extend([f'id{i}={aid}', f'name{i}="{esc}"'])
+                parts.extend([f"id{i}={aid}", f'name{i}="{esc}"'])
+
             f.write("    { " + ", ".join(parts) + " },\n")
+
         f.write("}\n\n")
         f.write(f"{REGION_VAR} = achievements\n")
 
@@ -677,6 +671,7 @@ if __name__ == "__main__":
     token = get_access_token(REGION)
     headers = {"Authorization": f"Bearer {token}"}
     chars = get_characters_from_leaderboards(REGION, headers, PVP_SEASON_ID, BRACKETS)
+    leaderboard_keys = set(chars.keys())
     chars.update(old_chars)
     print(f"[FINAL DEBUG] Total chars this run: {len(chars)}")
     if chars:
