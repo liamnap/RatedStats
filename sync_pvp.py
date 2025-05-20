@@ -589,10 +589,6 @@ async def process_characters(characters, leaderboard_keys):
         # -------------------------------------------------
         from itertools import combinations
 
-        # ── DEBUG: how many fingerprints / alt‐links we have
-        non_zero_links = sum(1 for links in alt_map.values() if links)
-        print(f"[DEBUG] alt_map keys={len(alt_map)}, with_links={non_zero_links}")
-
         # only fingerprint on your PvP titles in char_data:
         fingerprints = {
             key: set(ach_map.keys())
