@@ -471,16 +471,15 @@ async def process_characters(characters, leaderboard_keys):
                 if not earned:
                     return
 
-                # (A) your existing PvP subset
+                # (A) your PvP subset — always upsert, even if empty
                 ach_dict = {
                     ach["id"]: ach["achievement"]["name"]
                     for ach in earned
-                    if ach["id"] in pvp_achievements     # ← keep only the titles you care about
+                    if ach["id"] in pvp_achievements
                 }
-                if ach_dict:
-                    db_upsert(key, guid, ach_dict)
-                    nonlocal inserted_count
-                    inserted_count += 1
+                db_upsert(key, guid, ach_dict)
+                nonlocal inserted_count
+                inserted_count += 1
 
         # ── multi-pass **with batching** so we never schedule 100K+ tasks at once ──
         remaining      = list(characters.values())
@@ -646,13 +645,9 @@ async def process_characters(characters, leaderboard_keys):
         f.write("local achievements = {\n")
 
         for comp in groups:
-            # pick the first member who was on the PvP leaderboard
-            real_leaders = [m for m in comp if m in leaderboard_keys]
-            if not real_leaders:
-                continue
-
-            root = real_leaders[0]
-            alts = [m for m in comp if m != root]
+            # emit EVERY member (so singles + alts)
+            for root in comp:
+                alts = [m for m in comp if m != root]
 
             guid, ach_map = rows_map[root]
             alts_str      = "{" + ",".join(f'"{alt}"' for alt in alts) + "}"
