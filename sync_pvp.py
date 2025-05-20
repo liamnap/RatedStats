@@ -431,6 +431,8 @@ def seed_db_from_lua(lua_path: Path) -> dict[str, dict]:
 async def process_characters(characters, leaderboard_keys):
     token = get_access_token(REGION)
     headers = {"Authorization": f"Bearer {token}"}
+   # ── DEBUG: count how many db_upserts actually happen
+   inserted_count = 0
 
     # 1) Fetch PvP achievements keywords
     timeout = aiohttp.ClientTimeout(total=None)  # no socket limits
@@ -477,6 +479,8 @@ async def process_characters(characters, leaderboard_keys):
                 }
                 if ach_dict:
                     db_upsert(key, guid, ach_dict)
+                    nonlocal inserted_count
+                    inserted_count += 1
 
         # ── multi-pass **with batching** so we never schedule 100K+ tasks at once ──
         remaining      = list(characters.values())
@@ -576,6 +580,11 @@ async def process_characters(characters, leaderboard_keys):
                 break
 
         db.commit()
+        # ── DEBUG: did our upserts match the table size?
+        print(f"[DEBUG] inserted_count={inserted_count}")
+        row_count = sum(1 for _ in db_iter_rows())
+        print(f"[DEBUG] SQLite rows={row_count}")
+
         # -------------------------------------------------
         # 2)  Build a simple alt map from the rows in SQLite
         # -------------------------------------------------
@@ -614,6 +623,10 @@ async def process_characters(characters, leaderboard_keys):
         groups.append(sorted(comp))     # sorted list of all chars in this group
 	
     # session is closed here
+    # ── DEBUG: how many components, and total chars across them
+    total_group_members = sum(len(c) for c in groups)
+    print(f"[DEBUG] group_roots={len(groups)}, total_group_members={total_group_members}")
+
     # ── DEBUG: sanity checks before Lua write
     row_count = sum(1 for _ in db_iter_rows())
     print(f"[DEBUG] SQLite has {row_count} character rows")
