@@ -471,12 +471,19 @@ async def process_characters(characters, leaderboard_keys):
                 if not earned:
                     return
 
-                # (A) build a map id→timestamp for true “fingerprint” matching
-                ach_dict = {
-                    ach["id"]: ach["timestamp"]
-                    for ach in earned
-                    if ach["id"] in pvp_achievements
-                }
+            # (A) capture id *and* completion timestamp for true fingerprinting
+            ach_dict = {}
+            for ach in earned:
+                aid = ach["id"]
+                if aid not in pvp_achievements:
+                    continue
+                # the JSON field is "completed_timestamp"
+                ts = ach.get("completed_timestamp")
+                if ts is None:
+                    # DEBUG: show you exactly what's coming back
+                    print(f"{YELLOW}[DEBUG] no completed_timestamp for {key} ach {aid}{RESET}")
+                ach_dict[aid] = {"name": ach["achievement"]["name"], "ts": ts}
+
                 db_upsert(key, guid, ach_dict)
                 nonlocal inserted_count
                 inserted_count += 1
@@ -589,11 +596,15 @@ async def process_characters(characters, leaderboard_keys):
         # -------------------------------------------------
         from itertools import combinations
 
-        # fingerprint = set of (id, timestamp) tuples
-        fingerprints = {
-            key: {(aid, atime) for aid, atime in ach_map.items()}
-            for key, guid, ach_map in db_iter_rows()
-        }
+        # build fingerprint as (id, timestamp) pairs
+        fingerprints = {}
+        for key, guid, ach_map in db_iter_rows():
+            pts = set()
+            for aid, info in ach_map.items():
+                ts = info.get("ts")
+                if ts is not None:
+                    pts.add((aid, ts))
+            fingerprints[key] = pts
 
         alt_map = {k: [] for k in fingerprints}
         for a, b in combinations(fingerprints, 2):
