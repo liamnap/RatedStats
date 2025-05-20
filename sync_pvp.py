@@ -663,6 +663,13 @@ async def process_characters(characters, leaderboard_keys):
     row_count = sum(1 for _ in db_iter_rows())
     print(f"[DEBUG] SQLite has {row_count} character rows")
     print("[DEBUG] Writing Lua file…")
+
+    # build a lookup so we can pull guid + ach_map by key
+    rows_map = {
+       key: (guid, ach_map)
+        for key, guid, ach_map in db_iter_rows()
+    }
+    # DEBUG: now that rows_map exists, inspect it
     print(f"[DEBUG] rows_map entries={len(rows_map)}, sample keys={list(rows_map)[:5]}")
 
     # make sure achiev/ exists no matter which branch we're on
@@ -679,14 +686,16 @@ async def process_characters(characters, leaderboard_keys):
         f.write("local achievements = {\n")
 
         for comp in groups:
-            # DEBUG: entering component
-            print(f"[DEBUG] writing comp of size {len(comp)}")
+            # DEBUG: each group we’re about to write
+            print(f"[DEBUG] group of size={len(comp)}, leaders={len([m for m in comp if m in leaderboard_keys])}")
 
             real_leaders = [m for m in comp if m in leaderboard_keys]
             if not real_leaders:
                 continue
 
             root = real_leaders[0]
+            # DEBUG: writing the root entry for this component
+            print(f"[DEBUG] writing character={root}")
             alts = [m for m in comp if m != root]
 
             # DEBUG: root we’ll write
