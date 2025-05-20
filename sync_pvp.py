@@ -590,11 +590,23 @@ async def process_characters(characters):
                 alt_map[a].append(b)
                 alt_map[b].append(a)
 
-        # ── prune out any character that only ever appears as an alt ──
-        roots = set(alt_map)               # everyone who’s an “owner”
-        for owner, alts in alt_map.items():
-            for alt in alts:
-                roots.discard(alt)         # if they’re only an alt, drop them
+    # ── now break into connected components, pick the first as “root” ──
+    visited = set()
+    groups = []
+    for key in sorted(alt_map):
+        if key in visited:
+            continue
+        # flood‐fill this component
+        comp = {key}
+        stack = [key]
+        while stack:
+            u = stack.pop()
+            for v in alt_map[u]:
+                if v not in comp:
+                    comp.add(v)
+                    stack.append(v)
+        visited |= comp
+        groups.append(sorted(comp))     # sorted list of all chars in this group
 	
     # session is closed here
     print("[DEBUG] Writing Lua file from SQLite rows …")
@@ -605,11 +617,16 @@ async def process_characters(characters):
     with open(OUTFILE, "w", encoding="utf-8") as f:
         f.write(f'-- File: RatedStats/achiev/region_{REGION}.lua\n')
         f.write("local achievements = {\n")
-        for key, guid, ach_map in db_iter_rows():
-            if key not in roots:
-                continue
-            alts_str = "{" + ",".join(f'"{alt}"' for alt in alt_map.get(key, [])) + "}"
-            parts = [f'character="{key}"', f'alts={alts_str}', f'guid={guid}']
+        # for each component, write exactly one “root” line
+        # and set all the others as its alts
+        rows = list(db_iter_rows())
+        for comp in groups:
+            root, *alts = comp
+            # pull guid + ach_map for the root
+            guid = next(g for k,g,ach in rows if k == root)
+            ach_map = next(ach for k,g,ach in rows if k == root)
+            alts_str = "{" + ",".join(f'"{alt}"' for alt in alts) + "}"
+            parts = [f'character="{root}"', f'alts={alts_str}', f'guid={guid}']
             for i, (aid, aname) in enumerate(sorted(ach_map.items()), 1):
                 esc = aname.replace('"', '\\"')
                 parts.extend([f'id{i}={aid}', f'name{i}="{esc}"'])
