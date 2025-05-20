@@ -428,7 +428,7 @@ def seed_db_from_lua(lua_path: Path) -> dict[str, dict]:
     return rows
 
 # MAIN
-async def process_characters(characters):
+async def process_characters(characters, leaderboard_keys):
     token = get_access_token(REGION)
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -673,7 +673,7 @@ if __name__ == "__main__":
         print("[FINAL DEBUG] No characters matched.")
 
     try:
-        asyncio.run(process_characters(chars))
+        asyncio.run(process_characters(chars, leaderboard_keys))
     except CancelledError:
         # swallow any leftover “operation was canceled” so the script exits cleanly
         print(f"{YELLOW}[WARN] Top-level run was cancelled, exiting.{RESET}")
