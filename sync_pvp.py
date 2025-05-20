@@ -645,17 +645,21 @@ async def process_characters(characters):
     # make sure achiev/ exists no matter which branch we're on
     OUTFILE.parent.mkdir(parents=True, exist_ok=True)
 
+    # build a quick lookup of only those chars which actually have PvP data:
+    rows_map = {k: (g, ach) for k, g, ach in db_iter_rows()}
+
     with open(OUTFILE, "w", encoding="utf-8") as f:
         f.write(f'-- File: RatedStats/achiev/region_{REGION}.lua\n')
         f.write("local achievements = {\n")
-        # for each component, write exactly one “root” line
-        # and set all the others as its alts
-        rows = list(db_iter_rows())
         for comp in groups:
-            root, *alts = comp
-            # pull guid + ach_map for the root
-            guid = next(g for k,g,ach in rows if k == root)
-            ach_map = next(ach for k,g,ach in rows if k == root)
+            # pick the first member of this group who actually has a row
+            members_in_data = [m for m in comp if m in rows_map]
+            if not members_in_data:
+                continue
+            root = members_in_data[0]
+            alts = [m for m in members_in_data if m != root]
+
+            guid, ach_map = rows_map[root]
             alts_str = "{" + ",".join(f'"{alt}"' for alt in alts) + "}"
             parts = [f'character="{root}"', f'alts={alts_str}', f'guid={guid}']
             for i, (aid, aname) in enumerate(sorted(ach_map.items()), 1):
