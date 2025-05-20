@@ -589,6 +589,10 @@ async def process_characters(characters, leaderboard_keys):
         # -------------------------------------------------
         from itertools import combinations
 
+        # ── DEBUG: how many fingerprints / alt‐links we have
+        non_zero_links = sum(1 for links in alt_map.values() if links)
+        print(f"[DEBUG] alt_map keys={len(alt_map)}, with_links={non_zero_links}")
+
         # only fingerprint on your PvP titles in char_data:
         fingerprints = {
             key: set(ach_map.keys())
@@ -602,6 +606,11 @@ async def process_characters(characters, leaderboard_keys):
                 continue
             alt_map[a].append(b)
             alt_map[b].append(a)
+
+        # ── DEBUG: show a few sample alt_map entries
+        samples = list(alt_map.items())[:3]
+        for key, links in samples:
+            print(f"[DEBUG] alt_map sample {key!r} → {len(links)} alts")
 
     # ── now break into connected components, pick the first as “root” ──
     visited = set()
@@ -620,6 +629,15 @@ async def process_characters(characters, leaderboard_keys):
                     stack.append(v)
         visited |= comp
         groups.append(sorted(comp))     # sorted list of all chars in this group
+
+    # ── DEBUG: analyze your groups
+    from collections import Counter
+    sizes = [len(c) for c in groups]
+    print(f"[DEBUG] total_groups={len(groups)}, size_counts={Counter(sizes)}")
+    # log top 3 largest components
+    largest = sorted(groups, key=len, reverse=True)[:3]
+    for i, comp in enumerate(largest, 1):
+        print(f"[DEBUG] group#{i} size={len(comp)}, sample={comp[:5]}")
 	
     # session is closed here
     # ── DEBUG: how many components, and total chars across them
