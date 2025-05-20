@@ -589,8 +589,8 @@ async def process_characters(characters):
             shared = fingerprints[a] & fingerprints[b]
             if len(shared) < 2:                             # require ≥2 shared titles
                 continue
-         alt_map[a].append(b)
-         alt_map[b].append(a)
+             alt_map[a].append(b)
+             alt_map[b].append(a)
 
     # ── now break into connected components, pick the first as “root” ──
     visited = set()
