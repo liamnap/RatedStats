@@ -730,9 +730,15 @@ if __name__ == "__main__":
     print(f"[DEBUG] seed_db_from_lua loaded {len(old_chars)} prior entries")
     token = get_access_token(REGION)
     headers = {"Authorization": f"Bearer {token}"}
-    chars = get_characters_from_leaderboards(REGION, headers, PVP_SEASON_ID, BRACKETS)
-    leaderboard_keys = set(chars.keys())
-    chars.update(old_chars)
+    # fetch raw API characters
+    api_chars = get_characters_from_leaderboards(REGION, headers, PVP_SEASON_ID, BRACKETS)
+    # normalize into the same lower-case name-realm key that we use in db_upsert()
+    leaderboard_keys = {
+        f"{c['name'].lower()}-{c['realm'].lower()}"
+        for c in api_chars.values()
+    }
+    # merge API chars with any seeded-from-lua chars
+    chars = { **api_chars, **old_chars }
     print(f"[FINAL DEBUG] Total chars this run: {len(chars)}")
     if chars:
          pass
