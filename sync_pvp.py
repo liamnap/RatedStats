@@ -614,7 +614,10 @@ async def process_characters(characters, leaderboard_keys):
         groups.append(sorted(comp))     # sorted list of all chars in this group
 	
     # session is closed here
-    print("[DEBUG] Writing Lua file from SQLite rows …")
+    # ── DEBUG: sanity checks before Lua write
+    row_count = sum(1 for _ in db_iter_rows())
+    print(f"[DEBUG] SQLite has {row_count} character rows")
+    print("[DEBUG] Writing Lua file…")
 
     # make sure achiev/ exists no matter which branch we're on
     OUTFILE.parent.mkdir(parents=True, exist_ok=True)
@@ -655,11 +658,15 @@ async def process_characters(characters, leaderboard_keys):
         f.write("}\n\n")
         f.write(f"{REGION_VAR} = achievements\n")
 
+    # ── DEBUG: confirm how many “root” entries we just emitted
+    print(f"[DEBUG] Emitted {len(groups)} entries into region_{REGION}.lua")
+
     db.close()
 
 # RUN
 if __name__ == "__main__":
     old_chars = seed_db_from_lua(OUTFILE)
+    print(f"[DEBUG] seed_db_from_lua loaded {len(old_chars)} prior entries")
     token = get_access_token(REGION)
     headers = {"Authorization": f"Bearer {token}"}
     chars = get_characters_from_leaderboards(REGION, headers, PVP_SEASON_ID, BRACKETS)
