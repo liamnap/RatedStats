@@ -471,9 +471,9 @@ async def process_characters(characters, leaderboard_keys):
                 if not earned:
                     return
 
-                # (A) your PvP subset — always upsert, even if empty
+                # (A) build a map id→timestamp for true “fingerprint” matching
                 ach_dict = {
-                    ach["id"]: ach["achievement"]["name"]
+                    ach["id"]: ach["timestamp"]
                     for ach in earned
                     if ach["id"] in pvp_achievements
                 }
@@ -589,16 +589,17 @@ async def process_characters(characters, leaderboard_keys):
         # -------------------------------------------------
         from itertools import combinations
 
-        # only fingerprint on your PvP titles in char_data:
+        # fingerprint = set of (id, timestamp) tuples
         fingerprints = {
-            key: set(ach_map.keys())
+            key: {(aid, atime) for aid, atime in ach_map.items()}
             for key, guid, ach_map in db_iter_rows()
         }
 
         alt_map = {k: [] for k in fingerprints}
         for a, b in combinations(fingerprints, 2):
+            # now only match when they share the same id *and* timestamp
             shared = fingerprints[a] & fingerprints[b]
-            if len(shared) < 3:                             # require ≥2 shared titles
+            if len(shared) < 3:  # you can raise this threshold if needed
                 continue
             alt_map[a].append(b)
             alt_map[b].append(a)
