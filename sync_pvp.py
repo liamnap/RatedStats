@@ -478,14 +478,6 @@ async def process_characters(characters):
                 if ach_dict:
                     db_upsert(key, guid, ach_dict)
 
-                # (B) build and store the **full** achievement→timestamp map
-                full_map = {
-                    ach["id"]: ach.get("completed_timestamp", 0)
-                    for ach in earned
-                    if "completed_timestamp" in ach
-                    }
-                db_full_upsert(key, full_map)
-
         # ── multi-pass **with batching** so we never schedule 100K+ tasks at once ──
         remaining      = list(characters.values())
         # debug: show what our rate‐limits actually are
