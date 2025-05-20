@@ -678,20 +678,25 @@ async def process_characters(characters, leaderboard_keys):
         f.write("local achievements = {\n")
 
         for comp in groups:
-            # emit EVERY member (so singles + alts)
-            for root in comp:
-                alts = [m for m in comp if m != root]
+            real_leaders = [m for m in comp if m in leaderboard_keys]
+            if not real_leaders:
+                continue
+
+            root = real_leaders[0]
+            alts = [m for m in comp if m != root]
 
             guid, ach_map = rows_map[root]
-            alts_str      = "{" + ",".join(f'"{alt}"' for alt in alts) + "}"
+            alts_str = "{" + ",".join(f'"{alt}"' for alt in alts) + "}"
 
             parts = [
                 f'character="{root}"',
                 f'alts={alts_str}',
                 f'guid={guid}'
             ]
-            for i, (aid, aname) in enumerate(sorted(ach_map.items()), start=1):
-                esc = aname.replace('"', '\\"')
+            # now ach_map[aid] is a dict: {"name":…, "ts":…}
+            for i, (aid, info) in enumerate(sorted(ach_map.items()), start=1):
+                name = info["name"]
+                esc  = name.replace('"', '\\"')
                 parts.extend([f"id{i}={aid}", f'name{i}="{esc}"'])
 
             f.write("    { " + ", ".join(parts) + " },\n")
