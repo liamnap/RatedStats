@@ -663,6 +663,7 @@ async def process_characters(characters, leaderboard_keys):
     row_count = sum(1 for _ in db_iter_rows())
     print(f"[DEBUG] SQLite has {row_count} character rows")
     print("[DEBUG] Writing Lua file…")
+    print(f"[DEBUG] rows_map entries={len(rows_map)}, sample keys={list(rows_map)[:5]}")
 
     # make sure achiev/ exists no matter which branch we're on
     OUTFILE.parent.mkdir(parents=True, exist_ok=True)
@@ -678,12 +679,18 @@ async def process_characters(characters, leaderboard_keys):
         f.write("local achievements = {\n")
 
         for comp in groups:
+            # DEBUG: entering component
+            print(f"[DEBUG] writing comp of size {len(comp)}")
+
             real_leaders = [m for m in comp if m in leaderboard_keys]
             if not real_leaders:
                 continue
 
             root = real_leaders[0]
             alts = [m for m in comp if m != root]
+
+            # DEBUG: root we’ll write
+            print(f"[DEBUG] writing entry for root {root}")
 
             guid, ach_map = rows_map[root]
             alts_str = "{" + ",".join(f'"{alt}"' for alt in alts) + "}"
@@ -693,7 +700,6 @@ async def process_characters(characters, leaderboard_keys):
                 f'alts={alts_str}',
                 f'guid={guid}'
             ]
-            # now ach_map[aid] is a dict: {"name":…, "ts":…}
             for i, (aid, info) in enumerate(sorted(ach_map.items()), start=1):
                 name = info["name"]
                 esc  = name.replace('"', '\\"')
