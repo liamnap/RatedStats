@@ -481,7 +481,7 @@ async def process_characters(characters, leaderboard_keys):
                 ts = ach.get("completed_timestamp")
                 if ts is None:
                     # DEBUG: show you exactly what's coming back
-                    print(f"{YELLOW}[DEBUG] no completed_timestamp for {key} ach {aid}{RESET}")
+                    # print(f"{YELLOW}[DEBUG] no completed_timestamp for {key} ach {aid}{RESET}")
                 ach_dict[aid] = {"name": ach["achievement"]["name"], "ts": ts}
 
                 db_upsert(key, guid, ach_dict)
@@ -492,8 +492,8 @@ async def process_characters(characters, leaderboard_keys):
         remaining      = list(characters.values())
         # debug: show what our rate‐limits actually are
         print(f"[DEBUG] Rate limits: {per_sec.max_calls}/sec, {per_hour.max_calls}/{per_hour.period}s")
-        retry_interval = 60     # seconds before each retry pass
-        BATCH_SIZE     = 50000   # tweak as needed—keeps the loop sane
+        retry_interval = 10     # seconds before each retry pass
+        BATCH_SIZE     = 10000   # tweak as needed—keeps the loop sane
 
         while remaining:
             retry_list = []
