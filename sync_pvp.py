@@ -443,7 +443,7 @@ async def process_characters(characters, leaderboard_keys):
         print(f"[DEBUG] PvP keywords loaded: {len(pvp_achievements)}")
 
         if REGION == "us":
-            SEM_CAPACITY = min(50, per_sec.max_calls)
+            SEM_CAPACITY = min(25, per_sec.max_calls)
         else:
             SEM_CAPACITY = min(100, per_sec.max_calls)
         
