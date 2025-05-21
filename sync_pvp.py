@@ -101,7 +101,7 @@ class RateLimiter:
     def __init__(self, max_calls: int, period: float):
         # token-bucket enforcement
         self.capacity  = max_calls            # bucket size
-        self.tokens    = max_calls            # current tokens
+        self.tokens    = 0                    # current tokens
         self.fill_rate = max_calls / period   # tokens per second
         self.timestamp = time.monotonic()     # last refill check
 
