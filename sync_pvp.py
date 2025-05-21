@@ -530,24 +530,16 @@ async def process_characters(characters, leaderboard_keys):
             # per-pass retry bucket
             retry_dict: dict[str, dict] = {}
 
-            # if our 429 retry queue is blowing up, back off entirely for 5 min
-            if HTTP_429_QUEUED > 1000:
-                print(f"{YELLOW}[INFO] 429 queue size {HTTP_429_QUEUED} > 1000; pausing for 5 minutes{RESET}")
-                # let any in-flight tasks from the last batch finish...
-                await asyncio.sleep(300)
-                # clear the counter so we don’t immediately re-enter this pause
-                HTTP_429_QUEUED = 0
+            # prepare this pass’s retry bucket
+            retry_dict: dict[str, dict] = {}
 
-            # process in batches of BATCH_SIZE, but back off mid-loop if 429s spike
+            # process in batches of BATCH_SIZE, pausing before each if 429s have piled up
             total_batches = (len(remaining) + BATCH_SIZE - 1) // BATCH_SIZE
             for batch_num, offset in enumerate(range(0, len(remaining), BATCH_SIZE), start=1):
-                # — if our 429 retry queue is blowing up mid-run, pause before starting this batch —
                 if HTTP_429_QUEUED > 1000:
                     print(f"{YELLOW}[INFO] 429 queue size {HTTP_429_QUEUED} > 1000; pausing for 5 minutes{RESET}")
-                    # let in-flight tasks finish, then sleep
-                    await asyncio.sleep(300)
-                    # reset and continue
-                    HTTP_429_QUEUED = 0
+                    await asyncio.sleep(300)        # let in-flight finish then sleep
+                    HTTP_429_QUEUED = 0             # reset counter before resuming
                 batch = remaining[offset:offset + BATCH_SIZE]
  
                 for finished in as_completed(tasks):
