@@ -479,9 +479,9 @@ async def process_characters(characters, leaderboard_keys):
                     continue
                 # the JSON field is "completed_timestamp"
                 ts = ach.get("completed_timestamp")
-                if ts is None:
+                if ts is None and aid is not 9434:
                     # DEBUG: show you exactly what's coming back
-                    # print(f"{YELLOW}[DEBUG] no completed_timestamp for {key} ach {aid}{RESET}")
+                    print(f"{YELLOW}[DEBUG] no completed_timestamp for {key} ach {aid}{RESET}")
                 ach_dict[aid] = {"name": ach["achievement"]["name"], "ts": ts}
 
                 db_upsert(key, guid, ach_dict)
