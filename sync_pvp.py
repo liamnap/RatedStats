@@ -496,7 +496,7 @@ async def process_characters(characters, leaderboard_keys):
         BATCH_SIZE     = 10000   # tweak as needed—keeps the loop sane
 
         while remaining:
-            retry_list = []
+            retry_dict: dict[str, dict] = {}
 
             # process in batches of BATCH_SIZE
             total_batches = (len(remaining) + BATCH_SIZE - 1) // BATCH_SIZE
@@ -510,7 +510,9 @@ async def process_characters(characters, leaderboard_keys):
                     except CancelledError:
                         continue
                     except RetryCharacter as rc:
-                        retry_list.append(rc.char)
+                        # dedupe by key ("name-realm")
+                        key = f"{rc.char['name']}-{rc.char['realm']}"
+                        retry_dict[key] = rc.char
                     except Exception as e:
                         print(f"{RED}[ERROR] Character task failed: {e}{RESET}")
                         continue
@@ -578,10 +580,10 @@ async def process_characters(characters, leaderboard_keys):
             # ── drop cached JSON to keep RAM flat ──
             url_cache.clear()
 
-            if retry_list:
-                print(f"{YELLOW}[INFO] Retrying {len(retry_list)} after {retry_interval}s{RESET}")
+            if retry_dict:
+                print(f"{YELLOW}[INFO] Retrying {len(retry_dict)} unique chars after {retry_interval}s{RESET}")
                 await asyncio.sleep(retry_interval)
-                remaining = retry_list
+                remaining = list(retry_dict.values())
             else:
                 break
 
