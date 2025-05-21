@@ -220,7 +220,11 @@ def get_characters_from_leaderboards(region, headers, season_id, brackets):
 # Battle.net hard caps at ~20 req/s *per public IP* and ~100 k req/day.
 # Four runners share the same IP, so stay conservative.
 NUM_RUNNERS = 4
-per_sec  = RateLimiter(100, 1)
+if REGION == "us":
+    per_sec = RateLimiter(50, 1)
+else:
+    per_sec  = RateLimiter(100, 1)
+    
 per_hour = RateLimiter(1_500_000, 3600)
 url_cache: dict[str, dict] = {}                   # simple in-memory GET cache
 # ------------------------------------------------------------------------
