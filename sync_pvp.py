@@ -112,7 +112,6 @@ class RateLimiter:
             await asyncio.sleep(wait)
             now = asyncio.get_event_loop().time()
             self.calls = [t for t in self.calls if now - t < self.period]
-        self.calls.append(now)
 
 # AUTH
 def get_access_token(region):
@@ -219,12 +218,10 @@ def get_characters_from_leaderboards(region, headers, season_id, brackets):
 # --- Rate-limit configuration -------------------------------------------
 # Battle.net hard caps at ~20 req/s *per public IP* and ~100 k req/day.
 # Four runners share the same IP, so stay conservative.
-NUM_RUNNERS = 4
-if REGION == "us":
-    per_sec = RateLimiter(50, 1)
-else:
-    per_sec  = RateLimiter(100, 1)
-    
+REGION_CAP = 50 if REGION=="us" else 100
+per_sec = RateLimiter(REGION_CAP, 1)
+SEM_CAPACITY = REGION_CAP  # or lower if you like
+
 per_hour = RateLimiter(1_500_000, 3600)
 url_cache: dict[str, dict] = {}                   # simple in-memory GET cache
 # ------------------------------------------------------------------------
@@ -446,11 +443,6 @@ async def process_characters(characters, leaderboard_keys):
         pvp_achievements = await get_pvp_achievements(session, headers)
         print(f"[DEBUG] PvP keywords loaded: {len(pvp_achievements)}")
 
-        if REGION == "us":
-            SEM_CAPACITY = min(25, per_sec.max_calls)
-        else:
-            SEM_CAPACITY = min(100, per_sec.max_calls)
-        
         sem = asyncio.Semaphore(SEM_CAPACITY)
         total = len(characters)
         completed = 0
