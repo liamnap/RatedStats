@@ -442,7 +442,11 @@ async def process_characters(characters, leaderboard_keys):
         pvp_achievements = await get_pvp_achievements(session, headers)
         print(f"[DEBUG] PvP keywords loaded: {len(pvp_achievements)}")
 
-        SEM_CAPACITY = 50                 
+	    if REGION == "us":
+            SEM_CAPACITY = 25
+        else
+            SEM_CAPACITY = 50
+        
         sem = asyncio.Semaphore(SEM_CAPACITY)
         total = len(characters)
         completed = 0
