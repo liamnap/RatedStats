@@ -468,6 +468,11 @@ async def process_characters(characters, leaderboard_keys):
         pvp_achievements = await get_pvp_achievements(session, headers)
         print(f"[DEBUG] PvP keywords loaded: {len(pvp_achievements)}")
 
+        # === reset rate‐limiter bucket so we don't get an initial flood ===
+        now = asyncio.get_event_loop().time()
+        per_sec.tokens    = 0
+        per_sec.timestamp = now
+        per_sec.calls.clear()
         sem = asyncio.Semaphore(SEM_CAPACITY)
         total = len(characters)
         completed = 0
