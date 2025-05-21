@@ -610,7 +610,7 @@ async def process_characters(characters, leaderboard_keys):
         for a, b in combinations(fingerprints, 2):
             # now only match when they share the same id *and* timestamp
             shared = fingerprints[a] & fingerprints[b]
-            if len(shared) < 3:  # you can raise this threshold if needed
+            if len(shared) < 5:  # you can raise this threshold if needed
                 continue
             alt_map[a].append(b)
             alt_map[b].append(a)
