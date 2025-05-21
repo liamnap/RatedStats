@@ -105,32 +105,36 @@ class RateLimiter:
         self.fill_rate = max_calls / period   # tokens per second
         self.timestamp = time.monotonic()     # last refill check
 
+        # serialize acquires so bucket logic is safe under concurrency
+        self._lock = asyncio.Lock()
+
         # metrics (for your existing heartbeat debug)
         self.max_calls = max_calls            # alias for capacity
         self.period    = period               # window length (s)
         self.calls     = []                   # timestamp list for rolling-window rate
 
     async def acquire(self):
-        # refill token bucket
-        now     = time.monotonic()
-        elapsed = now - self.timestamp
-        self.timestamp = now
-        self.tokens    = min(self.capacity, self.tokens + elapsed * self.fill_rate)
-
-        # if bucket empty, wait until at least 1 token is refilled
-        if self.tokens < 1:
-            wait_time = (1 - self.tokens) / self.fill_rate
-            await asyncio.sleep(wait_time)
-            now            = time.monotonic()
+        async with self._lock:
+            # refill token bucket
+            now     = time.monotonic()
+            elapsed = now - self.timestamp
             self.timestamp = now
-            self.tokens    = 1   # freshly refilled
+            self.tokens    = min(self.capacity, self.tokens + elapsed * self.fill_rate)
 
-        # consume it
-        self.tokens -= 1
+            # if empty, wait exactly until 1 token is refilled
+            if self.tokens < 1:
+                wait_time = (1 - self.tokens) / self.fill_rate
+                await asyncio.sleep(wait_time)
+                now            = time.monotonic()
+                self.timestamp = now
+                self.tokens    = 1
 
-        # record for your sec_rate metric
-        self.calls = [t for t in self.calls if now - t < self.period]
-        self.calls.append(now)
+            # consume the token
+            self.tokens -= 1
+
+            # update your sliding-window metric for heartbeats
+            self.calls = [t for t in self.calls if now - t < self.period]
+            self.calls.append(now)
 
 # AUTH
 def get_access_token(region):
