@@ -524,7 +524,7 @@ async def process_characters(characters, leaderboard_keys):
         # debug: show what our rate‐limits actually are
         print(f"[DEBUG] Rate limits: {per_sec.max_calls}/sec, {per_hour.max_calls}/{per_hour.period}s")
         retry_interval = 10     # seconds before each retry pass
-        BATCH_SIZE     = 10000   # tweak as needed—keeps the loop sane
+        BATCH_SIZE     = 2500   # tweak as needed—keeps the loop sane
 
         while remaining:
             # per-pass retry bucket
@@ -537,9 +537,9 @@ async def process_characters(characters, leaderboard_keys):
             total_batches = (len(remaining) + BATCH_SIZE - 1) // BATCH_SIZE
             for batch_num, offset in enumerate(range(0, len(remaining), BATCH_SIZE), start=1):
                 if HTTP_429_QUEUED > 1000:
-                    print(f"{YELLOW}[INFO] 429 queue size {HTTP_429_QUEUED} > 1000; pausing for 5 minutes{RESET}")
+                    print(f"[{ts}] {YELLOW}[INFO] 429 queue size {HTTP_429_QUEUED} > 1000; pausing for 5 minutes{RESET}")
                     await asyncio.sleep(300)        # let in-flight finish then sleep
-                    HTTP_429_QUEUED = 0             # reset counter before resuming
+#                    HTTP_429_QUEUED = 0             # reset counter before resuming
                 batch = remaining[offset:offset + BATCH_SIZE]
 
                 # ◀️ schedule these before awaiting
