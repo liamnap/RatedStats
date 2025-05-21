@@ -105,13 +105,16 @@ class RateLimiter:
 
     async def acquire(self):
         now = asyncio.get_event_loop().time()
-        # drop old calls outside our window
+        # purge any timestamps older than our window
         self.calls = [t for t in self.calls if now - t < self.period]
         if len(self.calls) >= self.max_calls:
+            # wait until the oldest token expires
             wait = self.period - (now - self.calls[0])
             await asyncio.sleep(wait)
             now = asyncio.get_event_loop().time()
             self.calls = [t for t in self.calls if now - t < self.period]
+        # consume a slot—this guarantees you never exceed max_calls in `period`
+        self.calls.append(now)
 
 # AUTH
 def get_access_token(region):
@@ -237,7 +240,9 @@ async def fetch_with_rate_limit(session, url, headers, max_retries: int = 5):
         return url_cache[url]
     # --------------------------------------------------------------------
 
-    await asyncio.gather(per_sec.acquire(), per_hour.acquire())
+    # throttle *before* we actually hit the network
+    await per_sec.acquire()
+    await per_hour.acquire()
 
     for attempt in range(1, max_retries + 1):
         try:
