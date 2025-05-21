@@ -99,22 +99,32 @@ LOCALE = LOCALES.get(REGION, "en_US")
 
 class RateLimiter:
     def __init__(self, max_calls: int, period: float):
-        self.max_calls = max_calls
-        self.period = period
-        self.calls = []
+        # capacity = tokens that can be held
+        self.capacity  = max_calls
+        # how many tokens we currently have
+        self.tokens    = max_calls
+        # refill rate = tokens per second
+        self.fill_rate = max_calls / period
+        # last timestamp we refilled at
+        self.timestamp = asyncio.get_event_loop().time()
 
     async def acquire(self):
         now = asyncio.get_event_loop().time()
-        # purge any timestamps older than our window
-        self.calls = [t for t in self.calls if now - t < self.period]
-        if len(self.calls) >= self.max_calls:
-            # wait until the oldest token expires
-            wait = self.period - (now - self.calls[0])
-            await asyncio.sleep(wait)
-            now = asyncio.get_event_loop().time()
-            self.calls = [t for t in self.calls if now - t < self.period]
-        # consume a slot—this guarantees you never exceed max_calls in `period`
-        self.calls.append(now)
+        # refill based on time elapsed
+        elapsed = now - self.timestamp
+        self.timestamp = now
+        self.tokens    = min(self.capacity, self.tokens + elapsed * self.fill_rate)
+
+        # if no tokens are available, sleep until one has refilled
+        if self.tokens < 1:
+            wait_time = (1 - self.tokens) / self.fill_rate
+            await asyncio.sleep(wait_time)
+            # after sleeping, reset timestamp and drain the token
+            self.timestamp = asyncio.get_event_loop().time()
+            self.tokens    = 0
+        else:
+            # consume one token immediately
+            self.tokens -= 1
 
 # AUTH
 def get_access_token(region):
