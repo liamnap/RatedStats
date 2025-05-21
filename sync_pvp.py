@@ -525,21 +525,23 @@ async def process_characters(characters, leaderboard_keys):
         print(f"[DEBUG] Rate limits: {per_sec.max_calls}/sec, {per_hour.max_calls}/{per_hour.period}s")
         retry_interval = 10     # seconds before each retry pass
         BATCH_SIZE     = 2500   # tweak as needed—keeps the loop sane
+        # remember how many 429s we’d seen at the last backoff
+        prev_429_count = 0
 
         while remaining:
             # per-pass retry bucket
             retry_dict: dict[str, dict] = {}
 
-            # prepare this pass’s retry bucket
-            retry_dict: dict[str, dict] = {}
-
-            # process in batches of BATCH_SIZE, pausing before each if 429s have piled up
+            # process in batches of BATCH_SIZE, backing off whenever 1k new 429s arrive
             total_batches = (len(remaining) + BATCH_SIZE - 1) // BATCH_SIZE
             for batch_num, offset in enumerate(range(0, len(remaining), BATCH_SIZE), start=1):
-                if HTTP_429_QUEUED > 1000:
-                    print(f"[{ts}] {YELLOW}[INFO] 429 queue size {HTTP_429_QUEUED} > 1000; pausing for 5 minutes{RESET}")
-                    await asyncio.sleep(300)        # let in-flight finish then sleep
-#                    HTTP_429_QUEUED = 0             # reset counter before resuming
+                # how many new 429s since last pause?
+                delta = HTTP_429_QUEUED - prev_429_count
+                if delta >= 1000:
+                    cur_time = time.strftime("%H:%M:%S", time.localtime())
+                    print(f"[{cur_time}] {YELLOW}[INFO] {delta} new 429s queued; pausing for 5 minutes{RESET}")
+                    await asyncio.sleep(300)              # let in-flight finish then sleep
+                    prev_429_count = HTTP_429_QUEUED      # checkpoint here
                 batch = remaining[offset:offset + BATCH_SIZE]
 
                 # ◀️ schedule these before awaiting
