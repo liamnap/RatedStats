@@ -527,14 +527,16 @@ async def process_characters(characters, leaderboard_keys):
         BATCH_SIZE     = 10000   # tweak as needed—keeps the loop sane
 
         while remaining:
-            # — if our 429 retry queue is blowing up, back off entirely for 5 min —
+            # per-pass retry bucket
+            retry_dict: dict[str, dict] = {}
+
+            # if our 429 retry queue is blowing up, back off entirely for 5 min
             if HTTP_429_QUEUED > 1000:
                 print(f"{YELLOW}[INFO] 429 queue size {HTTP_429_QUEUED} > 1000; pausing for 5 minutes{RESET}")
                 # let any in-flight tasks from the last batch finish...
                 await asyncio.sleep(300)
                 # clear the counter so we don’t immediately re-enter this pause
-                HTTP_429_QUEUED = 0            
-                retry_dict: dict[str, dict] = {}
+                HTTP_429_QUEUED = 0
 
             # process in batches of BATCH_SIZE
             total_batches = (len(remaining) + BATCH_SIZE - 1) // BATCH_SIZE
