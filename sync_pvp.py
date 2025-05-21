@@ -241,7 +241,7 @@ def get_characters_from_leaderboards(region, headers, season_id, brackets):
 # --- Rate-limit configuration -------------------------------------------
 # Battle.net hard caps at ~20 req/s *per public IP* and ~100 k req/day.
 # Four runners share the same IP, so stay conservative.
-REGION_CAP = 50 if REGION=="us" else 100
+REGION_CAP = 50 if REGION in ("us", "eu") else 100
 per_sec = RateLimiter(REGION_CAP, 1)
 SEM_CAPACITY = REGION_CAP  # or lower if you like
 
