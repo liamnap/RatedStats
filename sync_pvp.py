@@ -99,32 +99,38 @@ LOCALE = LOCALES.get(REGION, "en_US")
 
 class RateLimiter:
     def __init__(self, max_calls: int, period: float):
-        # capacity = tokens that can be held
-        self.capacity  = max_calls
-        # how many tokens we currently have
-        self.tokens    = max_calls
-        # refill rate = tokens per second
-        self.fill_rate = max_calls / period
-        # last timestamp we refilled at
-        self.timestamp = asyncio.get_event_loop().time()
+        # token-bucket enforcement
+        self.capacity  = max_calls            # bucket size
+        self.tokens    = max_calls            # current tokens
+        self.fill_rate = max_calls / period   # tokens per second
+        self.timestamp = time.monotonic()     # last refill check
+
+        # metrics (for your existing heartbeat debug)
+        self.max_calls = max_calls            # alias for capacity
+        self.period    = period               # window length (s)
+        self.calls     = []                   # timestamp list for rolling-window rate
 
     async def acquire(self):
-        now = asyncio.get_event_loop().time()
-        # refill based on time elapsed
+        # refill token bucket
+        now     = time.monotonic()
         elapsed = now - self.timestamp
         self.timestamp = now
         self.tokens    = min(self.capacity, self.tokens + elapsed * self.fill_rate)
 
-        # if no tokens are available, sleep until one has refilled
+        # if bucket empty, wait until at least 1 token is refilled
         if self.tokens < 1:
             wait_time = (1 - self.tokens) / self.fill_rate
             await asyncio.sleep(wait_time)
-            # after sleeping, reset timestamp and drain the token
-            self.timestamp = asyncio.get_event_loop().time()
-            self.tokens    = 0
-        else:
-            # consume one token immediately
-            self.tokens -= 1
+            now            = time.monotonic()
+            self.timestamp = now
+            self.tokens    = 1   # freshly refilled
+
+        # consume it
+        self.tokens -= 1
+
+        # record for your sec_rate metric
+        self.calls = [t for t in self.calls if now - t < self.period]
+        self.calls.append(now)
 
 # AUTH
 def get_access_token(region):
