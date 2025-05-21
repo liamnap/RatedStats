@@ -444,7 +444,7 @@ async def process_characters(characters, leaderboard_keys):
 
         if REGION == "us":
             SEM_CAPACITY = 25
-	    else:
+        else:
             SEM_CAPACITY = 50
         
         sem = asyncio.Semaphore(SEM_CAPACITY)
