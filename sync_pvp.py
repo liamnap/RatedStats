@@ -541,7 +541,10 @@ async def process_characters(characters, leaderboard_keys):
                     await asyncio.sleep(300)        # let in-flight finish then sleep
                     HTTP_429_QUEUED = 0             # reset counter before resuming
                 batch = remaining[offset:offset + BATCH_SIZE]
- 
+
+                # ◀️ schedule these before awaiting
+                tasks = [create_task(process_one(c)) for c in batch]
+		    
                 for finished in as_completed(tasks):
                     try:
                         await shield(finished)
