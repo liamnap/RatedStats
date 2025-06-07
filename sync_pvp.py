@@ -239,13 +239,13 @@ def get_characters_from_leaderboards(region, headers, season_id, brackets):
     return limited
 
 # --- Rate-limit configuration -------------------------------------------
-# Battle.net hard caps at ~20 req/s *per public IP* and ~100 k req/day.
+# Battle.net hard caps at unknown req/s *per public IP* and unknown req/day.
 # Four runners share the same IP, so stay conservative.
-REGION_CAP = 10 if REGION in ("us", "eu") else 100
+REGION_CAP = 20 if REGION in ("us", "eu") else 100
 per_sec = RateLimiter(REGION_CAP, 1)
 SEM_CAPACITY = REGION_CAP  # or lower if you like
 
-per_hour = RateLimiter(1_500_000, 3600)
+per_hour = RateLimiter(360_000, 3600)
 url_cache: dict[str, dict] = {}                   # simple in-memory GET cache
 # ------------------------------------------------------------------------
 
@@ -540,7 +540,7 @@ async def process_characters(characters, leaderboard_keys):
                 if delta >= 1000:
                     cur_time = time.strftime("%H:%M:%S", time.localtime())
                     print(f"[{cur_time}] {YELLOW}[INFO] {delta} new 429s queued; pausing for 5 minutes{RESET}")
-                    await asyncio.sleep(300)              # let in-flight finish then sleep
+                    await asyncio.sleep(5)              # let in-flight finish then sleep
                     prev_429_count = HTTP_429_QUEUED      # checkpoint here
                 batch = remaining[offset:offset + BATCH_SIZE]
 
