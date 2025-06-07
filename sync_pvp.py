@@ -259,7 +259,7 @@ def get_characters_from_leaderboards(region, headers, season_id, brackets):
 # --- Rate-limit configuration -------------------------------------------
 # Battle.net hard caps at unknown req/s *per public IP* and unknown req/day.
 # Four runners share the same IP, so stay conservative.
-REGION_CAP = 20 if REGION in ("us", "eu") else 100
+REGION_CAP = 10 if REGION in ("us", "eu") else 100
 per_sec = RateLimiter(REGION_CAP, 1)
 SEM_CAPACITY = REGION_CAP  # or lower if you like
 
@@ -480,7 +480,7 @@ async def process_characters(characters, leaderboard_keys):
     inserted_count = 0
 
     # 1) Fetch PvP achievements keywords
-    timeout = aiohttp.ClientTimeout(total=None)  # no socket limits
+    timeout = aiohttp.ClientTimeout(total=5)  # no socket limits
     async with aiohttp.ClientSession(timeout=timeout) as session:
         global TOTAL_CALLS
         TOTAL_CALLS = len(characters) + 1
