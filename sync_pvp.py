@@ -219,6 +219,15 @@ def get_latest_static_namespace(region):
 NAMESPACE_STATIC = get_latest_static_namespace(REGION)
 print(f"[INFO] Region: {REGION}, Locale: {LOCALE}, Static NS: {NAMESPACE_STATIC}")
 
+ # Show which API credentials are active
+ if REGION == "eu":
+     api_used = os.getenv("BLIZZARD_CLIENT_ID_EU", os.getenv("BLIZZARD_CLIENT_ID"))
+ elif REGION == "us":
+     api_used = os.getenv("BLIZZARD_CLIENT_ID_US", os.getenv("BLIZZARD_CLIENT_ID"))
+ else:
+     api_used = os.getenv("BLIZZARD_CLIENT_ID")
+ print(f"[DEBUG] Using API credentials for {REGION}: {api_used}")
+
 # CHAR LIST
 def get_characters_from_leaderboards(region, headers, season_id, brackets):
     seen = {}
