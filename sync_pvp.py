@@ -550,6 +550,12 @@ async def process_characters(characters, leaderboard_keys):
                     print(f"[{cur_time}] {YELLOW}[INFO] {delta} new 429s queued; pausing for 5 seconds{RESET}")
                     await asyncio.sleep(5)              # let in-flight finish then sleep
                     prev_429_count = HTTP_429_QUEUED      # checkpoint here
+                
+                ts_now = time.strftime("%H:%M:%S")
+                if ts_now.startswith(ts_now[:2] + ":00:"):
+                    print(f"[{ts_now}] [INFO] Start of new hour — sleeping 10 minutes to prevent hitting API hourly cap.")
+                    await asyncio.sleep(600)
+                
                 batch = remaining[offset:offset + BATCH_SIZE]
 
                 # ◀️ schedule these before awaiting
