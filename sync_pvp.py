@@ -239,13 +239,13 @@ def get_characters_from_leaderboards(region, headers, season_id, brackets):
     return limited
 
 # --- Rate-limit configuration -------------------------------------------
-# Battle.net hard caps at unknown per public IP* and unknown req/day.
+# Battle.net hard caps at unknown req/s *per public IP* and unknown req/day.
 # Four runners share the same IP, so stay conservative.
 REGION_CAP = 20 if REGION in ("us", "eu") else 100
 per_sec = RateLimiter(REGION_CAP, 1)
 SEM_CAPACITY = REGION_CAP  # or lower if you like
 
-per_hour = RateLimiter(360_000, 3600)
+per_hour = RateLimiter(36_000, 3600)
 url_cache: dict[str, dict] = {}                   # simple in-memory GET cache
 # ------------------------------------------------------------------------
 
