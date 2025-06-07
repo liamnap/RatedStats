@@ -274,6 +274,13 @@ async def fetch_with_rate_limit(session, url, headers, max_retries: int = 5):
                     _bump_calls()
                     return data
                 if resp.status == 429:
+                    print(f"[{ts}] [DEBUG] 429 Too Many Requests")
+                    print(f"[{ts}] [DEBUG] Response Headers: {dict(resp.headers)}")
+                    try:
+                        text = await resp.text()
+                        print(f"[{ts}] [DEBUG] Response Body: {text}")  # full untruncated body
+                    except Exception as e:
+                        print(f"[{ts}] [DEBUG] Failed to read 429 response body: {e}")
                     # track & re-queue on next sweep
                     global HTTP_429_QUEUED
                     HTTP_429_QUEUED += 1
