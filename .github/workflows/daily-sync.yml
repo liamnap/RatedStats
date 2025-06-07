@@ -38,6 +38,10 @@ jobs:
         env:
           BLIZZARD_CLIENT_ID:     ${{ secrets.BLIZZARD_CLIENT_ID }}
           BLIZZARD_CLIENT_SECRET: ${{ secrets.BLIZZARD_CLIENT_SECRET }}
+          BLIZZARD_CLIENT_ID_EU:     ${{ secrets.BLIZZARD_CLIENT_ID_EU }}
+          BLIZZARD_CLIENT_SECRET_EU: ${{ secrets.BLIZZARD_CLIENT_SECRET_EU }}
+          BLIZZARD_CLIENT_ID_US:     ${{ secrets.BLIZZARD_CLIENT_ID_US }}
+          BLIZZARD_CLIENT_SECRET_US: ${{ secrets.BLIZZARD_CLIENT_SECRET_US }}
           REGION:                 ${{ matrix.region }}
         run: python sync_pvp.py
 
