@@ -138,16 +138,16 @@ class RateLimiter:
 
 # AUTH
 def get_access_token(region):
-    # Optional override for specific regions
-    if region == "eu":
-        client_id = os.environ.get("BLIZZARD_CLIENT_ID_EU", os.environ["BLIZZARD_CLIENT_ID"])
-        client_secret = os.environ.get("BLIZZARD_CLIENT_SECRET_EU", os.environ["BLIZZARD_CLIENT_SECRET"])
-    elif region == "us":
-        client_id = os.environ.get("BLIZZARD_CLIENT_ID_US", os.environ["BLIZZARD_CLIENT_ID"])
-        client_secret = os.environ.get("BLIZZARD_CLIENT_SECRET_US", os.environ["BLIZZARD_CLIENT_SECRET"])
+    if region == "eu" and os.getenv("BLIZZARD_CLIENT_ID_EU") and os.getenv("BLIZZARD_CLIENT_SECRET_EU"):
+        client_id = os.getenv("BLIZZARD_CLIENT_ID_EU")
+        client_secret = os.getenv("BLIZZARD_CLIENT_SECRET_EU")
+    elif region == "us" and os.getenv("BLIZZARD_CLIENT_ID_US") and os.getenv("BLIZZARD_CLIENT_SECRET_US"):
+        client_id = os.getenv("BLIZZARD_CLIENT_ID_US")
+        client_secret = os.getenv("BLIZZARD_CLIENT_SECRET_US")
     else:
-        client_id = os.environ["BLIZZARD_CLIENT_ID"]
-        client_secret = os.environ["BLIZZARD_CLIENT_SECRET"]
+        client_id = os.getenv("BLIZZARD_CLIENT_ID")
+        client_secret = os.getenv("BLIZZARD_CLIENT_SECRET")
+
     url = f"https://us.battle.net/oauth/token"
     resp = requests.post(
         url,
@@ -220,12 +220,13 @@ NAMESPACE_STATIC = get_latest_static_namespace(REGION)
 print(f"[INFO] Region: {REGION}, Locale: {LOCALE}, Static NS: {NAMESPACE_STATIC}")
 
 # Show which API credentials are active
-if REGION == "eu":
-    api_used = os.getenv("BLIZZARD_CLIENT_ID_EU", os.getenv("BLIZZARD_CLIENT_ID"))
-elif REGION == "us":
-    api_used = os.getenv("BLIZZARD_CLIENT_ID_US", os.getenv("BLIZZARD_CLIENT_ID"))
+if REGION == "eu" and os.getenv("BLIZZARD_CLIENT_ID_EU"):
+    api_used = os.getenv("BLIZZARD_CLIENT_ID_EU")
+elif REGION == "us" and os.getenv("BLIZZARD_CLIENT_ID_US"):
+    api_used = os.getenv("BLIZZARD_CLIENT_ID_US")
 else:
     api_used = os.getenv("BLIZZARD_CLIENT_ID")
+
 print(f"[DEBUG] Using API credentials for {REGION}: …{api_used[-6:]}")
 
 # CHAR LIST
