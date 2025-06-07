@@ -226,7 +226,7 @@ elif REGION == "us":
     api_used = os.getenv("BLIZZARD_CLIENT_ID_US", os.getenv("BLIZZARD_CLIENT_ID"))
 else:
     api_used = os.getenv("BLIZZARD_CLIENT_ID")
-print(f"[DEBUG] Using API credentials for {REGION}: {api_used}")
+print(f"[DEBUG] Using API credentials for {REGION}: …{api_used[-6:]}")
 
 # CHAR LIST
 def get_characters_from_leaderboards(region, headers, season_id, brackets):
