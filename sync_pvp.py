@@ -539,8 +539,8 @@ async def process_characters(characters, leaderboard_keys):
                 delta = HTTP_429_QUEUED - prev_429_count
                 if delta >= 1000:
                     cur_time = time.strftime("%H:%M:%S", time.localtime())
-                    print(f"[{cur_time}] {YELLOW}[INFO] {delta} new 429s queued; pausing for 5 minutes{RESET}")
-                    await asyncio.sleep(300)              # let in-flight finish then sleep
+                    print(f"[{cur_time}] {YELLOW}[INFO] {delta} new 429s queued; pausing for 5 seconds{RESET}")
+                    await asyncio.sleep(5)              # let in-flight finish then sleep
                     prev_429_count = HTTP_429_QUEUED      # checkpoint here
                 batch = remaining[offset:offset + BATCH_SIZE]
 
