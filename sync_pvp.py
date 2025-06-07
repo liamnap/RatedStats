@@ -138,8 +138,16 @@ class RateLimiter:
 
 # AUTH
 def get_access_token(region):
-    client_id = os.environ["BLIZZARD_CLIENT_ID"]
-    client_secret = os.environ["BLIZZARD_CLIENT_SECRET"]
+    # Optional override for specific regions
+    if region == "eu":
+        client_id = os.environ.get("BLIZZARD_CLIENT_ID_EU", os.environ["BLIZZARD_CLIENT_ID"])
+        client_secret = os.environ.get("BLIZZARD_CLIENT_SECRET_EU", os.environ["BLIZZARD_CLIENT_SECRET"])
+    elif region == "us":
+        client_id = os.environ.get("BLIZZARD_CLIENT_ID_US", os.environ["BLIZZARD_CLIENT_ID"])
+        client_secret = os.environ.get("BLIZZARD_CLIENT_SECRET_US", os.environ["BLIZZARD_CLIENT_SECRET"])
+    else:
+        client_id = os.environ["BLIZZARD_CLIENT_ID"]
+        client_secret = os.environ["BLIZZARD_CLIENT_SECRET"]
     url = f"https://us.battle.net/oauth/token"
     resp = requests.post(
         url,
@@ -274,14 +282,6 @@ async def fetch_with_rate_limit(session, url, headers, max_retries: int = 5):
                     _bump_calls()
                     return data
                 if resp.status == 429:
-                    debug_ts = datetime.datetime.utcnow().strftime("%H:%M:%S")
-                    print(f"[{debug_ts}] [DEBUG] 429 Too Many Requests")
-                    print(f"[{debug_ts}] [DEBUG] Response Headers: {dict(resp.headers)}")
-                    try:
-                        text = await resp.text()
-                        print(f"[{debug_ts}] [DEBUG] Response Body: {text}")
-                    except Exception as e:
-                        print(f"[{debug_ts}] [DEBUG] Failed to read 429 response body: {e}")
                     # track & re-queue on next sweep
                     global HTTP_429_QUEUED
                     HTTP_429_QUEUED += 1
