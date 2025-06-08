@@ -259,7 +259,7 @@ def get_characters_from_leaderboards(region, headers, season_id, brackets):
 # --- Rate-limit configuration -------------------------------------------
 # Battle.net hard caps at unknown req/s *per public IP* and unknown req/day.
 # Four runners share the same IP, so stay conservative.
-REGION_CAP = 10 if REGION in ("us", "eu") else 100
+REGION_CAP = 9 if REGION in ("us", "eu") else 100
 per_sec = RateLimiter(REGION_CAP, 1)
 SEM_CAPACITY = REGION_CAP  # or lower if you like
 
@@ -561,11 +561,6 @@ async def process_characters(characters, leaderboard_keys):
                     await asyncio.sleep(5)              # let in-flight finish then sleep
                     prev_429_count = HTTP_429_QUEUED      # checkpoint here
                 
-                ts_now = time.strftime("%H:%M:%S")
-                if ts_now.startswith(ts_now[:2] + ":00:"):
-                    print(f"[{ts_now}] [INFO] Start of new hour — sleeping 10 minutes to prevent hitting API hourly cap.", flush=True)
-                    await asyncio.sleep(600)
-                
                 batch = remaining[offset:offset + BATCH_SIZE]
 
                 # ◀️ schedule these before awaiting
@@ -624,6 +619,11 @@ async def process_characters(characters, leaderboard_keys):
                                     eta_when = eta_when_dt.strftime("%Y-%m-%d %H:%MZ")
                                 except OverflowError:
                                     eta_when = ">9999-01-01"
+
+                            ts_now = time.strftime("%H:%M:%S")
+                            if ts_now.startswith(ts_now[:2] + ":00:"):
+                                print(f"[{ts_now}] [INFO] Start of new hour — sleeping 1 minutes to prevent hitting API hourly cap.", flush=True)
+                                await asyncio.sleep(60)
 
                             print(
                                 f"[{ts}] [HEARTBEAT] batch {batch_num}/{total_batches} | "
