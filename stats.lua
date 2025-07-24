@@ -33,18 +33,25 @@ end
 
 -- Fallback to most recent valid match in season if Today has no games
 local function GetMostRecentEnemyMMR(matches)
-	local seasonStart = RSTATS:GetCurrentSeasonStart()
-	local seasonFinish = RSTATS:GetCurrentSeasonFinish()
+    local seasonStart  = RSTATS:GetCurrentSeasonStart()
+    local seasonFinish = RSTATS:GetCurrentSeasonFinish()
 
-	for _, match in ipairs(matches) do
-		if not match.isInitial and match.endTime and (match.endTime >= seasonStart and match.endTime < seasonFinish) then
-			local mmr = tonumber(match.enemyMMR)
-			if mmr then
-				return mmr
-			end
-		end
-	end
-	return nil
+    -- Walk the list _backwards_ so you pick the newest match first
+    for i = #matches, 1, -1 do
+        local match = matches[i]
+        if not match.isInitial 
+          and match.endTime 
+          and match.endTime >= seasonStart 
+          and match.endTime < seasonFinish 
+        then
+            local mmr = tonumber(match.enemyMMR)
+            if mmr then
+                return mmr
+            end
+        end
+    end
+
+    return nil
 end
 
 -- Main stats calculation
@@ -122,12 +129,12 @@ function Stats.CalculateSummary(filteredMatches, fullMatchHistory, bracketID)
 
     local enemyMMR = GetMostRecentEnemyMMR(fullMatchHistory)
     local tierRanges = {
-        [7] = {303, 304, 305, 306, 307, 308, 309, 310, 311, 312}, -- Solo Shuffle
-        [1] = {1, 2, 3, 4, 5, 6, 7, 8, 9},           -- 2v2
-        [2] = {11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21}, -- 3v3
-        [4] = {206, 207, 208, 209, 210, 211, 212, 213, 214}, -- RBG
-        [9] = {383, 384, 385, 386, 387, 389, 390, 391}, -- Solo RBG
-    }
+      [7] = {312,  311,  310,  309,  307,  306,  305,  304,  303}, -- Solo Shuffle
+      [1] = {1,   2,   206,  3,  207,  4,  208,  5,  6},         -- 2v2
+      [2] = {8,  9,  210,  11,  210,  12,  211,  13,  14}, -- 3v3
+      [4] = {16,  17,  212,  18,  213,  19,  214,  20,  21},      -- RBG
+      [9] = {383, 384, 385, 386, 387, 391, 390, 389, 388},           -- Solo RBG
+   }
     local enemyBracketInfo = enemyMMR and GetTierByMMR(enemyMMR, tierRanges[bracketID] or {}) or nil
 
     return {

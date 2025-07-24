@@ -96,6 +96,84 @@ SlashCmdList["RATEDSTATSDEBUG"] = function()
     end
 end
 
+SLASH_SHOWSPELLS1 = "/showspells"
+SlashCmdList["SHOWSPELLS"] = function()
+    local tabs = {
+      { name = "SoloShuffle", tableKey = "SoloShuffleHistory" },
+      { name = "2v2",         tableKey = "v2History"         },
+      { name = "3v3",         tableKey = "v3History"         },
+      { name = "RBG",         tableKey = "RBGHistory"        },
+      { name = "SoloRBG",     tableKey = "SoloRBGHistory"    },
+    }
+
+    for _, info in ipairs(tabs) do
+        local history = Database[info.tableKey]
+        if history and #history > 0 then
+            DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00---- "..info.name.." ----|r")
+            for _, matchEntry in ipairs(history) do
+                local when = date("%Y-%m-%d %H:%M:%S", matchEntry.timestamp or time())
+
+                for _, stats in ipairs(matchEntry.playerStats or {}) do
+                    -- 1) Tracked spells
+                    local spells = stats.playerTrackedSpells or {}
+                    if #spells > 0 then
+                        DEFAULT_CHAT_FRAME:AddMessage(
+                          ("[%s] %s → Spells:"):format( when, stats.name or "Unknown" )
+                        )
+                        for _, spellID in ipairs(spells) do
+                            -- C_Spell.GetSpellInfo(spellID) now returns a table
+                            local sinfo = C_Spell.GetSpellInfo(spellID)
+                            local sname = (type(sinfo)=="table" and sinfo.name) or sinfo or "ID:"..spellID
+                            -- new SpellInfo table has field `iconID`
+                            local iconID = (type(sinfo)=="table" and sinfo.iconID) or nil
+                            DEFAULT_CHAT_FRAME:AddMessage(
+                              ("    • %s (%d) — iconID: %s"):format(
+                                sname, spellID, iconID or "n/a"
+                              )
+                            )
+                        end
+                    end
+
+                    -- 2) Gladiator's Medallion
+                    do
+                        local medID = stats.trinketSpellID
+                        if medID and medID > 0 then
+                            local minfo = C_Spell.GetSpellInfo(medID)
+                            local mname = (type(minfo)=="table" and minfo.name) or minfo or "ID:"..medID
+                            local mid   = (type(minfo)=="table" and minfo.iconID)
+                            DEFAULT_CHAT_FRAME:AddMessage(
+                              ("    Medallion: %s (%d) — iconID: %s")
+                              :format(mname, medID, mid or "n/a")
+                            )
+                        else
+                            DEFAULT_CHAT_FRAME:AddMessage("    Medallion: none")
+                        end
+                    end
+
+                    -- 3) PvP talents 1–3
+                    for i=1,3 do
+                        local tid = stats["pvptalent"..i]
+                        if tid and tid > 0 then
+                            -- SpecializationInfo API in 10.2+
+                            local tinfo = C_SpecializationInfo.GetPvpTalentInfo(tid)
+                            local tname = tinfo and tinfo.name or "ID:"..tid
+                            local tidx  = tinfo and tinfo.icon or "n/a"
+                            DEFAULT_CHAT_FRAME:AddMessage(
+                              ("    PvP Talent %d: %s (%d) — iconID: %s")
+                              :format(i, tname, tid, tidx)
+                            )
+                        else
+                            DEFAULT_CHAT_FRAME:AddMessage(
+                              ("    PvP Talent %d: none"):format(i)
+                            )
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
 
 --------------------------------------
 -- Namespaces
@@ -119,6 +197,8 @@ local UIConfig
 local contentFrames = {}
 local scrollFrames = {}
 local scrollContents = {}
+local headerFontSize = 10
+local entryFontSize = 8
 
 Database.combatLogEvents = Database.combatLogEvents or {}
 combatLogEvents = Database.combatLogEvents
@@ -296,7 +376,13 @@ function LoadData()
 
     -- Assign the player-specific data to the local Database reference
     Database = RSTATS.Database[playerName]
-
+	
+    -- Ensure our settings table carries over (defaults to enabled)
+    Database.settings = Database.settings or {}
+    if Database.settings.achievementTracking == nil then
+        Database.settings.achievementTracking = true
+    end
+ 
     -- Ensure all necessary tables are initialized for the player
     Database.SoloShuffleHistory = Database.SoloShuffleHistory or {}
     Database.v2History = Database.v2History or {}
@@ -776,7 +862,7 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
     AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, allianceTeamScore, hordeTeamScore, roundsWon, categoryName, categoryID, damp)
 
 	-- Call CheckPlayerTalents to process talents for new matches
----	CheckPlayerTalents(playerName, true)  -- `true` indicates this is a new game and should check talents
+--	CheckPlayerTalents(playerName, true)  -- `true` indicates this is a new game and should check talents
 
     SaveData() -- Updated to call SaveData function
 end
@@ -1596,26 +1682,38 @@ local specIcons = {
     ["-"] = "-"  -- This will preserve the hyphen in the text
 }
 
-local function CreateIconWithTooltip(parentFrame, text, tooltipText, xOffset, yOffset, columnWidth, rowHeight)
-    local icon = parentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    icon:SetFont("Fonts\\FRIZQT__.TTF", 14)
-    icon:SetText(text)
-
-    -- Center in the column cell
-    local centerX = xOffset + (columnWidth / 2)
-    icon:SetPoint("CENTER", parentFrame, "TOPLEFT", centerX, yOffset - (rowHeight / 2))
-
-    icon:SetScript("OnEnter", function()
-        GameTooltip:SetOwner(icon, "ANCHOR_RIGHT")
-        GameTooltip:SetText(tooltipText, 1, 1, 1, 1, true)
-        GameTooltip:Show()
-    end)
-
-    icon:SetScript("OnLeave", function()
-        GameTooltip:Hide()
-    end)
-
-    return icon
+local function CreateIconWithTooltip(parentFrame, content, tooltipText, xOffset, yOffset, columnWidth, rowHeight, isAtlas)
+    if isAtlas then
+        -- draw a texture from an Atlas
+        local tex = parentFrame:CreateTexture(nil, "ARTWORK")
+        tex:SetSize(12, 12)
+        tex:SetPoint("CENTER", parentFrame, "TOPLEFT", xOffset + (columnWidth/2), yOffset - (rowHeight/2))
+        tex:SetAtlas(content, false)   -- `content` is your atlas name
+        tex:SetScript("OnEnter", function()
+            GameTooltip:SetOwner(tex, "ANCHOR_RIGHT")
+            GameTooltip:SetText(tooltipText, 1,1,1,1, true)
+            GameTooltip:Show()
+        end)
+        tex:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
+        return tex
+    else
+        -- existing text path
+        local icon = parentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        icon:SetFont(GetUnicodeSafeFont(), 14)
+        icon:SetText(content)         -- `content` is your text or texture-string
+        icon:SetPoint("CENTER", parentFrame, "TOPLEFT", xOffset + (columnWidth/2), yOffset - (rowHeight/2))
+        icon:SetScript("OnEnter", function()
+            GameTooltip:SetOwner(icon, "ANCHOR_RIGHT")
+            GameTooltip:SetText(tooltipText, 1,1,1,1, true)
+            GameTooltip:Show()
+        end)
+        icon:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
+        return icon
+    end
 end
 
 -- Helper function to sanitize player names by removing region suffix, but keeping the realm
@@ -2383,6 +2481,7 @@ function ToggleNestedTable(matchFrame, nestedTable, content)
 		nestedTable:SetFrameStrata("HIGH")
 		nestedTable:SetFrameLevel(22)
         local ntHeight = nestedTable:GetHeight() or 0
+		
         matchFrame:SetHeight(matchFrame.baseHeight + ntHeight + 10)
 		matchFrame:SetFrameStrata("HIGH")
 		matchFrame:SetFrameLevel(22)
@@ -2532,7 +2631,7 @@ end
 -- can reposition all rows by calling ReflowRows.
 ------------------------------------------------------------------------------
 function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltered)
-    ClearStaleMatchFrames(content)
+    ClearStaleMatchFrames(content)		-- needed for rows to not overlap
 
     -- 1) Sort history by matchID ascending
     table.sort(historyTable, function(a, b)
@@ -2552,11 +2651,17 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 	}
 	local columnOffsets = {}
 	local spacing = 8
-	local headerFont = "Fonts\\FRIZQT__.TTF"
+	local headerFont = GetUnicodeSafeFont()
 	local headerFontSize = 10
-	local headerFrameWidth = content:GetWidth() * 0.98
+	
+	if UIConfig.isCompact then
+		headerFrameWidth = content:GetWidth() * 2
+	else
+		headerFrameWidth = content:GetWidth() * 0.98
+	end
+	
 	local splitIndex = 15  -- This is where you start the second faction header set
-	local splitX = headerFrameWidth * 0.57
+	local splitX = headerFrameWidth * 0.65
 	local xOffset = 0
 	
 	local tempFS = UIParent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -2648,6 +2753,13 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 		xOffset = xOffset + width
 	end
 	
+	-- ─────── Persist offsets for paging later ───────
+     content.columnOffsets = columnOffsets
+     content.columnWidths  = columnWidths
+     content.splitIndex    = splitIndex
+	 content.splitX		   = splitX
+     -- ────────────────────────────────────────────────
+	
 	tempFS:Hide()
 
 	local columnWidths = {}
@@ -2659,9 +2771,6 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 		end
 	end
 
-    local headerFontSize = 10
-    local entryFontSize  = 8
-
 	-- -----------------------------------------------------------
 	-- Header-row ― build once, reuse; never shrink in compact view
 	-- -----------------------------------------------------------
@@ -2670,10 +2779,15 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 	
 	if not headerFrame then
 		-- First time on this tab → actually create the widgets
-		headerFrame = CreateFrame("Frame", nil, contentFrame)
+		headerFrame = CreateFrame("Frame", "HeaderFrame", contentFrame)
 		headerFrame:SetPoint("TOPLEFT", mmrLabel, "BOTTOMLEFT", 0, -30)
-	
-		local startWidth = contentFrame:GetWidth() - 20          -- full-view width
+		
+		if UIConfig.isCompact then
+			startWidth = contentFrame:GetWidth() * 2
+		else
+			startWidth = contentFrame:GetWidth() - 20          -- full-view width
+		end
+		
 		headerFrame:SetSize(startWidth, 14)
 		headerFrame.fullWidth = startWidth                       -- remember “wide” size
 	
@@ -2687,7 +2801,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 		local headerTexts = {}
 		for i, name in ipairs(headers) do
 			local h = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-			h:SetFont("Fonts\\FRIZQT__.TTF", headerFontSize)
+			h:SetFont(GetUnicodeSafeFont(), headerFontSize)
 			h:SetJustifyH("CENTER")
 			h:SetTextColor(1,1,1)
 			h:SetShadowOffset(1,-1)
@@ -2719,7 +2833,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 		end
 	
 		local placeholder = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-		placeholder:SetFont("Fonts\\FRIZQT__.TTF", 10)
+		placeholder:SetFont(GetUnicodeSafeFont(), 10)
 		placeholder:SetPoint("TOPLEFT", content.header, "BOTTOMLEFT", 0, -20)
 	
 		if isFiltered then
@@ -2741,7 +2855,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 	local anchorForRows = content.headerTexts[1]
 
     -- 5) Create a base anchor frame placed immediately below mmrLabel.
-    local baseAnchor = CreateFrame("Frame", nil, content)
+    local baseAnchor = CreateFrame("Frame", "HeadingAnchor", content)
     baseAnchor:SetSize(1, 1)
     baseAnchor:SetPoint("TOPLEFT", mmrLabel, "BOTTOMLEFT", 0, -35)
     content.baseAnchor = baseAnchor
@@ -2750,14 +2864,18 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
     for i = #historyTable, 1, -1 do
 		local match = historyTable[i]
 		local matchID = match.matchID or i
-		local parentWidth  = RatedStatsConfig:GetWidth()
-		local parentHeight = RatedStatsConfig:GetHeight()
+		local parentWidth  = UIConfig:GetWidth()
+		local parentHeight = UIConfig:GetHeight()
 		
 		if content.matchFrameByID[matchID] then
             table.insert(content.matchFrames, content.matchFrameByID[matchID])
         else
-			local matchFrame = CreateFrame("Frame", nil, nil, "BackdropTemplate")
-			matchFrame:SetSize(parentWidth * 1.06, parentHeight)  -- Initial minimal height
+			local matchFrame = CreateFrame("Frame", "MatchFrame", nil, "BackdropTemplate")
+			if UIConfig.isCompact then
+				matchFrame:SetSize(parentWidth * 2, parentHeight) -- double the width of the matchFrame in compact mode
+			else
+				matchFrame:SetSize(parentWidth * 1.06, parentHeight)  -- Width controls the offset for left of row text -- Initial minimal height
+			end
 			matchFrame:SetFrameStrata("HIGH")
 			matchFrame:SetFrameLevel(22)
 			matchFrame:SetParent(content)
@@ -2768,7 +2886,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 			local columns = formatMatch(match)
 			for j, colText in ipairs(columns) do
 				local fs = matchFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-				fs:SetFont("Fonts\\FRIZQT__.TTF", entryFontSize)
+				fs:SetFont(GetUnicodeSafeFont(), entryFontSize)
 				fs:SetJustifyH("LEFT")
 				fs:SetPoint("TOPLEFT", matchFrame, "TOPLEFT", columnOffsets[j], -2)
 				fs:SetWidth(columnWidths[j] or 60)  -- Fallback in case
@@ -2943,170 +3061,300 @@ local function SendBattleNetInvite(playerName)
     end
 end
 
--- Function to create Add Friend and Talents buttons
-local function CreateFriendAndTalentButtons(playerName, parent)
-    -- Define categoryMappings inside the function
-    local categoryMappings = {
-        { id = 7, name = "SoloShuffle", tableKey = "SoloShuffleHistory" },
-        { id = 1, name = "2v2", tableKey = "v2History" },
-        { id = 2, name = "3v3", tableKey = "v3History" },
-        { id = 4, name = "RBG", tableKey = "RBGHistory" },
-        { id = 9, name = "SoloRBG", tableKey = "SoloRBGHistory" },
-    }
-
-	local me = UnitName("player") .. "-" .. GetRealmName()
-
-    -- Create the "Add Friend" button
-    local addFriendButton = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    addFriendButton:SetSize(100, 20)
-    addFriendButton:SetPoint("TOPLEFT", parent, "TOPLEFT", 45, -60)
-    addFriendButton:SetText("Add Friend")
-
-    -- Check if the player is yourself
-    if playerName == me then
-        -- If it's the player themselves, change the button text to "Yourself"
-        addFriendButton:SetText("Yourself")
-        addFriendButton:Disable() -- Optionally disable the button to prevent clicks
-        return -- Exit early since no need to continue processing
+-- Function to for Popout Details of Name/Spec/Loadout
+-- Pop-out content + layout tweaks
+local function CreateFriendAndTalentButtons(stats, matchEntry, parent)
+    -- ----------------------------------------------------------------------------
+    -- 0) clear any old icons
+    -- ----------------------------------------------------------------------------
+    if parent.spellIcons then
+        for _, ic in ipairs(parent.spellIcons) do ic:Hide() end
     end
+    parent.spellIcons = {}
 
-    -- Get the GUID for the playerName (as playerName should include region)
-    local playerGUID
-    for _, info in ipairs(categoryMappings) do
-        local historyTable = Database[info.tableKey]
+    -- ----------------------------------------------------------------------------
+    -- A) draw the four “PvP” icons row (always)
+    -- ----------------------------------------------------------------------------
 
-        -- Check if the historyTable exists and is not empty
-        if historyTable and #historyTable > 0 then
-            -- Loop through the entries to find the matching player name and get their GUID
-            for _, entry in ipairs(historyTable) do
-                for _, stats in ipairs(entry.playerStats or {}) do
-                    if stats.name == playerName then
-                        playerGUID = stats.guid
-						bnet = stats.bnet
-                        break
-                    end
+    do
+        local topOff    = -45
+        local padding   = 4
+        local size      = 20
+
+        -- build our list: medallion, pvp1, pvp2, pvp3
+		local pvp = {}
+	
+		-- 1) grab all “Prized …” trinkets from tracked spells
+		local found = {}
+        for _, spellID in ipairs(stats.playerTrackedSpells or {}) do
+            local sinfo = C_Spell.GetSpellInfo(spellID)
+            local sname = sinfo and sinfo.name
+            if sname then
+                -- look for Insignia/Medallion/Emblem at end, or Badge of Ferocity, or Sigil anywhere
+                if sname:match("Insignia$") 
+                or sname:match("Medallion$") 
+                or sname:match("Badge$") 
+                or sname:find("Emblem$") 
+                or sname:match("Adapted") then
+                    tinsert(found, spellID)
                 end
-                if playerGUID then break end
             end
-        else
         end
+	
+		-- 2) if we found at least one, insert them all; otherwise one placeholder
+		if #found > 0 then
+			for _, id in ipairs(found) do
+				tinsert(pvp, id)
+			end
+		else
+			tinsert(pvp, "X")
+		end
+	
+		-- 3) now append the three PvP talents as before
+		for i = 1, 3 do
+			local tid = stats["pvptalent"..i]
+			if tid and tid > 0 then
+				tinsert(pvp, tid)
+			else
+				tinsert(pvp, "X")
+			end
+		end
+
+        -- center that row
+        local count   = #pvp
+        local rowW    = count*size + (count-1)*padding
+        local startX  = (parent:GetWidth() - rowW)/2
+
+		for i, eid in ipairs(pvp) do
+			local btn = CreateFrame("Button", "PlayerPvPTalentFrame", parent, "BackdropTemplate")
+			btn:SetSize(size, size)
+			btn:SetPoint("TOPLEFT", parent, "TOPLEFT",
+						startX + (i-1)*(size+padding),
+						topOff)
+		
+			-- 1) pick your texture, remember if we fell back to the red-X
+			local isTalent       = (i > 1)
+			local lookupID       = tonumber(eid)     -- will be nil for "X"
+			local tex, didFallback, fromTalentInfo
+		
+			if not lookupID then
+				-- no ID at all → hard fallback
+				tex         = "Interface\\Icons\\Achievement_PVP_P_250K.blp"
+				didFallback = true
+		
+			elseif isTalent then
+				-- PvP talents: try talent→spell first
+				local tinfo = C_SpecializationInfo.GetPvpTalentInfo(lookupID)
+				if tinfo and tinfo.spellID then
+					fromTalentInfo = true
+					tex, _         = C_Spell.GetSpellTexture(tinfo.spellID)
+				end
+				-- next try the raw talentID as a “spell”
+				if not tex then
+					tex, _        = C_Spell.GetSpellTexture(lookupID)
+				end
+				-- last resort: red-X
+				if not tex then
+					tex           = "Interface\\Icons\\Achievement_PVP_P_250K.blp"
+					didFallback   = true
+				end
+		
+			else
+				-- medallion is a normal spellID
+				tex, _         = C_Spell.GetSpellTexture(lookupID)
+				if not tex then
+					tex         = select(3, C_Spell.GetSpellInfo(lookupID))
+				end
+			end
+		
+			btn.icon = btn:CreateTexture(nil, "BACKGROUND")
+			btn.icon:SetAllPoints(btn)
+			btn.icon:SetTexture(tex)
+		
+			-- 2) tooltip
+			btn:SetScript("OnEnter", function(self)
+				GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+				if didFallback then
+					GameTooltip:AddLine("Undetected",1,0,0)
+				elseif fromTalentInfo then
+					GameTooltip:SetPvpTalent(lookupID)
+				else
+					GameTooltip:SetSpellByID(lookupID)
+				end
+				GameTooltip:Show()
+			end)
+			btn:SetScript("OnLeave", GameTooltip_Hide)
+		
+			btn:Show()
+			tinsert(parent.spellIcons, btn)
+		end
     end
 
-    -- Now check if the player is online or offline using the GUID
-    if playerGUID then
-        local accountInfo = C_BattleNet.GetAccountInfoByGUID(playerGUID)
-        if bnet then
-			addFriendButton:Show()
-		elseif accountInfo then
-            if accountInfo.isOnline then
-                -- Player is online, enable the button
-                addFriendButton:Show()
-            else
-                -- Player is offline, disable the button and show "Offline"
-                addFriendButton:Disable()
-                addFriendButton:SetText("Offline")
-            end
-        else
-            -- Player not found or unable to fetch account info
-            addFriendButton:Disable()
-            addFriendButton:SetText("Offline")
+    -- ----------------------------------------------------------------------------
+    -- B) loadout present? show that and stop
+    -- ----------------------------------------------------------------------------
+    if stats.loadout and stats.loadout ~= "" then
+        -- ensure our loadoutBox & label exist
+        if not parent.loadoutBox then
+            local eb = CreateFrame("EditBox", "PlayerLoadoutFrame", parent, "BackdropTemplate")
+            eb:SetSize(280, 40)
+            eb:SetPoint("TOP", parent, "TOP", 0, -80)
+            eb:SetFontObject(ChatFontNormal)
+            eb:SetAutoFocus(false)
+            eb:EnableMouse(true)
+            eb:SetScript("OnEscapePressed", eb.ClearFocus)
+            parent.loadoutBox = eb
+
+            local lbl = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            lbl:SetPoint("TOPLEFT", eb, "TOPLEFT", 4, 4)
+            lbl:SetText("Loadout Copy:")
+            lbl:SetFont(GetUnicodeSafeFont(), 8)
+            parent.loadoutLabel = lbl
         end
-    else
-        -- Player GUID not found, consider as offline
-        addFriendButton:Disable()
-        addFriendButton:SetText("Offline")
+
+        parent.loadoutLabel:Show()
+        parent.loadoutBox:Show()
+        parent.loadoutBox:SetText(stats.loadout)
+        parent.loadoutBox:SetFont(GetUnicodeSafeFont(), 8, "OUTLINE")
+        parent.loadoutBox:HighlightText(0)
+        parent.loadoutBox:SetCursorPosition(0)
+
+        return
     end
 
-    -- Create the "Talents" button
-    local talentsButton = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    talentsButton:SetSize(100, 20)
-    talentsButton:SetPoint("LEFT", addFriendButton, "RIGHT", 5, 0)
-    talentsButton:SetText("View Talents")
+    -- ----------------------------------------------------------------------------
+    -- C) no loadout → hide loadout UI and draw tracked-spell icons grid
+    -- ----------------------------------------------------------------------------
+    if parent.loadoutBox then parent.loadoutBox:Hide() end
+    if parent.loadoutLabel then parent.loadoutLabel:Hide() end
 
-    -- Open the Wowhead Talent URL when clicked
-    talentsButton:SetScript("OnClick", function()
-        local talentCode = GetPlayerTalentCode(playerName)  -- You’ll need to define this function to get the talent code
-        local talentURL = "https://www.wowhead.com/talent-calc/paladin/retribution/" .. talentCode .. regionString
-        print("View talents: " .. talentURL)  -- This prints to chat, can be replaced with opening the link in a browser
-    end)
+    -- gather spells (history first, then detection)
+    local spells = stats.playerTrackedSpells
+               or ((stats.guid and RSTATS.DetectedPlayerTalents[stats.guid]
+                    and RSTATS.DetectedPlayerTalents[stats.guid].playerTrackedSpells)
+                   or {})
+
+    -- grid layout
+    local leftMarg  = 20
+    local padding   = 4
+    local iconSize  = 12
+    local topStart  = -40 - (24 + padding*2)  -- push below the PvP row
+    local usableW   = parent:GetWidth() - leftMarg*2
+    local cols      = math.max(1, math.floor(usableW / (iconSize + padding)))
+
+    for idx, spellID in ipairs(spells) do
+        local row = math.floor((idx-1) / cols)
+        local col = (idx-1) % cols
+
+        local x = leftMarg + col * (iconSize + padding)
+        local y = topStart - row * (iconSize + padding)
+
+        local icon = CreateFrame("Button", "PlayerSpellsFrame", parent)
+        icon:SetSize(iconSize, iconSize)
+        icon:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+
+        local tex = (C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(spellID))
+                  or select(3, C_Spell.GetSpellInfo(spellID))
+        icon.texture = icon:CreateTexture(nil, "BACKGROUND")
+        icon.texture:SetAllPoints(icon)
+        icon.texture:SetTexture(tex)
+
+        icon:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetSpellByID(spellID)
+            GameTooltip:Show()
+        end)
+        icon:SetScript("OnLeave", GameTooltip_Hide)
+
+        tinsert(parent.spellIcons, icon)
+    end
 end
 
-local function CreateCopyNameFrame(playerName)
-    -- Create a new frame for the popup
-    local frame = CreateFrame("Frame", "CopyNameFrame", UIParent, "BackdropTemplate")
-    frame:SetSize(300, 100)  -- Adjust size as needed
-    frame:SetPoint("CENTER", UIParent, "CENTER")  -- Position in the center of the screen
+-- Pop-out frame + name box tweaks
+local function CreateCopyNameFrame(stats, matchEntry)
+    local frame = CreateFrame("Frame", "CreateCopyNameFrame", UIParent, "BackdropTemplate")
+	UIPanelWindows["CreateCopyNameFrame"] = { area = "center", pushable = 0, whileDead = true }
+	tinsert(UISpecialFrames, "CreateCopyNameFrame")
+    frame:SetSize(300, 140)
+    frame:SetPoint("CENTER")
     frame:SetFrameStrata("DIALOG")
-    frame:SetFrameLevel(200)
-
-    -- Set the background texture to the image
-    local bgTexture = frame:CreateTexture(nil, "BACKGROUND")
-    bgTexture:SetTexture("Interface\\AddOns\\RatedStats\\RatedStats.tga")  -- Path to your image
-    bgTexture:SetAllPoints(frame)  -- Make the texture fit the entire frame
-
-    -- Add a backdrop to the frame (optional, for visibility)
-    frame:SetBackdrop({
-        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+    frame:SetBackdrop{
+        bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
         edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-        tile = true, tileSize = 32, edgeSize = 32,
-        insets = { left = 8, right = 8, top = 8, bottom = 8 }
-    })
-    frame:SetBackdropColor(0, 0, 0, 1)
-    frame:SetBackdropBorderColor(0, 0, 0, 1)
+        tile     = true, tileSize = 32, edgeSize = 32,
+        insets   = {left=8,right=8,top=8,bottom=8}
+    }
+    local bg = frame:CreateTexture(nil,"BACKGROUND", nil, -1)
+    bg:SetTexture("Interface\\AddOns\\RatedStats\\RatedStats.tga")
+    bg:SetAllPoints(frame)
 
-    -- Create an EditBox inside the frame
-    local editBox = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
-    editBox:SetSize(200, 40)
-    editBox:SetPoint("CENTER", frame, "CENTER")
-    editBox:SetFont(STANDARD_TEXT_FONT, 8, "OUTLINE")
-    editBox:SetText(playerName)
-    editBox:SetFocus()  -- Automatically focus the EditBox
-    editBox:HighlightText()  -- Highlight the text for easy copying
-    editBox:SetAutoFocus(false)  -- Prevent the EditBox from losing focus
-    editBox:SetAlpha(1)
+    -- 1) Title + Name EditBox
+    local nameTitle = frame:CreateFontString(nil,"OVERLAY","GameFontNormal")
+    nameTitle:SetPoint("TOP", frame, "TOP", 0, -16)
+    nameTitle:SetText("Player Name Copy:")
+	nameTitle:SetFont(GetUnicodeSafeFont(), 8)
 
-    -- Close the frame when the user presses Escape
-    editBox:SetScript("OnEscapePressed", function() frame:Hide() end)
+    local nameBox = CreateFrame("EditBox", "CreateCopyNameFrameEditBox", frame, "BackdropTemplate")
+    nameBox:SetSize(150, 20)
+    nameBox:SetPoint("TOP", nameTitle, "BOTTOM", 0, -4)
+    nameBox:SetAutoFocus(false)
+    nameBox:SetText(stats.name)
+	nameBox:SetFont(GetUnicodeSafeFont(), 8, "OUTLINE")
+	nameBox:SetJustifyH("CENTER")
+    nameBox:HighlightText(0)
+    nameBox:SetScript("OnEscapePressed", function(self)
+		self:ClearFocus()
+		HideUIPanel(self:GetParent())
+	end)
 
-    -- Handle clicking outside the EditBox to focus it again
-    frame:SetScript("OnMouseDown", function() editBox:SetFocus() end)
-    
-    -- Create the Add Friend and Talents buttons
-    CreateFriendAndTalentButtons(playerName, frame)
+    -- 2) Close button
+    local close = CreateFrame("Button", "CreateCopyNameFrameEditBoxCloseButton", frame, "UIPanelCloseButton")
+    close:SetPoint("TOPRIGHT", frame, "TOPRIGHT")
 
-    -- Allow the frame to be closed by clicking a close button
-    local closeButton = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
-    closeButton:SetPoint("TOPRIGHT", frame, "TOPRIGHT")
+    -- 3) Loadout box / icons
+    CreateFriendAndTalentButtons(stats, matchEntry, frame)
 
-    -- Show the frame
     frame:Show()
 end
 
-local function CreateClickableName(parent, playerName, x, y, columnWidth, rowHeight)
-    -- Create a FontString to display the player name
-    local nameText = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    nameText:SetFont(STANDARD_TEXT_FONT, 8, "OUTLINE")
+local function CreateClickableName(parent, stats, matchEntry, x, y, columnWidth, rowHeight)
+  -- stats = matchEntry.playerStats[i], contains .name + .loadout + .playerTrackedSpells
+  local playerName = stats.name
 
-    -- Center horizontally and vertically in the cell
-    local centerX = x + (columnWidth / 2)
-    local centerY = y - (rowHeight / 2)
-    nameText:SetPoint("CENTER", parent, "TOPLEFT", centerX, centerY)
+  local nameText = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  nameText:SetFont(GetUnicodeSafeFont(), 8, "OUTLINE")
+  nameText:SetPoint("CENTER", parent, "TOPLEFT", x + columnWidth/2, y - rowHeight/2)
+  nameText:SetText(playerName)
+  nameText:SetFont(GetUnicodeSafeFont(), 8)
 
-    nameText:SetText(playerName)
+  local clickableFrame = CreateFrame("Button", "ClickableName", parent)
+  clickableFrame:SetSize(nameText:GetStringWidth(), nameText:GetStringHeight())
+  clickableFrame:SetPoint("CENTER", nameText, "CENTER")
 
-    -- Create a clickable frame over the text
-    local clickableFrame = CreateFrame("Button", nil, parent)
-    clickableFrame:SetSize(nameText:GetStringWidth(), nameText:GetStringHeight())
-    clickableFrame:SetPoint("CENTER", nameText, "CENTER")
+  clickableFrame:SetScript("OnClick", function()
+  
+--    -- ───────────────────────────────────────────────────────────────────────────
+--    -- DEBUG: print out whatever PvP-talent IDs (and trinket) we have
+--    -- ───────────────────────────────────────────────────────────────────────────
+--    local t1, t2, t3 = stats.pvptalent1, stats.pvptalent2, stats.pvptalent3
+--    local med = stats.trinketSpellID
+--    DEFAULT_CHAT_FRAME:AddMessage(
+--      ("|cff00ccff[%s]|r PvP Talents → medallion:%s 1:%s 2:%s 3:%s"):format(
+--        stats.name,
+--        med  and tostring(med)  or "<nil>",
+--        t1   and tostring(t1)   or "<nil>",
+--        t2   and tostring(t2)   or "<nil>",
+--        t3   and tostring(t3)   or "<nil>"
+--      )
+--    )
 
-    clickableFrame:SetScript("OnClick", function()
-        CreateCopyNameFrame(playerName)
-    end)
+    CreateCopyNameFrame(stats, matchEntry)
+  end)
 
-    return nameText
+  return nameText
 end
 
-function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMissedGame)
+function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMissedGame, content)
 	local nestedTable = CreateFrame("Frame", "NestedTable_" .. (parent:GetName() or "unknown"), parent, "BackdropTemplate")
 
     -- Determine the match type using the correct function
@@ -3121,61 +3369,92 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     -- Calculate the size of the nested table
     local rowHeight = 15  -- Adjust this value based on your actual row height
     local tableHeight = playersPerTeam * rowHeight + 30  -- Adjust for padding or additional spacing
+	local enemyBaseX	
+	local baseWidth
+
 	-- Set base width as a percentage of the full config width
-	local baseWidth = parent:GetWidth() * 1.92
+    if UIConfig.isCompact then
+       enemyBaseX = parent:GetWidth() * 0.65 -- start exactly one pane right
+	   baseWidth = parent:GetWidth()    -- previously we doubled nested table width when in compact
+	else
+	   enemyBaseX = parent:GetWidth() * 0.65  -- first enemy col
+	   baseWidth = parent:GetWidth()
+	end
 
 	nestedTable:SetSize(baseWidth, tableHeight)
 	nestedTable:SetFrameStrata("HIGH")
 	nestedTable:SetFrameLevel(22)
 	nestedTable:Hide()
 	
-	-- ───────── DEBUG (new) ─────────
-	print(("[DEBUG] NT-create parentW=%.0f  ntW=%.0f  mode=%s"): format(parent:GetWidth(), baseWidth, UIConfig and UIConfig.isCompact and "compact" or "full"))
-
-	-- ------------------------------------------------------------------
-	-- column geometry (build once – NEVER grow this table later)
-	-- ------------------------------------------------------------------
-	local baseWidths = {100,40,40,50,60,40,40,50,40,40,60,60,80} -- 13 cols
-	local COLS_PER_TEAM = #baseWidths                             -- =13
-	
-	-- ally + enemy  = 26
-	local columnWidths = {unpack(baseWidths)}
-	for i = 1, COLS_PER_TEAM do
-		columnWidths[#columnWidths+1] = baseWidths[i]
-	end
-	
-	-- ───────── DEBUG ─────────
-	print("|cffff8800[DEBUG]|r columnWidths entries: "..#columnWidths)   -- should be 26
-	
-	-- running X positions (+5 for padding)
-	local columnPositions = {}
-	do
-		local x = 0
-		for i, w in ipairs(columnWidths) do
-			columnPositions[i] = x + 5   -- 5-pixel left-pad
-			x = x + w
-		end
-	end
+    -- ------------------------------------------------------------------
+    -- column geometry (dynamic based on parent:GetWidth())
+    -- ------------------------------------------------------------------
+    -- percentages for each of the 13 base-pixel columns (for a 2004px parent)
+    local baseFracs = {
+        0.049900,  -- 100 / 2004
+        0.019960,  --  40 / 2004
+        0.019960,
+        0.024950,  --  50 / 2004
+        0.029940,  --  60 / 2004
+        0.019960,
+        0.019960,
+        0.024950,
+        0.019960,
+        0.019960,
+        0.029940,
+        0.029940,
+        0.039920,  --  80 / 2004
+    }
+    local COLS_PER_TEAM = #baseFracs                             -- still =13
+    
+    -- build ally+enemy columnWidths at runtime
+    local columnWidths = {}
+    do
+        local totalW = baseWidth
+        for i = 1, COLS_PER_TEAM do
+            columnWidths[i] = baseFracs[i] * totalW
+        end
+        for i = 1, COLS_PER_TEAM do
+            columnWidths[#columnWidths+1] = baseFracs[i] * totalW
+        end
+    end
+	 
+    -- running X positions (+5px padding; enemy side starts at 50%)
+    local columnPositions = {}
+    do
+        local totalW = baseWidth
+        local halfW  = totalW * 0.5
+        -- your team (cols 1..COLS_PER_TEAM)
+        local x = 0
+        for i = 1, COLS_PER_TEAM do
+            columnPositions[i] = x + 5
+            x = x + columnWidths[i]
+        end
+        -- enemy team (cols COLS_PER_TEAM+1 .. 2*COLS_PER_TEAM)
+        local x2 = halfW
+        for i = 1, COLS_PER_TEAM do
+            columnPositions[COLS_PER_TEAM + i] = x2 + 5
+            x2 = x2 + columnWidths[COLS_PER_TEAM + i]
+        end
+    end
 
     local headers = {
         "Character", "Faction", "Race", "Class", "Spec", "Hero", "Role", "CR", "KBs", "HKs", "Damage", "Healing", "Rating Chg",
         "Character", "Faction", "Race", "Class", "Spec", "Hero", "Role", "CR", "KBs", "HKs", "Damage", "Healing", "Rating Chg"
     }
 
-    local headerFontSize = 10
-    local entryFontSize = 8
     local headerHeight = 18  -- Height of the header row
 
     -- Create "Your Team" header
     local yourTeamHeader = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    yourTeamHeader:SetFont("Fonts\\FRIZQT__.TTF", headerFontSize)
-    yourTeamHeader:SetJustifyH("CENTER")
-    yourTeamHeader:SetPoint("TOPLEFT", nestedTable, "TOPLEFT", 0, 0)  -- Adjust position above friendly players
-    yourTeamHeader:SetText("                                                                                                            Your Team")
+    yourTeamHeader:SetFont(GetUnicodeSafeFont(), headerFontSize)
+    yourTeamHeader:SetJustifyH("LEFT")
+    yourTeamHeader:SetPoint("TOPLEFT", nestedTable, "TOPLEFT", parent:GetWidth() * 0.15, 0)  -- Adjust position above friendly players
+    yourTeamHeader:SetText("Your Team")
 
     -- Create "Enemy Team" header
 	local enemyTeamHeader = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-	enemyTeamHeader:SetFont("Fonts\\FRIZQT__.TTF", headerFontSize)
+	enemyTeamHeader:SetFont(GetUnicodeSafeFont(), headerFontSize)
 	enemyTeamHeader:SetJustifyH("CENTER")
 	-- we’ll anchor it *after* we calculate enemyBaseX
 	enemyTeamHeader:SetText("Enemy Team")
@@ -3185,23 +3464,17 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
 	local parentWidth = parent:GetWidth()
 	local columnWidth = (parentWidth * 0.5) / totalColumnsPerTeam
 	local headerY = -headerHeight  -- Keep vertical spacing consistent
-	local enemyBaseX	
-	local paneW     = parent:GetParent():GetParent():GetWidth()   -- visible-pane width
-	if UIConfig.isCompact then
-		enemyBaseX = paneW                  -- start exactly one pane right
-	else
-		enemyBaseX = columnPositions[COLS_PER_TEAM + 1]  -- first enemy col
-	end
+--	local paneW     = parent:GetParent():GetParent():GetWidth()   -- visible-pane width
 	
 	-- table now spans 13 cols (friendly) + 13 cols (enemy)
-	local baseWidth = paneW * 1.92          -- 0.92 ≈ 13/14 → use real ratio
+--	local baseWidth = paneW * 1.92          -- 0.92 ≈ 13/14 → use real ratio
 	nestedTable:SetWidth(baseWidth)
 	enemyTeamHeader:ClearAllPoints()
 	enemyTeamHeader:SetPoint("TOPLEFT", nestedTable, "TOPLEFT", enemyBaseX, 0)
 	
 	for i, header in ipairs(headers) do
 		local headerText = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-		headerText:SetFont("Fonts\\FRIZQT__.TTF", headerFontSize)
+		headerText:SetFont(GetUnicodeSafeFont(), headerFontSize)
 		headerText:SetJustifyH("CENTER")
 		headerText:SetText(header)
 	
@@ -3211,16 +3484,10 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
 			xPos = columnPositions[i]
 		else
 			-- “Enemy team” columns use pre-computed origin
-			xPos = enemyBaseX + columnPositions[i - totalColumnsPerTeam]
+			xPos = parent:GetWidth() * 0.5 + columnPositions[i - totalColumnsPerTeam]
 		end
 		
 		local width = columnWidths[i]
-		
-		-- ───────── DEBUG ─────────
-		if not width then
-			print(string.format("|cffff0000[WARN]|r header width nil  (i=%d  total=%d)",
-								i, #columnWidths))
-		end
 	
 		headerText:SetPoint("TOPLEFT", nestedTable, "TOPLEFT", xPos, -headerHeight)
 		headerText:SetWidth(width)
@@ -3234,7 +3501,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
         table.insert(friendlyPlayers, playerStats[1])  -- Assume the player is the first entry
         for i = 1, playersPerTeam do
             table.insert(enemyPlayers, {
-                name = "-", originalFaction = "-", race = "-", class = "-", spec = "-", role = "-", 
+                name = "-", originalFaction = "-", race = "-", class = "-", spec = "-", hero = "-", role = "-", 
                 newrating = "-", killingBlows = "-", honorableKills = "-", damage = "-", healing = "-", ratingChange = "-"
             })  -- Add placeholder entries for the enemy
         end
@@ -3252,7 +3519,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     -- Populate friendly player stats
     for index, player in ipairs(friendlyPlayers) do
         local rowOffset = -(headerHeight + 15 * index)  -- Adjust rowOffset to account for headers
-		CreateClickableName(nestedTable, player.name, columnPositions[1], rowOffset, columnWidths[1], rowHeight)
+		CreateClickableName(nestedTable, player, matchEntry, columnPositions[1], rowOffset, columnWidths[1], rowHeight)
         for i, stat in ipairs({
 			"",
             factionIcons[player.originalFaction] or player.originalFaction, 
@@ -3276,6 +3543,41 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 CreateIconWithTooltip(nestedTable, stat, player.class, columnPositions[i], rowOffset, columnWidths[i], rowHeight)
             elseif i == 5 then
                 CreateIconWithTooltip(nestedTable, stat, player.spec, columnPositions[i], rowOffset, columnWidths[i], rowHeight)
+            elseif i == 6 then
+                -- hero‐talent column (guard against nil/undetected)
+                local heroName = player.heroSpec
+                if not heroName or not HERO_TALENTS[heroName] then
+                    -- no hero spec detected (or not in our table) → show “Undetected”
+                    local text = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+                    text:SetPoint("CENTER", nestedTable, "TOPLEFT",
+                                columnPositions[i] + columnWidths[i]/2,
+                                rowOffset - rowHeight/2)
+					text:SetFont(GetUnicodeSafeFont(), entryFontSize)
+                    text:SetText("Undetected")
+                else
+                   -- we have a mapping!
+                   local atlas = HERO_TALENTS[heroName].iconAtlas
+                   if atlas then
+                       CreateIconWithTooltip(
+                         nestedTable,
+                         atlas,
+                         heroName,
+                         columnPositions[i],
+                         rowOffset,
+                         columnWidths[i],
+                         rowHeight,
+                         true
+                       )
+                    else
+                        -- you could still fall back to text if you want
+                        local text = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+                        text:SetPoint("CENTER", nestedTable, "TOPLEFT",
+                                    columnPositions[i] + columnWidths[i]/2,
+                                    rowOffset - rowHeight/2)
+					 	text:SetFont(GetUnicodeSafeFont(), entryFontSize)
+                        text:SetText(heroName)
+                    end
+               end
             elseif i == 7 then
                 -- Add role tooltip
                 CreateIconWithTooltip(nestedTable, stat, roleTooltips[player.role], columnPositions[i], rowOffset, columnWidths[i], rowHeight)
@@ -3284,7 +3586,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 local text = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 				local xPos = columnPositions[i]
 				local width = columnWidths[i]
-                text:SetFont("Fonts\\FRIZQT__.TTF", entryFontSize)
+                text:SetFont(GetUnicodeSafeFont(), entryFontSize)
                 text:SetJustifyH("CENTER")
                 text:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
                 text:SetText(tostring(textValue))  -- Ensure the value is converted to a string
@@ -3295,8 +3597,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     -- Populate enemy player stats
     for index, player in ipairs(enemyPlayers) do
 		local rowOffset = -(headerHeight + 15 * index)  -- Adjust rowOffset to account for headers
-		
-		CreateClickableName(nestedTable, player.name, enemyBaseX + columnPositions[1], rowOffset, columnWidths[14], rowHeight)
+        CreateClickableName(nestedTable, player, matchEntry, columnPositions[COLS_PER_TEAM + 1], rowOffset, columnWidths[COLS_PER_TEAM + 1], rowHeight)
         for i, stat in ipairs({
 			"",
             factionIcons[player.originalFaction] or player.originalFaction, 
@@ -3312,14 +3613,10 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
             FormatNumber(player.healing), 
             player.ratingChange
         }) do
-			local xPos  = enemyBaseX + columnPositions[i]   -- use shared origin
-			local width = columnWidths[i]                   -- no “+13”
+            local ci    = COLS_PER_TEAM + i
+            local xPos  = columnPositions[ci]
+            local width = columnWidths[ci]
 			
-			-- ───────── DEBUG ─────────
-			if not columnWidths[i+13] then
-				print(string.format("|cffff0000[WARN]|r columnWidths[%d] nil  (total=%d)",
-									i+13, #columnWidths))
-			end
 
             if i == 2 then
                 CreateIconWithTooltip(nestedTable, stat, player.originalFaction, xPos, rowOffset, width, rowHeight)
@@ -3329,13 +3626,45 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 CreateIconWithTooltip(nestedTable, stat, player.class, xPos, rowOffset, width, rowHeight)
             elseif i == 5 then
                 CreateIconWithTooltip(nestedTable, stat, player.spec, xPos, rowOffset, width, rowHeight)
+           elseif i == 6 then
+                -- hero‐talent column (guard against nil/undetected)
+				local heroName = player.heroSpec
+				if not heroName or not HERO_TALENTS[heroName] then
+					local text = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+					text:SetPoint("CENTER", nestedTable, "TOPLEFT",
+									xPos + (width / 2),
+									rowOffset - (rowHeight / 2))
+					text:SetFont(GetUnicodeSafeFont(), entryFontSize)
+					text:SetText("Undetected")
+				else
+					local atlas = HERO_TALENTS[heroName].iconAtlas
+					if atlas then
+						CreateIconWithTooltip(
+							nestedTable,
+							atlas,
+							heroName,
+							xPos,
+							rowOffset,
+							width,
+							rowHeight,
+							true
+						)
+					else
+						local text = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+						text:SetPoint("CENTER", nestedTable, "TOPLEFT",
+									xPos + (width / 2),
+									rowOffset - (rowHeight / 2))
+						text:SetFont(GetUnicodeSafeFont(), entryFontSize)
+						text:SetText(heroName)
+					end
+				end
             elseif i == 7 then
                 -- Add role tooltip
                 CreateIconWithTooltip(nestedTable, stat, roleTooltips[player.role], xPos, rowOffset, width, rowHeight)
             else
                 local textValue = stat or "-"  -- Provide a default value if stat is nil
                 local text = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-                text:SetFont("Fonts\\FRIZQT__.TTF", entryFontSize)
+                text:SetFont(GetUnicodeSafeFont(), entryFontSize)
                 text:SetJustifyH("CENTER")
 				text:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
                 text:SetText(tostring(textValue))  -- Ensure the value is converted to a string
@@ -3353,7 +3682,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
 				local width = columnWidths[i]
 				text:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
 				text:SetWidth(width)
-				text:SetFont("Fonts\\FRIZQT__.TTF", entryFontSize)
+				text:SetFont(GetUnicodeSafeFont(), entryFontSize)
 				text:SetJustifyH("CENTER")
 				text:SetText("-")
             end
@@ -3370,7 +3699,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
 				local width = columnWidths[i]
 				text:SetPoint("CENTER", parent, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
 				text:SetWidth(width)
-				text:SetFont("Fonts\\FRIZQT__.TTF", entryFontSize)
+				text:SetFont(GetUnicodeSafeFont(), entryFontSize)
 				text:SetJustifyH("CENTER")
 				text:SetText("-")
             end
@@ -3378,11 +3707,14 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     end
 
 	function nestedTable:UpdateTeamView()
-		local offset = 0
 		if UIConfig.isCompact and UIConfig.ActiveTeamView == 2 then
-			local paneW = self:GetParent():GetParent():GetParent():GetWidth()
-			offset      = paneW                      -- shift by one pane when ►
+			baseWidth = parent:GetWidth() * 2    -- double nested table width when in compact
 		end
+	-- **Re-anchor** using the new offset: keep the same relative Y,
+	-- but shift X by `offset` pixels.
+	self:ClearAllPoints()
+	self:SetWidth(baseWidth)
+	self:SetPoint("TOPLEFT", self:GetParent(), "TOPLEFT", 0, -14)
 	end
 
     SaveData()
@@ -3456,25 +3788,25 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
     
 	if not contentFrame.crLabel then
 		contentFrame.crLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-		contentFrame.crLabel:SetFont("Fonts\\FRIZQT__.TTF", 14)
+		contentFrame.crLabel:SetFont(GetUnicodeSafeFont(), 14)
 		contentFrame.crLabel:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 10, -10)
 	end
 	contentFrame.crLabel:SetText(RSTATS:ColorText("Current CR: ") .. currentCR)
 	
 	if not contentFrame.mmrLabel then
 		contentFrame.mmrLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-		contentFrame.mmrLabel:SetFont("Fonts\\FRIZQT__.TTF", 14)
+		contentFrame.mmrLabel:SetFont(GetUnicodeSafeFont(), 14)
 		contentFrame.mmrLabel:SetPoint("TOPLEFT", contentFrame.crLabel, "BOTTOMLEFT", 0, -5)
 	end
 	contentFrame.mmrLabel:SetText(RSTATS:ColorText("Current MMR: ") .. currentMMR)
 	
 	if not contentFrame.instructionLabel then
 		contentFrame.instructionLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-		contentFrame.instructionLabel:SetFont("Fonts\\FRIZQT__.TTF", 12)
+		contentFrame.instructionLabel:SetFont(GetUnicodeSafeFont(), 12)
 		contentFrame.instructionLabel:SetPoint("TOP", contentFrame, "TOP", 0, -10)
 		contentFrame.instructionLabel:SetJustifyH("CENTER")
 	end
-	contentFrame.instructionLabel:SetText("Click on rows to expand.    \nClick on player name to copy, Add Friend or get Talent Code.")
+	contentFrame.instructionLabel:SetText("Click on rows to expand.    \nClick on a player name to copy name, see trinkets, pvp talents, loadout codes or get a Spells List.\nAchievements Tracking uses memory due to a large filesize, right click minimap to toggle it ON/OFF.\nBattle.net Add Friend button on nameplates, for when you meet good peeps!")
     
     -- Return the last label for potential further positioning
     return contentFrame.mmrLabel
@@ -3495,6 +3827,13 @@ function Config:CreateMenu()
     local parentHeight = UIParent:GetHeight()
 
     UIConfig = CreateFrame("Frame", "RatedStatsConfig", UIParent, "PortraitFrameTemplate")
+	UIPanelWindows["RatedStatsConfig"] = {
+	area     = "center",    -- center of the screen
+	pushable = 0,           -- don’t push other panels
+	whileDead = true,       -- allow even when dead (optional)
+	}
+	-- …and flag it to close on ESC
+	tinsert(UISpecialFrames, "RatedStatsConfig")
     UIConfig:SetSize(parentWidth * 0.9, parentHeight * 0.8)
     UIConfig:SetPoint("CENTER", UIParent, "CENTER", 0, 75)
     UIConfig:SetResizable(true)
@@ -3504,10 +3843,17 @@ function Config:CreateMenu()
     UIConfig:SetScript("OnDragStart", UIConfig.StartMoving)
     UIConfig:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
     UIConfig:SetFrameStrata("HIGH")
-    UIConfig:SetFrameLevel(20)
+    UIConfig:SetFrameLevel(1)
     UIConfig:SetClampedToScreen(true)
     UIConfig:SetTitle("Rated Stats")
 	UIConfig.fullContentWidth = parentWidth * 0.9        -- <- same number you used for SetSize()
+	
+    -- Now change title to our addon colour
+    if UIConfig.TitleText then
+        UIConfig.TitleText:SetText(
+            string.format("|cff%s%s|r", COLOR_HEX, "Rated Stats")
+        )
+	end
 
     -- Background
     local faction = UnitFactionGroup("player")
@@ -3516,7 +3862,9 @@ function Config:CreateMenu()
         or "Interface\\AddOns\\RatedStats\\images\\hordebackground"
 
     UIConfig.BG = UIConfig:CreateTexture(nil, "BACKGROUND")
-    UIConfig.BG:SetAllPoints()
+	UIConfig.BG:SetDrawLayer("BACKGROUND", -1)
+	UIConfig.BG:SetPoint("TOPLEFT",     UIConfig, "TOPLEFT",     8, -30)
+	UIConfig.BG:SetPoint("BOTTOMRIGHT", UIConfig, "BOTTOMRIGHT", -8,   8)
     UIConfig.BG:SetTexture(bgPath)
     UIConfig.BG:SetAlpha(0.4)
 
@@ -3524,16 +3872,16 @@ function Config:CreateMenu()
     local portrait = UIConfig.PortraitContainer:CreateTexture(nil, "ARTWORK")
     portrait:SetTexture("Interface\\AddOns\\RatedStats\\RatedStats")
     portrait:SetSize(50, 50)
-    portrait:SetPoint("CENTER", UIConfig.PortraitContainer, "BOTTOMRIGHT", 23, -23)
+	portrait:SetPoint("CENTER", UIConfig.PortraitContainer, "BOTTOMRIGHT", 23, -23)
     portrait:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-    portrait:SetDrawLayer("ARTWORK", 1)
+    portrait:SetDrawLayer("ARTWORK", -1)
     UIConfig.portrait = portrait
 
     -- Example extra UI
     Config:CreateSearchBox(UIConfig)
     Config:CreateFilterMenu(UIConfig)
 
-	local statsBar = CreateFrame("Frame", nil, UIConfig)
+	local statsBar = CreateFrame("Frame", "MatchStatsBar", UIConfig)
 	statsBar:SetSize(800, 24)
 	statsBar:SetPoint("BOTTOMLEFT", UIConfig, "BOTTOMLEFT", 16, 15)
 	statsBar:SetPoint("BOTTOMRIGHT", UIConfig, "BOTTOMRIGHT", -16, 15)
@@ -3554,7 +3902,7 @@ function Config:CreateMenu()
 
     -- Create 5 frames + scrollFrames for each tab
     for i = 1, 5 do
-        local frame = CreateFrame("Frame", nil, UIConfig)
+        local frame = CreateFrame("Frame", "TabFrame", UIConfig)
         frame:SetPoint("TOPLEFT", UIConfig, "TOPLEFT", 20, -100)
         frame:SetPoint("BOTTOMRIGHT", UIConfig, "BOTTOMRIGHT", -20, 40)
 		frame:SetClipsChildren(true)
@@ -3565,8 +3913,9 @@ function Config:CreateMenu()
 		local scrollFrame = CreateFrame("ScrollFrame", "RatedStatsScrollFrame"..i, frame, "UIPanelScrollFrameTemplate")
 		-- Anchor the scrollFrame statically below the header and give it a fixed height
 ---		scrollFrame:SetPoint("TOPLEFT", scrollContent.header, "BOTTOMLEFT", -5, -5)
-		scrollFrame:SetWidth(frame:GetWidth())
-		scrollFrame:SetHeight(350) -- 👈 Fixed height (you can change 300 to your preferred value)
+		scrollFrame:ClearAllPoints()
+		scrollFrame:SetPoint("TOPLEFT",     frame, "TOPLEFT",     20, -100)
+		scrollFrame:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -20,  40)
 		scrollFrame:SetClipsChildren(true)
 		scrollFrame:EnableMouseWheel(true)
 
@@ -3582,9 +3931,19 @@ function Config:CreateMenu()
         end)
 
         local content = CreateFrame("Frame", "RatedStatsScrollChild"..i, scrollFrame)
-		content:SetPoint("TOPLEFT", scrollFrame, "TOPLEFT", 0, 0)
-		content:SetSize(scrollFrame:GetWidth() + 20, 0) -- optional if overridden later
+		content:SetPoint("TOPLEFT",     scrollFrame, "TOPLEFT",     0,  0)  -- only anchor to top left for mouse wheel scrolling
+--		content:SetPoint("BOTTOMRIGHT", scrollFrame, "BOTTOMRIGHT", 0,  0)
+--		if UIConfig.isCompact then
+--			content:SetWidth(UIConfig.fullContentWidth * 0.5, 0) -- optional if overridden later
+--			print("scrollFrame: ", scrollFrame:GetWidth())
+--		else
+--			content:SetWidth(UIConfig.fullContentWidth, 0)
+--		end
 		scrollFrame:SetScrollChild(content)
+
+		scrollFrame:SetScript("OnSizeChanged", function(self, width, height)
+			content:SetWidth(width)
+		end)
 
         local scrollbar = scrollFrame.ScrollBar
         if scrollbar then
@@ -3592,11 +3951,16 @@ function Config:CreateMenu()
             scrollbar:SetPoint("TOPRIGHT", scrollFrame, "TOPRIGHT", 0, -20)
             scrollbar:SetPoint("BOTTOMRIGHT",scrollFrame,"BOTTOMRIGHT",-2,16)
             scrollbar:Show()
+			scrollbar:EnableMouseWheel(true)
         end
 
 		local rowsAnchor = CreateFrame("Frame", "RatedStatsRowsAnchor"..i, content)
 		rowsAnchor:SetPoint("TOPLEFT", content, "TOPLEFT", 0, 0)
-		rowsAnchor:SetSize(content:GetWidth() * 0.96, 1)  -- Height is not important
+		if UIConfig.isCompact then
+			rowsAnchor:SetSize(content:GetWidth() * 0.5, 1)  -- Height is not important
+		else
+			rowsAnchor:SetSize(content:GetWidth() * 0.96, 1)  -- Height is not important
+		end
 		content.rowsAnchor = rowsAnchor
 		
 		-- Create a per-tab dropdown
@@ -3636,6 +4000,12 @@ function Config:CreateMenu()
         scrollFrames[i]   = scrollFrame
         scrollContents[i] = content
     end
+	
+     -- expose frames before any history is built
+    RSTATS.UIConfig       = UIConfig
+    RSTATS.ContentFrames  = contentFrames
+    RSTATS.ScrollFrames   = scrollFrames
+    RSTATS.ScrollContents = scrollContents
 	
 	local selectedTimeFilter = "today"
 	
@@ -3765,6 +4135,39 @@ function Config:CreateMenu()
 		if root then walk(root) end
 	end
 
+	local function UpdateCompactHeaders(tabID)
+	local content     = RSTATS.ScrollContents[tabID]
+	if not content or not content.headerFrame then return end
+	
+	local off         = content.columnOffsets
+	local splitIdx    = content.splitIndex
+	local hf          = content.headerFrame
+	local headerTexts = content.headerTexts
+	
+	-- 1) compute of the *frame* width once
+	local shift = content:GetWidth()
+	
+	for i, h in ipairs(headerTexts) do
+		h:ClearAllPoints()
+	
+		if UIConfig.isCompact then
+			if UIConfig.ActiveTeamView == 1 then
+				-- friendly page: no shift
+				h:SetPoint("TOPLEFT", hf, "TOPLEFT", off[i], 0)
+				h:SetShown(i <= splitIdx)
+			else
+				-- enemy page: subtract a fixed shift
+				h:SetPoint("TOPLEFT", hf, "TOPLEFT", off[i] - shift, 0)
+				h:SetShown(i > splitIdx)
+			end
+			else
+			-- full view: all headers, original offsets
+			h:SetPoint("TOPLEFT", hf, "TOPLEFT", off[i], 0)
+			h:Show()
+			end
+		end
+	end
+
     -- Tab buttons
     local tabNames = { "Solo Shuffle", "2v2", "3v3", "RBG", "Solo RBG" }
     local tabs = {}
@@ -3788,6 +4191,10 @@ function Config:CreateMenu()
 			for j, f in ipairs(contentFrames) do
 			f:SetShown(j == tabID)
 			end
+			
+			-- always go back to page 1 on a brand-new tab
+			UIConfig.ActiveTeamView = 1
+			UpdateArrowState()
 		
 			ACTIVE_TAB_ID = tabID
 			
@@ -3800,13 +4207,6 @@ function Config:CreateMenu()
 			else
 				scrollFrame:SetHorizontalScroll(0)             -- full view
 			end
-
-print(("TAB-CLICK  tab=%d  paneW=%.0f  scrlX=%.0f  ActiveView=%d"):
-      format(tabID,
-             scrollFrame:GetWidth(),
-             scrollFrame:GetHorizontalScroll(),
-             UIConfig.ActiveTeamView))
-
 
 			UpdateArrowState()
 			
@@ -3826,6 +4226,12 @@ print(("TAB-CLICK  tab=%d  paneW=%.0f  scrlX=%.0f  ActiveView=%d"):
 			-- ✅ Refresh tab view immediately
 			FilterAndSearchMatches(RatedStatsSearchBox and RatedStatsSearchBox:GetText() or "")
 			RSTATS:UpdateStatsView(filterKey, tabID)
+			
+			-- ensure the ScrollFrame is at the correct pane in compact
+			local sf = RSTATS.ScrollFrames[tabID]
+			if UIConfig.isCompact then sf:SetHorizontalScroll(0) end
+			
+			UpdateCompactHeaders(tabID)
 		end)
 
         tab:Show()
@@ -3861,7 +4267,7 @@ print(("TAB-CLICK  tab=%d  paneW=%.0f  scrlX=%.0f  ActiveView=%d"):
     end
 
     -- Optional ToggleViewButton
-    UIConfig.ToggleViewButton = CreateFrame("Button",nil,UIConfig)
+    UIConfig.ToggleViewButton = CreateFrame("Button","FrameCloseButton",UIConfig)
     UIConfig.ToggleViewButton:SetSize(24,24)
     UIConfig.ToggleViewButton:SetPoint("RIGHT",UIConfig.CloseButton,"LEFT",0,0)
     UIConfig.ToggleViewButton:SetFrameStrata("DIALOG")
@@ -3875,6 +4281,7 @@ print(("TAB-CLICK  tab=%d  paneW=%.0f  scrlX=%.0f  ActiveView=%d"):
     if tex then
         tex:SetDrawLayer("OVERLAY",7)
     end
+	
     UIConfig.ToggleViewButton:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self,"ANCHOR_RIGHT")
         GameTooltip:SetText("Toggle View",1,1,1)
@@ -3903,35 +4310,31 @@ print(("TAB-CLICK  tab=%d  paneW=%.0f  scrlX=%.0f  ActiveView=%d"):
             f:SetWidth(UIConfig:GetWidth()-40)
         end
         for _, c in ipairs(scrollContents) do
-            c:SetWidth(UIConfig:GetWidth()-40)
+            c:SetWidth(UIConfig.fullContentWidth * 2)                  -- this controls the width of the nested table row in compact
 
 			-- 🔧 keep its rowsAnchor in sync –
 			--     that’s what all NestedTables are parented to
 			if c.rowsAnchor then
-				c.rowsAnchor:SetWidth(c:GetWidth()*0.96)
+				c.rowsAnchor:SetWidth(c:GetWidth())
 			end
 			
 			----------------------------------------------------------------
 			--  🔧  NEW: shrink/grow every existing row + its nested table  -
 			----------------------------------------------------------------
 			if c.matchFrames then
-				local newRowW   = c:GetWidth()*1.06                -- row width
-				local newTableW = newRowW*1.92                     -- both teams
+				local newRowW   = c:GetWidth()                     -- row width
+				local newTableW = newRowW				-- both teams
+				-- resize nested tables to full-UI width
+				local fullTableW = UIConfig.fullContentWidth
 				for _, row in ipairs(c.matchFrames) do
-					row:SetWidth(newRowW)
 					if row.nestedTable then
-						row.nestedTable:SetWidth(newTableW)
-						if row.nestedTable.UpdateTeamView then
-							row.nestedTable:UpdateTeamView()
-						end
+						row.nestedTable:SetWidth(fullTableW)
+						row.nestedTable:UpdateTeamView()
 					end
 				end
 			end
         end
 		
-		local newUIW = UIConfig.isCompact and parentWidth*0.5 or parentWidth*0.9
-		UIConfig:SetWidth(newUIW)
-	
 		----------------------------------------------------------
 		--  NEW: keep every scroll pane in step with the window  --
 		----------------------------------------------------------
@@ -3961,12 +4364,12 @@ print(("TAB-CLICK  tab=%d  paneW=%.0f  scrlX=%.0f  ActiveView=%d"):
 		-- Also update the most recent nested table’s width
 		-- Refresh every nested table in the now-active scrollFrame
 		RefreshAllNestedTables(RSTATS.ScrollFrames[ACTIVE_TAB_ID])
-		print(string.format("[DEBUG] resize-toggle  mode=%s  UIW=%.0f  anchorW=%.0f", UIConfig.isCompact and "compact" or "full", UIConfig:GetWidth(), (activeContent and activeContent.rowsAnchor) and activeContent.rowsAnchor:GetWidth() or -1))
+		UpdateCompactHeaders(ACTIVE_TAB_ID)
     end)
 	
     -- Small Arrow Buttons for Team View (like Spellbook arrows)
     local arrowSize = 24
-    UIConfig.TeamLeftButton = CreateFrame("Button", nil, UIConfig, "UIPanelButtonTemplate")
+    UIConfig.TeamLeftButton = CreateFrame("Button", "TeamLeftButton", UIConfig, "UIPanelButtonTemplate")
     UIConfig.TeamLeftButton:SetSize(arrowSize, arrowSize)
     UIConfig.TeamLeftButton:SetPoint("BOTTOMRIGHT", UIConfig, "BOTTOMRIGHT", -48, 12)
     UIConfig.TeamLeftButton:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Up")
@@ -3980,7 +4383,7 @@ print(("TAB-CLICK  tab=%d  paneW=%.0f  scrlX=%.0f  ActiveView=%d"):
     end)
     UIConfig.TeamLeftButton:SetScript("OnLeave", GameTooltip_Hide)
 
-    UIConfig.TeamRightButton = CreateFrame("Button", nil, UIConfig, "UIPanelButtonTemplate")
+    UIConfig.TeamRightButton = CreateFrame("Button", "TeamRightButton", UIConfig, "UIPanelButtonTemplate")
     UIConfig.TeamRightButton:SetSize(arrowSize, arrowSize)
     UIConfig.TeamRightButton:SetPoint("BOTTOMRIGHT", UIConfig, "BOTTOMRIGHT", -20, 12)
     UIConfig.TeamRightButton:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up")
@@ -4001,7 +4404,7 @@ print(("TAB-CLICK  tab=%d  paneW=%.0f  scrlX=%.0f  ActiveView=%d"):
 		UpdateArrowState()
 		RSTATS:UpdateStatsView(selectedTimeFilter, ACTIVE_TAB_ID)
 		RefreshAllNestedTables(scrollFrame)
-		print(("[DEBUG] arrow dir=%s  pageW=%.0f  scrollX=%.0f"): format("%s", pageWidth, scrollFrame:GetHorizontalScroll()))
+		UpdateCompactHeaders(ACTIVE_TAB_ID)
 	end)
 		
 	UIConfig.TeamRightButton:SetScript("OnClick", function()
@@ -4012,7 +4415,7 @@ print(("TAB-CLICK  tab=%d  paneW=%.0f  scrlX=%.0f  ActiveView=%d"):
 		UpdateArrowState()
 		RSTATS:UpdateStatsView(selectedTimeFilter, ACTIVE_TAB_ID)
 		RefreshAllNestedTables(scrollFrame)
-		print(("[DEBUG] arrow dir=%s  pageW=%.0f  scrollX=%.0f"): format("%s", pageWidth, scrollFrame:GetHorizontalScroll()))
+		UpdateCompactHeaders(ACTIVE_TAB_ID)
 	end)
 
     UpdateArrowState()
@@ -4026,13 +4429,9 @@ print(("TAB-CLICK  tab=%d  paneW=%.0f  scrlX=%.0f  ActiveView=%d"):
 		UIConfig.TeamRightButton:Hide()
 	end
 	
+	-- Build all tabs once at startup
+	RefreshDisplay()
     UIConfig:Hide()
-
-    -- Expose to your namespace if needed
-    RSTATS.UIConfig       = UIConfig
-    RSTATS.ContentFrames  = contentFrames
-    RSTATS.ScrollFrames   = scrollFrames
-    RSTATS.ScrollContents = scrollContents
 	
 	-- In Config:CreateMenu, after all frames and tabs are set up:
 
@@ -4065,6 +4464,14 @@ print(("TAB-CLICK  tab=%d  paneW=%.0f  scrlX=%.0f  ActiveView=%d"):
 		FilterAndSearchMatches("")
 		RSTATS:UpdateStatsView(filterKey, DEFAULT_TAB_ID)
 	end)
+
+    -- ↪ When the main window closes, also tear down the copy‐name popup if open
+    UIConfig:HookScript("OnHide", function(self)
+      local cf = _G["CreateCopyNameFrame"]
+      if cf and cf:IsShown() then
+        HideUIPanel(cf)
+      end
+    end)
 
     return UIConfig
 end

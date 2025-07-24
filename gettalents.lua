@@ -164,7 +164,7 @@ local function ProcessInspectQueue()
 
 			if not NeedsRescan(guid)
 			and talents.playerTrackedSpells
-			and #talents.playerTrackedSpells >= 10 then
+			and #talents.playerTrackedSpells >= 50 then
 				completedUnits[guid] = true
 			end
         else
@@ -266,7 +266,7 @@ local function TryInspectUnit(unitToken)
 			return
 		end
 	
-		local talents = {}
+		local talents = RSTATS.DetectedPlayerTalents[guid] or {}
 		
 		for i = 1, 3 do
 			local pvpTalent = C_SpecializationInfo.GetInspectSelectedPvpTalent(unitToken, i)
@@ -289,7 +289,7 @@ local function TryInspectUnit(unitToken)
 			
 			if not NeedsRescan(guid)
 			and talents.playerTrackedSpells
-			and #talents.playerTrackedSpells >= 10 then
+			and #talents.playerTrackedSpells >= 50 then
 				completedUnits[guid] = true
 			end
 		end
@@ -375,7 +375,7 @@ function GetTalents:ProcessHeroCheck(unit)
 	
 	if not NeedsRescan(guid)
 	and entry.playerTrackedSpells
-	and #entry.playerTrackedSpells >= 10 then
+	and #entry.playerTrackedSpells >= 50 then
 		completedUnits[guid] = true
 	end
 end
@@ -390,6 +390,11 @@ function NeedsRescan(guid)
 	local entry = RSTATS.DetectedPlayerTalents[guid]
 	if not entry then return true end
 
+    -- NEW: if we’ve collected more than 40 distinct spells, force “complete”
+    if entry.playerTrackedSpells and #entry.playerTrackedSpells > 40 then
+        return false
+    end
+
 	local unit = GUIDToUnitToken[guid]
 	local isFriendly = unit and UnitIsFriend("player", unit)
 
@@ -402,7 +407,7 @@ function NeedsRescan(guid)
 	if not entry.heroSpec then return true end
 	
 	-- Need at least one spell recorded
-	if not entry.playerTrackedSpells or #entry.playerTrackedSpells < 10 then
+	if not entry.playerTrackedSpells or #entry.playerTrackedSpells < 50 then
 		return true
 	end
 
@@ -445,32 +450,6 @@ end
 function GetTalents:Stop(shouldClearMemory)
     scanning = false
 
-    -- 🧹 CLEANUP playerTrackedSpells to remove garbage BEFORE wiping anything
-    for guid, player in pairs(RSTATS.DetectedPlayerTalents or {}) do
-        if player.heroSpec then
-            local allowedSpells = {}
-            local heroData = HERO_TALENTS[player.heroSpec]
-            if heroData then
-                for _, spell in pairs(heroData) do
-					local ids = spell.spellID
-					if type(ids) ~= "table" then ids = { ids } end
-					for _, id in ipairs(ids) do
-						allowedSpells[id] = true
-					end
-				end
-            end
-
-            local cleanedSpells = {}
-            for _, spellID in ipairs(player.playerTrackedSpells or {}) do
-                if allowedSpells[spellID] then
-                    table.insert(cleanedSpells, spellID)
-                end
-            end
-
-            player.playerTrackedSpells = cleanedSpells
-        end
-    end
-
     -- ⚡ If we passed (false), skip clearing memory for now
     if shouldClearMemory == false then
         return
@@ -505,6 +484,20 @@ CLEUFrame:SetScript("OnEvent", function()
 	if not sourceName or not spellID or not spellName then return end
 	if bit.band(sourceFlags, COMBATLOG_OBJECT_TYPE_PLAYER) ~= COMBATLOG_OBJECT_TYPE_PLAYER then return end
 	if not GUIDToUnitToken[sourceGUID] then return end
+	
+	-- NEW: catch trinket/item uses by name pattern
+    if type(spellName) == "string" and (
+        spellName:match("Insignia$") 
+     or spellName:match("Medallion$") 
+     or spellName:match("Badge$") 
+     or spellName:find("Emblem$") 
+     or spellName:match("Adapted")
+    ) then
+        TrackedPlayerSpells[sourceGUID] = TrackedPlayerSpells[sourceGUID] or {}
+        TrackedPlayerSpells[sourceGUID][spellID] = true
+        -- also update entry.playerTrackedSpells if you like immediately
+    end	
+	
 	if completedUnits[sourceGUID] then return end
 
 	local unitToken = GetUnitTokenByGUID(sourceGUID)
@@ -524,25 +517,15 @@ CLEUFrame:SetScript("OnEvent", function()
 	--  Decide if we should record the spell
 	------------------------------------------------------------------
 	local allowThisSpell = false
-	
-	if entry.heroSpec and HERO_TALENTS[entry.heroSpec] then
-		----------------------------------------------------------------
-		-- AFTER the hero spec is known → record everything.
-		----------------------------------------------------------------
+
+	if C_Spell.IsPvPTalentSpell and C_Spell.IsPvPTalentSpell(spellID) then
 		allowThisSpell = true
-	else
-		----------------------------------------------------------------
-		-- BEFORE the hero spec is known
-		--   • keep any PvP-talent spell
-		--   • keep spells that belong to *any* hero spec of this class
-		----------------------------------------------------------------
-		if C_Spell.IsPvPTalentSpell and C_Spell.IsPvPTalentSpell(spellID) then
+	end
+	
+	if class and HeroClassLookup then
+		local classLookup = HeroClassLookup[class]
+		if classLookup and classLookup[spellID] then
 			allowThisSpell = true
-		elseif class and HeroClassLookup then
-			local classLookup = HeroClassLookup[class]
-			if classLookup and classLookup[spellID] then
-				allowThisSpell = true
-			end
 		end
 	end
 

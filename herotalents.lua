@@ -1,5 +1,6 @@
 HERO_TALENTS = {
   ["Rider of the Apocalypse"] = {
+    iconAtlas   = "talents-heroclass-deathknight-rideroftheapocalypse",
     ["Rider's Champion"] = {
       class = "DEATHKNIGHT",
       spellID = 444005,
@@ -59,6 +60,7 @@ HERO_TALENTS = {
   },
 
   ["San'layn"] = {
+    iconAtlas   = "talents-heroclass-deathknight-sanlayn",
     ["Vampiric Strike"] = {
       class = "DEATHKNIGHT",
       spellID = 433901,
@@ -118,6 +120,7 @@ HERO_TALENTS = {
   },
 
   ["Deathbringer"] = {
+    iconAtlas   = "talents-heroclass-deathknight-deathbringer",
     ["Reaper's Mark"] = {
       class = "DEATHKNIGHT",
       spellID = 439843,
@@ -181,6 +184,7 @@ HERO_TALENTS = {
   },
 
   ["Fel Scarred"] = {
+    iconAtlas   = "talents-heroclass-demonhunter-felscarred",
     ["Demonsurge"] = {
       class = "DEMONHUNTER",
       spellID = 452416, -- talent spellID is 452402, 452416 seen in CLEU
@@ -240,6 +244,7 @@ HERO_TALENTS = {
   },
 
   ["Aldrachi Reaver"] = {
+    iconAtlas   = "talents-heroclass-demonhunter-aldrachireaver",
     ["Art of the Glaive"] = {
       class = "DEMONHUNTER",
       spellID = 444661, -- talent spellID is 442290, 444661 seen in CLEU
@@ -299,6 +304,7 @@ HERO_TALENTS = {
   },
 
   ["Keeper of the Grove"] = {
+    iconAtlas   = "talents-heroclass-druid-keeperofthegrove",
     ["Dream Surge"] = {
       class = "DRUID",
       spellID = { 434112, 433832 }, -- talent spellID is 433831, 431482, 434112 seen in CLEU
@@ -362,6 +368,7 @@ HERO_TALENTS = {
   },
 
   ["Elune's Chosen"] = {
+    iconAtlas   = "talents-heroclass-druid-eluneschosen",
     ["Boundless Moonlight"] = {
       class = "DRUID",
       spellID = 425206, -- talent spellID is 424058, 425206 seen in CLEU
@@ -425,6 +432,7 @@ HERO_TALENTS = {
   },
 
   ["Druid of the Claw"] = {
+    iconAtlas   = "talents-heroclass-druid-druidoftheclaw",
     ["Ravage"] = {
       class = "DRUID",
       spellID = 441591, -- talent spellID is 441583, 441591 seen in CLEU
@@ -484,6 +492,7 @@ HERO_TALENTS = {
   },
 
   ["Wildstalker"] = {
+    iconAtlas   = "talents-heroclass-druid-wildstalker",
     ["Thriving Growth"] = {
       class = "DRUID",
       spellID = 439528,
@@ -547,6 +556,7 @@ HERO_TALENTS = {
   },
 
   ["Scalecommander"] = {
+    iconAtlas   = "talents-heroclass-evoker-scalecommander",
     ["Mass Disintegrate"] = {
       class = "EVOKER",
       spellID = 436336, -- talent spellID is 436335, 436336 seen in CLEU
@@ -662,6 +672,7 @@ HERO_TALENTS = {
   },
 
   ["Flameshaper"] = {
+    iconAtlas   = "talents-heroclass-evoker-flameshaper",
     ["Engulf"] = {
       class = "EVOKER",
       spellID = 443328,
@@ -721,6 +732,7 @@ HERO_TALENTS = {
   },
 
   ["Chronowarden"] = {
+    iconAtlas   = "talents-heroclass-evoker-chronwarden",
     ["Chrone Flame"] = {
       class = "EVOKER",
       spellID = 431583, -- talent spellID is 431442, 431583 seen in CLEU
@@ -780,6 +792,7 @@ HERO_TALENTS = {
   },
 
   ["Dark Ranger"] = {
+    iconAtlas   = "talents-heroclass-hunter-darkranger",
     ["Black Arrow"] = {
       class = "HUNTER",
       spellID = { 466930, 468037 }, -- talent spellID is 466932, 466930, 468037 seen in CLEU
@@ -843,6 +856,7 @@ HERO_TALENTS = {
   },
 
   ["Pack Leader"] = {
+    iconAtlas   = "talents-heroclass-hunter-packleader",
     ["Howl of the Pack Leader"] = {
       class = "HUNTER",
       spellID = 471877, -- talent spellID is 471876, 471877 seen in CLEU
@@ -898,6 +912,7 @@ HERO_TALENTS = {
   },
 
   ["Sentinel"] = {
+    iconAtlas   = "talents-heroclass-hunter-sentinel",
     ["Sentinel"] = {
       class = "HUNTER",
       spellID = 450412, -- talent spellID is 450369, 450412 seen in CLEU
@@ -957,6 +972,7 @@ HERO_TALENTS = {
   },
 
   ["Spellslinger"] = {
+    iconAtlas   = "talents-heroclass-mage-spellslinger",
     ["Splintering Sorcery"] = {
       class = "MAGE",
       spellID = 443739,
@@ -1020,6 +1036,7 @@ HERO_TALENTS = {
   },
 
   ["Sunfury"] = {
+    iconAtlas   = "talents-heroclass-mage-sunfury",
     ["Spellfire Spheres"] = {
       class = "MAGE",
       spellID = 448604, -- talent spellID is 448601, 448604 seen in CLEU
@@ -1079,6 +1096,7 @@ HERO_TALENTS = {
   },
 
   ["Frostfire"] = {
+    iconAtlas   = "talents-heroclass-mage-frostfire",
     ["Frostfire Mastery"] = {
       class = "MAGE",
       spellID = 431038,
@@ -1138,6 +1156,7 @@ HERO_TALENTS = {
   },
 
   ["Master of Harmony"] = {
+    iconAtlas   = "talents-heroclass-monk-masterofharmony",
     ["Aspect of Harmony"] = {
       class = "MONK",
       spellID = 450508,
@@ -1201,6 +1220,7 @@ HERO_TALENTS = {
   },
 
   ["Shado-Pan"] = {
+    iconAtlas   = "talents-heroclass-monk-shadopan",
     ["Flurry Strikes"] = {
       class = "MONK",
       spellID = 450615,
@@ -1260,6 +1280,7 @@ HERO_TALENTS = {
   },
 
   ["Conduit of the Celestials"] = {
+    iconAtlas   = "talents-heroclass-monk-conduitofthecelestials",
     ["Celestial Conduit"] = {
       class = "MONK",
       spellID = 443038,
@@ -1324,6 +1345,7 @@ HERO_TALENTS = {
   },
 
   ["Lightsmith"] = {
+    iconAtlas   = "talents-heroclass-paladin-lightsmith",
     ["Holy Armaments"] = {
       class = "PALADIN",
       spellID = 432459,
@@ -1387,6 +1409,7 @@ HERO_TALENTS = {
   },
 
   ["Herald of the Sun"] = {
+    iconAtlas   = "talents-heroclass-paladin-heraldofthesun",
     ["Dawnlight"] = {
       class = "PALADIN",
       spellID = 431522, -- talent spellID is 431377, 431522 seen in CLEU
@@ -1446,6 +1469,7 @@ HERO_TALENTS = {
   },
 
   ["Templar"] = {
+    iconAtlas   = "talents-heroclass-paladin-templar",
     ["Light's Guidance"] = {
       class = "PALADIN",
       spellID = 427445,
@@ -1505,6 +1529,7 @@ HERO_TALENTS = {
   },
 
   ["Voidweaver"] = {
+    iconAtlas   = "talents-heroclass-priest-voidweaver",
     ["Entropic Rift"] = {
       class = "PRIEST",
       spellID = 447444, -- talent spellID is 447444, 450193 seen in CLEU
@@ -1568,6 +1593,7 @@ HERO_TALENTS = {
   },
 
   ["Oracle"] = {
+    iconAtlas   = "talents-heroclass-priest-oracle",
     ["Premonition"] = {
       class = "PRIEST",
       spellID = { 428933, 443526, 428930 }, -- talent spellID is 428924, 428933, 443526 and 428930 seen in CLEU
@@ -1631,6 +1657,7 @@ HERO_TALENTS = {
   },
 
   ["Archon"] = {
+    iconAtlas   = "talents-heroclass-priest-archon",
     ["Power Surge"] = {
       class = "PRIEST",
       spellID = 453109,
@@ -1690,6 +1717,7 @@ HERO_TALENTS = {
   },
 
   ["Deathstalker"] = {
+    iconAtlas   = "talents-heroclass-rogue-deathstalker",
     ["Deathstalker's Mark"] = {
       class = "ROGUE",
       spellID = 457157, -- talent spellID is 457052, 457157 seen in CLEU
@@ -1753,6 +1781,7 @@ HERO_TALENTS = {
   },
 
   ["Fatebound"] = {
+    iconAtlas   = "talents-heroclass-rogue-fatebound",
     ["Hand of Fate"] = {
       class = "ROGUE",
       spellID = 452536,
@@ -1812,6 +1841,7 @@ HERO_TALENTS = {
   },
 
   ["Trickster"] = {
+    iconAtlas   = "talents-heroclass-rogue-trickster",
     ["Unseen Blade"] = {
       class = "ROGUE",
       spellID = 441146,
@@ -1875,6 +1905,7 @@ HERO_TALENTS = {
   },
 
   ["Farseer"] = {
+    iconAtlas   = "talents-heroclass-shaman-farseer",
     ["Call of the Ancestors"] = {
       class = "SHAMAN",
       spellID = { 447244, 445624 }, -- talent spellID is 443450, 447244, 445624 seen in CLEU
@@ -1934,6 +1965,7 @@ HERO_TALENTS = {
   },
 
   ["Stormbringer"] = {
+    iconAtlas   = "talents-heroclass-shaman-stormbringer",
     ["Tempest"] = {
       class = "SHAMAN",
       spellID = 454015, -- talent spellID is 454009, 454015 seen in CLEU
@@ -1993,6 +2025,7 @@ HERO_TALENTS = {
   },
 
   ["Totemic"] = {
+    iconAtlas   = "talents-heroclass-shaman-totemic",
     ["Surging Totem"] = {
       class = "SHAMAN",
       spellID = 1221348, -- talent spellID is 444995, 1221348 seen in CLEU
@@ -2056,6 +2089,7 @@ HERO_TALENTS = {
   },
 
   ["Hellcaller"] = {
+    iconAtlas   = "talents-heroclass-warlock-hellcaller",
     ["Wither"] = {
       class = "WARLOCK",
       spellID = 445474,  -- talent spellID is 445468, 445474 seen in CLEU
@@ -2115,6 +2149,7 @@ HERO_TALENTS = {
   },
 
   ["Soul Harvester"] = {
+    iconAtlas   = "talents-heroclass-warlock-soulharvester",
     ["Demonic Soul"] = {
       class = "WARLOCK",
       spellID = 449801, -- talent spellID is 449614, 449801 seen in CLEU
@@ -2174,6 +2209,7 @@ HERO_TALENTS = {
   },
 
   ["Diabolist"] = {
+    iconAtlas   = "talents-heroclass-warlock-diabolist",
     ["Diabolic Ritual"] = {
       class = "WARLOCK",
       spellID = { 432815, 431944 }, -- talent spellID is 428514, 432815, 431944 seen in CLEU
@@ -2233,6 +2269,7 @@ HERO_TALENTS = {
   },
 
   ["Colossus"] = {
+    iconAtlas   = "talents-heroclass-warrior-colossus",
     ["Demolish"] = {
       class = "WARRIOR",
       spellID = 440884, -- talent spellID is 436358, 440884 seen in CLEU
@@ -2292,6 +2329,7 @@ HERO_TALENTS = {
   },
 
   ["Slayer"] = {
+    iconAtlas   = "talents-heroclass-warrior-slayer",
     ["Slayer's Dominance"] = {
       class = "WARRIOR",
       spellID = 444767,
@@ -2351,6 +2389,7 @@ HERO_TALENTS = {
   },
 
   ["Mountain Thane"] = {
+    iconAtlas   = "talents-heroclass-warrior-mountainthane",
     ["Lightning Strikes"] = {
       class = "WARRIOR",
       spellID = 435791, -- talent spellID is 434969, 435791 seen in CLEU
@@ -2414,14 +2453,21 @@ HERO_TALENTS = {
   },
 }
 
--- herotalents.lua  (very end, after the big table)
 HeroClassLookup = {}
 for heroName, spellTbl in pairs(HERO_TALENTS) do
-    local class = (next(spellTbl) and spellTbl[next(spellTbl)].class) or nil
+    -- pick a sample entry to get the class, but skip the iconAtlas field
+    local exampleKey, exampleVal = next(spellTbl)
+    while exampleKey == "iconAtlas" do
+        exampleKey, exampleVal = next(spellTbl, exampleKey)
+    end
+    local class = exampleVal and exampleVal.class
     if class then
         HeroClassLookup[class] = HeroClassLookup[class] or {}
-        for _, s in pairs(spellTbl) do
-            HeroClassLookup[class][s.spellID] = true
+        for talentName, s in pairs(spellTbl) do
+            -- only index real talent tables (they have a spellID number)
+            if type(s) == "table" and s.spellID then
+                HeroClassLookup[class][s.spellID] = true
+            end
         end
     end
 end

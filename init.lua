@@ -2,8 +2,6 @@
 -- Create Date : 7/26/2024 7:16:49 PM
 
 local _, RSTATS = ...; -- Namespace
-RSTATS.Database = RSTATS_Database or {}
-local Database = RSTATS.Database
 
 RSTATS.Config = RSTATS.Config or {}
 local Config = RSTATS.Config
@@ -82,8 +80,34 @@ function RSTATS:init(event, name)
 
 	SLASH_RatedStats1 = "/ratedstats";
 	SlashCmdList.RatedStats = HandleSlashCommands;
+	LoadData()
 	
-    RSTATS:Print("Welcome back", UnitName("player").."!");
+	for id, mod in pairs(RSTATS.Modules) do
+		local key     = UnitName("player") .. "-" .. GetRealmName()
+		local enabled = (RSTATS.Database[key].modules or {})[id]
+		if enabled then
+			-- directly call C_AddOns.LoadAddOn; no fallback needed
+			C_AddOns.LoadAddOn("RatedStats_" .. id)
+			mod.loaded = true
+		end
+	end
+	
+    local playerName = UnitName("player") .. "-" .. GetRealmName()
+    local Database   = RSTATS.Database[playerName]
+	
+	-- Ensure modules table exists
+	Database.modules = Database.modules or {}
+	
+	local module = "RatedStats_Achiev"
+	local enabled = (C_AddOns.GetAddOnEnableState(module, nil) > 0)
+	local achievementState = enabled and "enabled" or "disabled"
+	
+	RSTATS:Print("Welcome back", UnitName("player").."!")
+	RSTATS:Print(
+	"Achievements Tracking is",
+	achievementState,
+	"– right-click minimap to toggle."
+	)
 end
 
 local events = CreateFrame("Frame");

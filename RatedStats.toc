@@ -1,11 +1,13 @@
 ## Title: RatedStats
 ## Version: TWW S2
 ## Author: liamp
-## Interface: 110105
+## Interface: 110107
 ## DefaultState: enabled
 ## SavedVariables: RSTATS_Database
+## IconTexture: Interface\AddOns\RatedStats\RatedStats.tga
 
-## OptionalDeps: LibDataBroker-1.1, LibDBIcon-1.0
+## X-Category: Battlegrounds/PvP
+## OptionalDeps: Blizzard_AddOns, RatedStats_Achiev, Blizzard_PVPUI, LibDataBroker-1.1, LibDBIcon-1.0
 
 core.lua
 filters.lua
