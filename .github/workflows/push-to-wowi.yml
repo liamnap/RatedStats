@@ -23,7 +23,7 @@ jobs:
         ssh-keyscan git.wowinterface.com >> ~/.ssh/known_hosts
 
     - name: Add WoWI remote
-      run: git remote add wowi git@git.wowinterface.com:RatedStats
+      run: git remote add wowi git@git.wowinterface.com:RatedStats-726
 
     - name: Push tag to WoWI
       run: |
