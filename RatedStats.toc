@@ -18,4 +18,3 @@ config.lua
 minimap.lua
 addfriend.lua
 init.lua
-
