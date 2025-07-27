@@ -1,0 +1,10 @@
+# Ignore GitHub Actions and project settings
+.github/
+.vscode/
+
+# Ignore log files
+*.log
+
+# Ignore JavaScript and Python files
+*.js
+*.py
