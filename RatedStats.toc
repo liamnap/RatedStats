@@ -1,7 +1,7 @@
 ## Title: RatedStats
 ## Version: TWW S2
 ## Author: liamp
-## Interface: 110107
+## Interface: 110200
 ## DefaultState: enabled
 ## SavedVariables: RSTATS_Database
 ## IconTexture: Interface\AddOns\RatedStats\RatedStats.tga
