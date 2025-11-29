@@ -948,6 +948,7 @@ function RefreshDataEvent(self, event, ...)
 					roundIndex = 1
 				end
 				lastLoggedRound = {}
+				scoreboardDeaths = {}
 				playerDeathSeen = false
 	
 			elseif C_PvP.IsRatedArena() or C_PvP.IsRatedBattleground() or C_PvP.IsSoloRBG() then
@@ -970,12 +971,56 @@ function RefreshDataEvent(self, event, ...)
 			end
 		end)
 
-    elseif self.isSoloShuffle and (event == "UNIT_HEALTH" or event == "UNIT_AURA" or event == "COMBAT_LOG_EVENT_UNFILTERED") then
+elseif self.isSoloShuffle and (event == "UNIT_HEALTH" or event == "UNIT_AURA" or event == "COMBAT_LOG_EVENT_UNFILTERED") then
 
         confirmedDeaths = confirmedDeaths or {}
+        scoreboardDeaths = scoreboardDeaths or {}
 
         local function IsRecentlyConfirmed(player)
             return confirmedDeaths[player] and GetTime() < confirmedDeaths[player]
+        end
+
+        local function GetScoreboardDeathsForPlayer(player)
+            if not player or player == "" then
+                return nil
+            end
+
+            local numScores = GetNumBattlefieldScores()
+            for i = 1, numScores do
+                local scoreInfo = C_PvP.GetScoreInfo(i)
+                if scoreInfo and scoreInfo.name then
+                    local shortName = scoreInfo.name:match("([^%-]+)")
+                    if shortName == player then
+                        local deaths = tonumber(scoreInfo.deaths) or 0
+                        return deaths
+                    end
+                end
+            end
+
+            return nil
+        end
+
+        local function HasScoreboardDeathIncrement(player)
+            local currentDeaths = GetScoreboardDeathsForPlayer(player)
+            if not currentDeaths then
+                return false
+            end
+
+            local previousDeaths = scoreboardDeaths[player]
+
+            if previousDeaths == nil then
+                -- First time we see this player; establish baseline.
+                scoreboardDeaths[player] = currentDeaths
+                -- Only treat as a new death if they've actually died.
+                return currentDeaths > 0
+            end
+
+            if currentDeaths > previousDeaths then
+                scoreboardDeaths[player] = currentDeaths
+                return true
+            end
+
+            return false
         end
 
 		local function IsFeignDeath(unit)
@@ -1023,12 +1068,22 @@ function RefreshDataEvent(self, event, ...)
 					local unitName = UnitName(unit)
 					local player = unitName and unitName:match("([^%-]+)")
 		
-					if not isFeign and unitName then
-						if not IsRecentlyConfirmed(player) and lastLoggedRound[player] ~= roundIndex then
-							lastLoggedRound[player] = roundIndex
-							confirmedDeaths[player] = GetTime() + 3
-							ProcessPlayerDeath(player)
-						end
+					if not isFeign and unitName and player then
+						C_Timer.After(1, function()
+							if not self.isSoloShuffle then
+								return
+							end
+
+							if IsRecentlyConfirmed(player) or (lastLoggedRound and lastLoggedRound[player] == roundIndex) then
+								return
+							end
+
+							if HasScoreboardDeathIncrement(player) then
+								lastLoggedRound[player] = roundIndex
+								confirmedDeaths[player] = GetTime() + 3
+								ProcessPlayerDeath(player)
+							end
+						end)
 					elseif isFeign then
 					end
 				end)
