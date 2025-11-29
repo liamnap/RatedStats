@@ -761,6 +761,7 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
     local endTime = GetTimestamp()
     local teamFaction = GetPlayerFactionGroup()  -- Returns "Horde" or "Alliance"
     local enemyFaction = teamFaction == "Horde" and "Alliance" or "Horde"  -- Opposite faction
+    local myTeamIndex = nil  -- numeric team index from C_PvP.GetScoreInfo().faction
     local friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing = 0, 0, 0, 0
     local battlefieldWinner = GetBattlefieldWinner() == 0 and "Horde" or "Alliance"  -- Convert to "Horde" or "Alliance"
     local friendlyWinLoss = battlefieldWinner == teamFaction and "+   W" or "+   L"  -- Determine win/loss status
@@ -950,6 +951,7 @@ function RefreshDataEvent(self, event, ...)
 				lastLoggedRound = {}
 				scoreboardDeaths = {}
 				playerDeathSeen = false
+                scoreboardKBTotal = 0
 	
 			elseif C_PvP.IsRatedArena() or C_PvP.IsRatedBattleground() or C_PvP.IsSoloRBG() then
 				self.isSoloShuffle = nil
@@ -974,7 +976,7 @@ function RefreshDataEvent(self, event, ...)
 elseif self.isSoloShuffle and (event == "UNIT_HEALTH" or event == "UNIT_AURA" or event == "COMBAT_LOG_EVENT_UNFILTERED") then
 
         confirmedDeaths = confirmedDeaths or {}
-        scoreboardDeaths = scoreboardDeaths or {}
+        scoreboardKBTotal = scoreboardKBTotal or 0
 
         local function IsRecentlyConfirmed(player)
             return confirmedDeaths[player] and GetTime() < confirmedDeaths[player]
@@ -1035,6 +1037,18 @@ elseif self.isSoloShuffle and (event == "UNIT_HEALTH" or event == "UNIT_AURA" or
 			return false
 		end
 
+        local function GetTotalKillingBlows()
+            local total = 0
+            local numScores = GetNumBattlefieldScores()
+            for i = 1, numScores do
+                local scoreInfo = C_PvP.GetScoreInfo(i)
+                if scoreInfo and scoreInfo.killingBlows then
+                    total = total + (tonumber(scoreInfo.killingBlows) or 0)
+                end
+            end
+            return total
+        end
+
         local function ProcessPlayerDeath(name)
             playerDeathSeen = true
 
@@ -1062,29 +1076,30 @@ elseif self.isSoloShuffle and (event == "UNIT_HEALTH" or event == "UNIT_AURA" or
 			if not (unit == "player" or unit:match("^party[1-3]$") or unit:match("^arena[1-3]$")) then return end
 		
 			if UnitIsPlayer(unit) and UnitIsDeadOrGhost(unit) then
-				C_Timer.After(0.05, function() -- set to 0.05 as testing showed thats how fast it can be seen but still some slip through
+				C_Timer.After(1, function() -- wait for scoreboard to update KBs
+					if not self.isSoloShuffle then return end
+
 					local isFeign = IsFeignDeath(unit)
-		
 					local unitName = UnitName(unit)
 					local player = unitName and unitName:match("([^%-]+)")
-		
-					if not isFeign and unitName and player then
-						C_Timer.After(1, function()
-							if not self.isSoloShuffle then
-								return
-							end
 
-							if IsRecentlyConfirmed(player) or (lastLoggedRound and lastLoggedRound[player] == roundIndex) then
-								return
-							end
+					if isFeign or not unitName or not player then
+						return
+					end
 
-							if HasScoreboardDeathIncrement(player) then
-								lastLoggedRound[player] = roundIndex
-								confirmedDeaths[player] = GetTime() + 3
-								ProcessPlayerDeath(player)
-							end
-						end)
-					elseif isFeign then
+					local previousKB = scoreboardKBTotal or 0
+					local currentKB  = GetTotalKillingBlows()
+
+					-- Only treat this as a *real* death if the scoreboard shows
+					-- at least one new killing blow since the last confirmed death.
+					if currentKB > previousKB then
+						scoreboardKBTotal = currentKB
+
+						if not IsRecentlyConfirmed(player) and lastLoggedRound[player] ~= roundIndex then
+							lastLoggedRound[player] = roundIndex
+							confirmedDeaths[player] = GetTime() + 3
+							ProcessPlayerDeath(player)
+						end
 					end
 				end)
 			end
@@ -1122,6 +1137,7 @@ elseif self.isSoloShuffle and (event == "UNIT_HEALTH" or event == "UNIT_AURA" or
                 roundsWon = nil
                 previousRoundsWon = nil
                 playerDeathSeen = false
+                scoreboardKBTotal = nil
             elseif C_PvP.IsRatedArena() then
                 local matchBracket = C_PvP.GetActiveMatchBracket()
                 if matchBracket == 0 then
@@ -2011,6 +2027,13 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             local roleAssigned = scoreInfo.roleAssigned
             local stats = scoreInfo.stats
             local guid = scoreInfo.guid
+            local teamIndex = faction  -- C_PvP.GetScoreInfo().faction is a numeric team index
+            if guid and guid == UnitGUID("player") then
+                myTeamIndex = teamIndex
+            end
+            local roleAssigned = scoreInfo.roleAssigned
+            local stats = scoreInfo.stats
+            local guid = scoreInfo.guid
 ---            local roundsWon = roundsWon or 0  -- Capture rounds won
          
             -- Display additional stats
@@ -2037,6 +2060,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                 guid = guid,
 				bnet = bnet,
                 faction = translatedFaction,
+                teamIndex = teamIndex,
                 race = raceName,
                 evaluatedrace = remappedRace,
                 class = className,
@@ -2157,6 +2181,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
         duration = duration,
 		damp = damp,
         teamFaction = teamFaction,
+        myTeamIndex = myTeamIndex,
         friendlyRaidLeader = friendlyRaidLeader,
         friendlyAvgCR = friendlyAvgCR,  -- Average newrating for friendly team
         friendlyMMR = friendlyPostMatchMMR,
@@ -3005,7 +3030,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 			end
 	
 			-- Create the nested table (for match details) and parent it to the row.
-			local nestedTable = CreateNestedTable(matchFrame, match.playerStats or {}, match.teamFaction, match.isInitial, match.isMissedGame)
+			local nestedTable = CreateNestedTable(matchFrame, match.playerStats or {}, match.teamFaction, match.isInitial, match.isMissedGame, match)
 			nestedTable:SetParent(matchFrame)
 			nestedTable:SetPoint("TOPLEFT", matchFrame, "TOPLEFT", 0, -14)
 			nestedTable:SetFrameStrata("HIGH")
@@ -3409,7 +3434,7 @@ local function CreateClickableName(parent, stats, matchEntry, x, y, columnWidth,
   return nameText
 end
 
-function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMissedGame, content)
+function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMissedGame, content, matchEntry)
 	local nestedTable = CreateFrame("Frame", "NestedTable_" .. (parent:GetName() or "unknown"), parent, "BackdropTemplate")
 
     -- Determine the match type using the correct function
@@ -3560,8 +3585,17 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 newrating = "-", killingBlows = "-", honorableKills = "-", damage = "-", healing = "-", ratingChange = "-"
             })  -- Add placeholder entries for the enemy
         end
+    elseif matchEntry and matchEntry.myTeamIndex ~= nil then
+        -- Solo Shuffle / cross-faction: separate by numeric team index
+        for _, player in ipairs(playerStats) do
+            if player.teamIndex ~= nil and player.teamIndex == matchEntry.myTeamIndex then
+                table.insert(friendlyPlayers, player)
+            else
+                table.insert(enemyPlayers, player)
+            end
+        end
     else
-        -- Separate players by faction
+        -- Fallback: separate players by faction string (old behaviour)
         for _, player in ipairs(playerStats) do
             if player.faction == friendlyFaction then
                 table.insert(friendlyPlayers, player)
