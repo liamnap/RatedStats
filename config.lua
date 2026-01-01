@@ -692,6 +692,10 @@ local RSTATS_ScoreHistory = {}
 local allianceTeamScore = 0
 local hordeTeamScore = 0
 local roundsWon = 0
+-- Solo Shuffle: remember which scoreboard "team index" we belonged to at the
+-- moment the round ended (so we can keep our team on the left even if the UI
+-- reshuffles groups afterwards).
+local soloShuffleMyTeamIndexAtDeath = nil
 
 local RBGScoreWidgets = {
     [529]  = 1671, -- Arathi Basin
@@ -761,7 +765,10 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
     local endTime = GetTimestamp()
     local teamFaction = GetPlayerFactionGroup()  -- Returns "Horde" or "Alliance"
     local enemyFaction = teamFaction == "Horde" and "Alliance" or "Horde"  -- Opposite faction
-    local myTeamIndex = nil  -- numeric team index from C_PvP.GetScoreInfo().faction
+    -- For Solo Shuffle we want to anchor "my team" based on the team index we
+    -- belonged to at the moment the round ended, not whatever reshuffles the
+    -- scoreboard UI may have done afterwards.
+    local myTeamIndex = soloShuffleMyTeamIndexAtDeath
     local friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing = 0, 0, 0, 0
     local battlefieldWinner = GetBattlefieldWinner() == 0 and "Horde" or "Alliance"  -- Convert to "Horde" or "Alliance"
     local friendlyWinLoss = battlefieldWinner == teamFaction and "+   W" or "+   L"  -- Determine win/loss status
@@ -845,12 +852,25 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
             damageDone = tonumber(damageDone) or 0
             healingDone = tonumber(healingDone) or 0
 
-            if faction == teamFaction then
-                friendlyTotalDamage = friendlyTotalDamage + damageDone
-                friendlyTotalHealing = friendlyTotalHealing + healingDone
-            elseif faction == enemyFaction then
-                enemyTotalDamage = enemyTotalDamage + damageDone
-                enemyTotalHealing = enemyTotalHealing + healingDone
+            if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() and myTeamIndex ~= nil then
+                -- Solo Shuffle: treat the team we belonged to at death as "friendly"
+                -- regardless of Horde/Alliance split.
+                if faction == myTeamIndex then
+                    friendlyTotalDamage = friendlyTotalDamage + damageDone
+                    friendlyTotalHealing = friendlyTotalHealing + healingDone
+                else
+                    enemyTotalDamage = enemyTotalDamage + damageDone
+                    enemyTotalHealing = enemyTotalHealing + healingDone
+                end
+            else
+                -- Non-shuffle brackets keep the old Horde/Alliance logic.
+                if faction == teamFaction then
+                    friendlyTotalDamage = friendlyTotalDamage + damageDone
+                    friendlyTotalHealing = friendlyTotalHealing + healingDone
+                elseif faction == enemyFaction then
+                    enemyTotalDamage = enemyTotalDamage + damageDone
+                    enemyTotalHealing = enemyTotalHealing + healingDone
+                end
             end
         end
     end
@@ -930,28 +950,36 @@ function RefreshDataEvent(self, event, ...)
 		C_Timer.After(1, function()
 			if C_PvP.IsRatedSoloShuffle() then
 				self.isSoloShuffle = true
-				if self.isSoloShuffle and roundIndex and not playerDeathSeen then		
-					local cr, mmr = GetCRandMMR(7)
-					local historyTable = Database.SoloShuffleHistory
-					Database.CurrentCRforSoloShuffle = cr
-					Database.CurrentMMRforSoloShuffle = mmr
-					GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, "SoloShuffle", 7, startTime)
+            -- Make sure we always have a round index for Shuffle.
+            if roundIndex == nil then
+                roundIndex = 1
+            end
 
-					C_Timer.After(45, function()
-						GetTalents:Start()
-					end)
-	
-					if roundIndex < 6 then roundIndex = roundIndex + 1 end
-				end
-	
-				previousRoundsWon = roundsWon or 0
-				if roundIndex == nil then
-					roundIndex = 1
-				end
-				lastLoggedRound = {}
-				scoreboardDeaths = {}
-				playerDeathSeen = false
-                scoreboardKBTotal = 0
+            -- If we saw a round-ending "Death" (via PVP_MATCH_STATE_CHANGED),
+            -- treat this PVP_MATCH_ACTIVE as the point where the scoreboard is
+            -- final and create the row now.
+            if self.isSoloShuffle and roundIndex and playerDeathSeen then
+                local cr, mmr = GetCRandMMR(7)
+                local historyTable = Database.SoloShuffleHistory
+                Database.CurrentCRforSoloShuffle = cr
+                Database.CurrentMMRforSoloShuffle = mmr
+                GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, "SoloShuffle", 7, startTime)
+
+                C_Timer.After(45, function()
+                    GetTalents:Start()
+                end)
+
+                if roundIndex < 6 then
+                    roundIndex = roundIndex + 1
+                end
+            end
+
+            previousRoundsWon = roundsWon or 0
+            -- Reset per-round flags for the upcoming round.
+            lastLoggedRound = {}
+            scoreboardDeaths = {}
+            playerDeathSeen = false
+            scoreboardKBTotal = 0
 	
 			elseif C_PvP.IsRatedArena() or C_PvP.IsRatedBattleground() or C_PvP.IsSoloRBG() then
 				self.isSoloShuffle = nil
@@ -975,135 +1003,15 @@ function RefreshDataEvent(self, event, ...)
 
 elseif self.isSoloShuffle and (event == "UNIT_HEALTH" or event == "UNIT_AURA" or event == "COMBAT_LOG_EVENT_UNFILTERED") then
 
-        confirmedDeaths = confirmedDeaths or {}
-        scoreboardKBTotal = scoreboardKBTotal or 0
+        -- Solo Shuffle death is now driven by PVP_MATCH_STATE_CHANGED ("Death")
+        -- via OnSoloShuffleStateChanged(). We no longer try to infer death from
+        -- UNIT_HEALTH / UNIT_AURA / KB deltas because that breaks on Feign, Ice
+        -- Block, etc. and CLEU is being restricted in Midnight.
 
-        local function IsRecentlyConfirmed(player)
-            return confirmedDeaths[player] and GetTime() < confirmedDeaths[player]
+        if event == "UNIT_HEALTH" or event == "UNIT_AURA" then
+            -- Ignore these for Solo Shuffle death handling now.
+            return
         end
-
-        local function GetScoreboardDeathsForPlayer(player)
-            if not player or player == "" then
-                return nil
-            end
-
-            local numScores = GetNumBattlefieldScores()
-            for i = 1, numScores do
-                local scoreInfo = C_PvP.GetScoreInfo(i)
-                if scoreInfo and scoreInfo.name then
-                    local shortName = scoreInfo.name:match("([^%-]+)")
-                    if shortName == player then
-                        local deaths = tonumber(scoreInfo.deaths) or 0
-                        return deaths
-                    end
-                end
-            end
-
-            return nil
-        end
-
-        local function HasScoreboardDeathIncrement(player)
-            local currentDeaths = GetScoreboardDeathsForPlayer(player)
-            if not currentDeaths then
-                return false
-            end
-
-            local previousDeaths = scoreboardDeaths[player]
-
-            if previousDeaths == nil then
-                -- First time we see this player; establish baseline.
-                scoreboardDeaths[player] = currentDeaths
-                -- Only treat as a new death if they've actually died.
-                return currentDeaths > 0
-            end
-
-            if currentDeaths > previousDeaths then
-                scoreboardDeaths[player] = currentDeaths
-                return true
-            end
-
-            return false
-        end
-
-		local function IsFeignDeath(unit)
-			if UnitIsFeignDeath(unit) then return true end
-			for i = 1, 40 do
-				local name, _, _, _, _, _, _, _, _, spellId = UnitAura(unit, i, "HELPFUL")
-				if not name then break end
-				if spellId == 5384 then
-					return true
-				end
-			end
-			return false
-		end
-
-        local function GetTotalKillingBlows()
-            local total = 0
-            local numScores = GetNumBattlefieldScores()
-            for i = 1, numScores do
-                local scoreInfo = C_PvP.GetScoreInfo(i)
-                if scoreInfo and scoreInfo.killingBlows then
-                    total = total + (tonumber(scoreInfo.killingBlows) or 0)
-                end
-            end
-            return total
-        end
-
-        local function ProcessPlayerDeath(name)
-            playerDeathSeen = true
-
-            local cr, mmr = GetCRandMMR(7)
-            local historyTable = Database.SoloShuffleHistory
-            Database.CurrentCRforSoloShuffle = cr
-            Database.CurrentMMRforSoloShuffle = mmr
-            GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, "SoloShuffle", 7, startTime)
-			
-			-- 🔁 Stop any previous scan
-			if GetTalents then
-				GetTalents:Stop(false)
-			end
-		
-			C_Timer.After(45, function()
-				GetTalents:Start()
-			end)
-			
-            if roundIndex < 6 then roundIndex = roundIndex + 1 end
-        end
-
-		if event == "UNIT_HEALTH" then
-			local unit = ...
-			if not unit or not UnitExists(unit) then return end
-			if not (unit == "player" or unit:match("^party[1-3]$") or unit:match("^arena[1-3]$")) then return end
-		
-			if UnitIsPlayer(unit) and UnitIsDeadOrGhost(unit) then
-				C_Timer.After(1, function() -- wait for scoreboard to update KBs
-					if not self.isSoloShuffle then return end
-
-					local isFeign = IsFeignDeath(unit)
-					local unitName = UnitName(unit)
-					local player = unitName and unitName:match("([^%-]+)")
-
-					if isFeign or not unitName or not player then
-						return
-					end
-
-					local previousKB = scoreboardKBTotal or 0
-					local currentKB  = GetTotalKillingBlows()
-
-					-- Only treat this as a *real* death if the scoreboard shows
-					-- at least one new killing blow since the last confirmed death.
-					if currentKB > previousKB then
-						scoreboardKBTotal = currentKB
-
-						if not IsRecentlyConfirmed(player) and lastLoggedRound[player] ~= roundIndex then
-							lastLoggedRound[player] = roundIndex
-							confirmedDeaths[player] = GetTime() + 3
-							ProcessPlayerDeath(player)
-						end
-					end
-				end)
-			end
-		end
 
 		if event == "COMBAT_LOG_EVENT_UNFILTERED" then
 			local _, subEvent, _, _, sourceName, _, _, destGUID, destName, destFlags, _, _, _, overkill = CombatLogGetCurrentEventInfo()
@@ -4615,8 +4523,47 @@ local function OnPvPMatchEvent(self, event, arg1, arg2)
     end
 end
 
--- Initialize and register events
+local function OnSoloShuffleStateChanged(event, ...)
+    if not (C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle()) then
+        return
+    end
 
+    -- Look for a "Death" stage in the payload; don't assume a fixed arg index.
+    local isDeath = false
+    local numArgs = select("#", ...)
+    for i = 1, numArgs do
+        if select(i, ...) == "Death" then
+            isDeath = true
+            break
+        end
+    end
+
+    -- Either not a death, or we've already marked this round as having a death.
+    if not isDeath or playerDeathSeen then
+        return
+    end
+
+    -- Freeze our scoreboard team index at the moment the round ends.
+    soloShuffleMyTeamIndexAtDeath = nil
+    local myGUID = UnitGUID("player")
+    if myGUID then
+        local numScores = GetNumBattlefieldScores()
+        for i = 1, numScores do
+            local info = C_PvP.GetScoreInfo(i)
+            if info and info.guid == myGUID then
+                soloShuffleMyTeamIndexAtDeath = info.faction
+                break
+            end
+        end
+    end
+
+    -- Mark that this round has ended. The *existing* PVP_MATCH_ACTIVE logic
+    -- will see this and actually create the history row at the scoreboard-safe
+    -- moment.
+    playerDeathSeen = true
+end
+
+-- Initialize and register events
 function Initialize()
     local frame = CreateFrame("Frame")
 
@@ -4631,9 +4578,24 @@ function Initialize()
 	frame:RegisterEvent("PVP_RATED_STATS_UPDATE")
     
     frame:SetScript("OnEvent", function(self, event, ...)
-        if event == "PLAYER_ENTERING_WORLD" or event == "PVP_MATCH_COMPLETE" or event == "PVP_MATCH_ACTIVE" or event == "COMBAT_LOG_EVENT_UNFILTERED" or event == "UNIT_HEALTH" or event == "UNIT_AURA" then
+        if event == "PLAYER_ENTERING_WORLD"
+            or event == "PVP_MATCH_COMPLETE"
+            or event == "PVP_MATCH_ACTIVE"
+            or event == "COMBAT_LOG_EVENT_UNFILTERED"
+            or event == "UNIT_HEALTH"
+            or event == "UNIT_AURA"
+            or event == "PVP_RATED_STATS_UPDATE"
+        then
             RefreshDataEvent(self, event, ...)
         end
+    end)
+
+    -- Separate lightweight listener for Solo Shuffle state changes; this does
+    -- *not* invoke RefreshDataEvent, it just marks death state for Shuffle.
+    local shuffleFrame = CreateFrame("Frame")
+    shuffleFrame:RegisterEvent("PVP_MATCH_STATE_CHANGED")
+    shuffleFrame:SetScript("OnEvent", function(_, event, ...)
+        OnSoloShuffleStateChanged(event, ...)
     end)
 end
 
