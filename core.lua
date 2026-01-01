@@ -42,11 +42,11 @@ end
 -- 3) Them­ing & Helpers                --
 ----------------------------------------
 RSTATS.Config = RSTATS.Config or {}
-RSTATS.Config.ThemeColor = "00ccff"
+RSTATS.Config.ThemeColor = "cffb69e86"
 
 function RSTATS:ColorText(text)
     local hex = self.Config.ThemeColor:upper()
-    return string.format("|cff%s%s|r", hex, text)
+    return string.format("|cffb69e86%s%s|r", hex, text)
 end
 
 function GetUnicodeSafeFont()
