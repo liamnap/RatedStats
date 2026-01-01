@@ -965,6 +965,11 @@ function RefreshDataEvent(self, event, ...)
                 Database.CurrentMMRforSoloShuffle = mmr
                 GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, "SoloShuffle", 7, startTime)
 
+                -- ✅ Round committed. Clear the "pending death" latch so the next Death
+                -- event can arm the next round.
+                playerDeathSeen = false
+                soloShuffleMyTeamIndexAtDeath = nil
+
                 C_Timer.After(45, function()
                     GetTalents:Start()
                 end)
