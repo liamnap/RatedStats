@@ -1,7 +1,7 @@
 local _, RSTATS = ...
 local playerName = UnitName("player") .. "-" .. GetRealmName()
 local eventFrame = CreateFrame("Frame")
-local COLOR_HEX = "00CCFF"
+local COLOR_HEX = "b69e86"
 
 eventFrame:RegisterEvent("ADDON_LOADED")
 
