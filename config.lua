@@ -969,7 +969,6 @@ function RefreshDataEvent(self, event, ...)
 
 				local thisRound = roundIndex
 				roundIndex = roundIndex + 1
-				playerDeathSeen = false
 				soloShuffleMyTeamIndexAtDeath = nil
                 soloShuffleAlliesGUIDAtDeath = nil
 			
@@ -994,7 +993,9 @@ function RefreshDataEvent(self, event, ...)
             -- Reset per-round flags for the upcoming round.
             lastLoggedRound = {}
             scoreboardDeaths = {}
-            playerDeathSeen = false
+            C_Timer.After(30, function()
+                playerDeathSeen = false
+            end)
             scoreboardKBTotal = 0
 	
 			elseif C_PvP.IsRatedArena() or C_PvP.IsRatedBattleground() or C_PvP.IsSoloRBG() then
