@@ -2156,94 +2156,68 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     table.insert(historyTable, 1, entry) -- Insert at the beginning to keep the latest at the top
     SaveData() -- Updated to call SaveData function
 
-    -- Solo Shuffle logic with a 15-second delay only for round 1-5
-    if C_PvP.IsRatedSoloShuffle() and roundIndex >= 1 and roundIndex <= 5 then
-    
-        local matchIDToUpdate = appendHistoryMatchID -- Track the matchID for updating the correct match entry
-    
-        -- Add a delay of 20 seconds before fetching final stats
-        C_Timer.After(20, function()
-            friendlyTotalDamage = 0
-            friendlyTotalHealing = 0
-            enemyTotalDamage = 0
-            enemyTotalHealing = 0
-            friendlyRatingTotal = 0
-            enemyRatingTotal = 0
-            friendlyRatingChangeTotal = 0
-            enemyRatingChangeTotal = 0
-            friendlyPlayerCount = 0
-            enemyPlayerCount = 0
-    
-            -- Fetch updated player stats after delay
-            for i = 1, GetNumBattlefieldScores() do
-                local scoreInfo = C_PvP.GetScoreInfo(i)
-                if scoreInfo then
-                    -- Update playerStats directly with the provided values
-                    local name = scoreInfo.name
-                    if name == UnitName("player") then
-                        name = playerFullName
-                    end
-    
-                    for _, playerData in ipairs(playerStats) do
-						if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() and soloShuffleAlliesGUIDAtDeath and guid and soloShuffleAlliesGUIDAtDeath[guid] then
-							friendlyTotalDamage = friendlyTotalDamage + damageDone
-							friendlyTotalHealing = friendlyTotalHealing + healingDone
-							friendlyRatingTotal = friendlyRatingTotal + playerData.newrating
-							friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
-							friendlyPlayerCount = friendlyPlayerCount + 1
-							table.insert(friendlyPlayers, playerData)
-						elseif not (C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle()) and playerData.faction == teamFaction then
-							friendlyTotalDamage = friendlyTotalDamage + damageDone
-							friendlyTotalHealing = friendlyTotalHealing + healingDone
-							friendlyRatingTotal = friendlyRatingTotal + playerData.newrating
-							friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
-							friendlyPlayerCount = friendlyPlayerCount + 1
-							table.insert(friendlyPlayers, playerData)
-						else
-							enemyTotalDamage = enemyTotalDamage + damageDone
-							enemyTotalHealing = enemyTotalHealing + healingDone
-							enemyRatingTotal = enemyRatingTotal + playerData.newrating
-							enemyRatingChangeTotal = enemyRatingChangeTotal + playerData.ratingChange
-							enemyPlayerCount = enemyPlayerCount + 1
-							table.insert(enemyPlayers, playerData)
-						end
-    
-                            -- Debug output to confirm update
-                        end
-                    end
-                end
-            end
-    
-            -- Calculate average newrating for friendly and enemy teams
-            local friendlyAvgCR = friendlyPlayerCount > 0 and math.floor(friendlyRatingTotal / friendlyPlayerCount) or "N/A"
-            local enemyAvgCR = enemyPlayerCount > 0 and math.floor(enemyRatingTotal / enemyPlayerCount) or "N/A"
-    
-            -- Calculate average ratingChange for friendly and enemy teams
-            local friendlyAvgRatingChange = friendlyPlayerCount > 0 and math.floor(friendlyRatingChangeTotal / friendlyPlayerCount) or "N/A"
-            local enemyAvgRatingChange = enemyPlayerCount > 0 and math.floor(enemyRatingChangeTotal / enemyPlayerCount) or "N/A"
-    
-            -- Now update the corresponding entry in historyTable based on matchID
-            for _, entry in ipairs(historyTable) do
-                if entry.matchID == matchIDToUpdate then
-                    -- Update the match entry with the new totals and averages
-                    entry.friendlyTotalDamage = friendlyTotalDamage
-                    entry.friendlyTotalHealing = friendlyTotalHealing
-                    entry.enemyTotalDamage = enemyTotalDamage
-                    entry.enemyTotalHealing = enemyTotalHealing
-                    entry.friendlyAvgCR = friendlyAvgCR
-                    entry.enemyAvgCR = enemyAvgCR
-                    entry.friendlyRatingChange = friendlyAvgRatingChange
-                    entry.enemyRatingChange = enemyAvgRatingChange
-                    -- Update playerStats with the new player data
-                    entry.playerStats = playerStats
-                    break
-                end
-            end
-    
-            -- Save the updated data
-            SaveData()
-        end)
-    end
+	--- Solo Shuffle logic with a 15-second delay only for round 1-5
+	if C_PvP.IsRatedSoloShuffle() and roundIndex >= 1 and roundIndex <= 5 then
+	
+		local matchIDToUpdate = appendHistoryMatchID
+	
+		C_Timer.After(20, function()
+			local friendlyTotalDamage2, friendlyTotalHealing2 = 0, 0
+			local enemyTotalDamage2, enemyTotalHealing2 = 0, 0
+			local friendlyRatingTotal2, enemyRatingTotal2 = 0, 0
+			local friendlyRatingChangeTotal2, enemyRatingChangeTotal2 = 0, 0
+			local friendlyPlayerCount2, enemyPlayerCount2 = 0, 0
+	
+			-- Recompute totals from the scoreboard snapshot at this time.
+			for i = 1, GetNumBattlefieldScores() do
+				local scoreInfo = C_PvP.GetScoreInfo(i)
+				if scoreInfo then
+					local guid2 = scoreInfo.guid
+					local damage2 = tonumber(scoreInfo.damageDone) or 0
+					local healing2 = tonumber(scoreInfo.healingDone) or 0
+					local rating2 = tonumber(scoreInfo.rating) or 0
+					local ratingChange2 = tonumber(scoreInfo.ratingChange) or 0
+					local newrating2 = rating2 + ratingChange2
+	
+					local isSS = C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle()
+					if isSS and soloShuffleAlliesGUIDAtDeath and guid2 and soloShuffleAlliesGUIDAtDeath[guid2] then
+						friendlyTotalDamage2 = friendlyTotalDamage2 + damage2
+						friendlyTotalHealing2 = friendlyTotalHealing2 + healing2
+						friendlyRatingTotal2 = friendlyRatingTotal2 + newrating2
+						friendlyRatingChangeTotal2 = friendlyRatingChangeTotal2 + ratingChange2
+						friendlyPlayerCount2 = friendlyPlayerCount2 + 1
+					else
+						enemyTotalDamage2 = enemyTotalDamage2 + damage2
+						enemyTotalHealing2 = enemyTotalHealing2 + healing2
+						enemyRatingTotal2 = enemyRatingTotal2 + newrating2
+						enemyRatingChangeTotal2 = enemyRatingChangeTotal2 + ratingChange2
+						enemyPlayerCount2 = enemyPlayerCount2 + 1
+					end
+				end
+			end
+	
+			local friendlyAvgCR2 = friendlyPlayerCount2 > 0 and math.floor(friendlyRatingTotal2 / friendlyPlayerCount2) or "N/A"
+			local enemyAvgCR2 = enemyPlayerCount2 > 0 and math.floor(enemyRatingTotal2 / enemyPlayerCount2) or "N/A"
+			local friendlyAvgRatingChange2 = friendlyPlayerCount2 > 0 and math.floor(friendlyRatingChangeTotal2 / friendlyPlayerCount2) or "N/A"
+			local enemyAvgRatingChange2 = enemyPlayerCount2 > 0 and math.floor(enemyRatingChangeTotal2 / enemyPlayerCount2) or "N/A"
+	
+			for _, entry in ipairs(historyTable) do
+				if entry.matchID == matchIDToUpdate then
+					entry.friendlyTotalDamage = friendlyTotalDamage2
+					entry.friendlyTotalHealing = friendlyTotalHealing2
+					entry.enemyTotalDamage = enemyTotalDamage2
+					entry.enemyTotalHealing = enemyTotalHealing2
+					entry.friendlyAvgCR = friendlyAvgCR2
+					entry.enemyAvgCR = enemyAvgCR2
+					entry.friendlyRatingChange = friendlyAvgRatingChange2
+					entry.enemyRatingChange = enemyAvgRatingChange2
+					break
+				end
+			end
+	
+			SaveData()
+		end)
+	end
 
     if C_PvP.IsRatedSoloShuffle() and roundIndex == 6 then  
         local matchIDToUpdate = appendHistoryMatchID -- Track the matchID for updating the correct match entry
