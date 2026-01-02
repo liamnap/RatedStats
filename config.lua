@@ -964,6 +964,7 @@ function RefreshDataEvent(self, event, ...)
             if self.isSoloShuffle and roundIndex and playerDeathSeen then
                 -- Never create or advance rounds from delayed updates
                 if not historyTable or not historyTable[1] then
+                    print("[RS-DEBUG]: Thinks its a delayed update so skipping entry")
                     return
                 end
 
@@ -994,6 +995,7 @@ function RefreshDataEvent(self, event, ...)
             lastLoggedRound = {}
             scoreboardDeaths = {}
             C_Timer.After(30, function()
+                print("[RS-DEBUG]: playerDeathSeen has been reset")
                 playerDeathSeen = false
             end)
             scoreboardKBTotal = 0
@@ -1062,6 +1064,7 @@ function RefreshDataEvent(self, event, ...)
                 roundsWon = nil
                 previousRoundsWon = nil
                 playerDeathSeen = false
+                print("[RS-DEBUG]: playerDeathSeen has been reset.")
                 scoreboardKBTotal = nil
 				soloShuffleMyTeamIndexAtDeath = nil
                 soloShuffleAlliesGUIDAtDeath = nil
@@ -4536,11 +4539,13 @@ local function OnSoloShuffleStateChanged(event, ...)
 
     -- One latch per round; multiple state changes are normal.
     if playerDeathSeen then
+        print("[RS-DEBUG]: playerDeathSeen not reset")
         return
     end
 
     -- Mark round as ended
     playerDeathSeen = true
+    print("[RS-DEBUG]: playerDeathSeen marked as true based on pvp match state change")
 
     -- Freeze our allies for THIS round.
     -- In Solo Shuffle, party1/party2 are your teammates for the current round.
