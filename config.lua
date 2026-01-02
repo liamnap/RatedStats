@@ -696,6 +696,9 @@ local roundsWon = 0
 -- moment the round ended (so we can keep our team on the left even if the UI
 -- reshuffles groups afterwards).
 local soloShuffleMyTeamIndexAtDeath = nil
+-- Solo Shuffle: per-round allies (GUID set) captured at the moment the round ends.
+-- This is the only reliable way to force "my team" on the left in SS.
+local soloShuffleAlliesGUIDAtDeath = nil
 
 local RBGScoreWidgets = {
     [529]  = 1671, -- Arathi Basin
@@ -768,7 +771,7 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
     -- For Solo Shuffle we want to anchor "my team" based on the team index we
     -- belonged to at the moment the round ended, not whatever reshuffles the
     -- scoreboard UI may have done afterwards.
-    local myTeamIndex = soloShuffleMyTeamIndexAtDeath
+    local alliesGUID = soloShuffleAlliesGUIDAtDeath
     local friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing = 0, 0, 0, 0
     local battlefieldWinner = GetBattlefieldWinner() == 0 and "Horde" or "Alliance"  -- Convert to "Horde" or "Alliance"
     local friendlyWinLoss = battlefieldWinner == teamFaction and "+   W" or "+   L"  -- Determine win/loss status
@@ -846,16 +849,16 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
             local talentSpec = scoreInfo.talentSpec
             local honorLevel = scoreInfo.honorLevel
             local roleAssigned = scoreInfo.roleAssigned
+            local guid = scoreInfo.guid
             local stats = scoreInfo.stats
 
             -- Ensure damageDone and healingDone are numbers
             damageDone = tonumber(damageDone) or 0
             healingDone = tonumber(healingDone) or 0
 
-            if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() and myTeamIndex ~= nil then
-                -- Solo Shuffle: treat the team we belonged to at death as "friendly"
-                -- regardless of Horde/Alliance split.
-                if faction == myTeamIndex then
+            if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() and alliesGUID then
+                -- Solo Shuffle: friendly == me + party1 + party2 for THIS round.
+                if guid and alliesGUID[guid] then
                     friendlyTotalDamage = friendlyTotalDamage + damageDone
                     friendlyTotalHealing = friendlyTotalHealing + healingDone
                 else
@@ -959,16 +962,19 @@ function RefreshDataEvent(self, event, ...)
             -- treat this PVP_MATCH_ACTIVE as the point where the scoreboard is
             -- final and create the row now.
             if self.isSoloShuffle and roundIndex and playerDeathSeen then
-                local cr, mmr = GetCRandMMR(7)
-                local historyTable = Database.SoloShuffleHistory
-                Database.CurrentCRforSoloShuffle = cr
-                Database.CurrentMMRforSoloShuffle = mmr
-                GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, "SoloShuffle", 7, startTime)
-
-                -- ✅ Round committed. Clear the "pending death" latch so the next Death
-                -- event can arm the next round.
-                playerDeathSeen = false
-                soloShuffleMyTeamIndexAtDeath = nil
+				local thisRound = roundIndex
+				roundIndex = roundIndex + 1
+				playerDeathSeen = false
+				soloShuffleMyTeamIndexAtDeath = nil
+                soloShuffleAlliesGUIDAtDeath = nil
+			
+				C_Timer.After(1, function()
+					local cr, mmr = GetCRandMMR(7)
+					local historyTable = Database.SoloShuffleHistory
+					Database.CurrentCRforSoloShuffle = cr
+					Database.CurrentMMRforSoloShuffle = mmr
+					GetPlayerStatsEndOfMatch(cr, mmr, historyTable, thisRound, "SoloShuffle", 7, startTime)
+				end)
 
                 C_Timer.After(45, function()
                     GetTalents:Start()
@@ -1035,7 +1041,7 @@ elseif self.isSoloShuffle and (event == "UNIT_HEALTH" or event == "UNIT_AURA" or
 			end
 
             if self.isSoloShuffle then
-                if roundIndex and not playerDeathSeen then
+                if roundIndex and playerDeathSeen then
                     local cr, mmr = GetCRandMMR(7)
                     local historyTable = Database.SoloShuffleHistory
                     Database.CurrentCRforSoloShuffle = cr
@@ -1051,6 +1057,8 @@ elseif self.isSoloShuffle and (event == "UNIT_HEALTH" or event == "UNIT_AURA" or
                 previousRoundsWon = nil
                 playerDeathSeen = false
                 scoreboardKBTotal = nil
+				soloShuffleMyTeamIndexAtDeath = nil
+                soloShuffleAlliesGUIDAtDeath = nil
             elseif C_PvP.IsRatedArena() then
                 local matchBracket = C_PvP.GetActiveMatchBracket()
                 if matchBracket == 0 then
@@ -2022,8 +2030,14 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             enemyTotalDamage = tonumber(enemyTotalDamage) or 0
             enemyTotalHealing = tonumber(enemyTotalHealing) or 0
 
-
-            if playerData.faction == teamFaction then
+            if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() and soloShuffleAlliesGUIDAtDeath and guid and soloShuffleAlliesGUIDAtDeath[guid] then
+                friendlyTotalDamage = friendlyTotalDamage + damageDone
+                friendlyTotalHealing = friendlyTotalHealing + healingDone
+                friendlyRatingTotal = friendlyRatingTotal + playerData.newrating
+                friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
+                friendlyPlayerCount = friendlyPlayerCount + 1
+                table.insert(friendlyPlayers, playerData)
+            elseif not (C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle()) and playerData.faction == teamFaction then
                 friendlyTotalDamage = friendlyTotalDamage + damageDone
                 friendlyTotalHealing = friendlyTotalHealing + healingDone
                 friendlyRatingTotal = friendlyRatingTotal + playerData.newrating
@@ -2171,33 +2185,28 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                     end
     
                     for _, playerData in ipairs(playerStats) do
-                        if playerData.name == name then
-                            -- Update the playerData fields with new stats
-                            playerData.killingBlows = tonumber(scoreInfo.killingBlows) or 0
-                            playerData.honorableKills = tonumber(scoreInfo.honorableKills) or 0
-                            playerData.damage = tonumber(scoreInfo.damageDone) or 0
-                            playerData.healing = tonumber(scoreInfo.healingDone) or 0
-                            playerData.rating = tonumber(scoreInfo.rating) or 0
-                            playerData.ratingChange = tonumber(scoreInfo.ratingChange) or 0
-                            playerData.mmrChange = tonumber(scoreInfo.mmrChange) or 0
-                            playerData.postmatchMMR = tonumber(scoreInfo.postmatchMMR) or 0
-                            playerData.honorLevel = tonumber(scoreInfo.honorLevel) or 0
----                            playerData.roundsWon = roundsWon or 0
-    
-                            -- Calculate totals based on player's faction
-                            if playerData.faction == teamFaction then
-                                friendlyTotalDamage = friendlyTotalDamage + playerData.damage
-                                friendlyTotalHealing = friendlyTotalHealing + playerData.healing
-                                friendlyRatingTotal = friendlyRatingTotal + playerData.rating + playerData.ratingChange
-                                friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
-                                friendlyPlayerCount = friendlyPlayerCount + 1
-                            else
-                                enemyTotalDamage = enemyTotalDamage + playerData.damage
-                                enemyTotalHealing = enemyTotalHealing + playerData.healing
-                                enemyRatingTotal = enemyRatingTotal + playerData.rating + playerData.ratingChange
-                                enemyRatingChangeTotal = enemyRatingChangeTotal + playerData.ratingChange
-                                enemyPlayerCount = enemyPlayerCount + 1
-                            end
+						if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() and soloShuffleAlliesGUIDAtDeath and guid and soloShuffleAlliesGUIDAtDeath[guid] then
+							friendlyTotalDamage = friendlyTotalDamage + damageDone
+							friendlyTotalHealing = friendlyTotalHealing + healingDone
+							friendlyRatingTotal = friendlyRatingTotal + playerData.newrating
+							friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
+							friendlyPlayerCount = friendlyPlayerCount + 1
+							table.insert(friendlyPlayers, playerData)
+						elseif not (C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle()) and playerData.faction == teamFaction then
+							friendlyTotalDamage = friendlyTotalDamage + damageDone
+							friendlyTotalHealing = friendlyTotalHealing + healingDone
+							friendlyRatingTotal = friendlyRatingTotal + playerData.newrating
+							friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
+							friendlyPlayerCount = friendlyPlayerCount + 1
+							table.insert(friendlyPlayers, playerData)
+						else
+							enemyTotalDamage = enemyTotalDamage + damageDone
+							enemyTotalHealing = enemyTotalHealing + healingDone
+							enemyRatingTotal = enemyRatingTotal + playerData.newrating
+							enemyRatingChangeTotal = enemyRatingChangeTotal + playerData.ratingChange
+							enemyPlayerCount = enemyPlayerCount + 1
+							table.insert(enemyPlayers, playerData)
+						end
     
                             -- Debug output to confirm update
                         end
@@ -2277,19 +2286,28 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 ---                            playerData.roundsWon = roundsWon or 0
     
                             -- Calculate totals based on player's faction
-                            if playerData.faction == teamFaction then
-                                friendlyTotalDamage = friendlyTotalDamage + playerData.damage
-                                friendlyTotalHealing = friendlyTotalHealing + playerData.healing
-                                friendlyRatingTotal = friendlyRatingTotal + playerData.rating + playerData.ratingChange
-                                friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
-                                friendlyPlayerCount = friendlyPlayerCount + 1
-                            else
-                                enemyTotalDamage = enemyTotalDamage + playerData.damage
-                                enemyTotalHealing = enemyTotalHealing + playerData.healing
-                                enemyRatingTotal = enemyRatingTotal + playerData.rating + playerData.ratingChange
-                                enemyRatingChangeTotal = enemyRatingChangeTotal + playerData.ratingChange
-                                enemyPlayerCount = enemyPlayerCount + 1
-                            end
+						if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() and soloShuffleAlliesGUIDAtDeath and guid and soloShuffleAlliesGUIDAtDeath[guid] then
+							friendlyTotalDamage = friendlyTotalDamage + damageDone
+							friendlyTotalHealing = friendlyTotalHealing + healingDone
+							friendlyRatingTotal = friendlyRatingTotal + playerData.newrating
+							friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
+							friendlyPlayerCount = friendlyPlayerCount + 1
+							table.insert(friendlyPlayers, playerData)
+						elseif not (C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle()) and playerData.faction == teamFaction then
+							friendlyTotalDamage = friendlyTotalDamage + damageDone
+							friendlyTotalHealing = friendlyTotalHealing + healingDone
+							friendlyRatingTotal = friendlyRatingTotal + playerData.newrating
+							friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
+							friendlyPlayerCount = friendlyPlayerCount + 1
+							table.insert(friendlyPlayers, playerData)
+						else
+							enemyTotalDamage = enemyTotalDamage + damageDone
+							enemyTotalHealing = enemyTotalHealing + healingDone
+							enemyRatingTotal = enemyRatingTotal + playerData.newrating
+							enemyRatingChangeTotal = enemyRatingChangeTotal + playerData.ratingChange
+							enemyPlayerCount = enemyPlayerCount + 1
+							table.insert(enemyPlayers, playerData)
+						end
     
                             -- Debug output to confirm update
                         end
@@ -4533,32 +4551,26 @@ local function OnSoloShuffleStateChanged(event, ...)
         return
     end
 
-    -- Each Solo Shuffle round end triggers PVP_MATCH_STATE_CHANGED.
-    -- We do NOT inspect payloads; the event itself is the round delimiter.
+    -- One latch per round; multiple state changes are normal.
     if playerDeathSeen then
         return
     end
 
+    -- Mark round as ended
     playerDeathSeen = true
 
-    -- Freeze our scoreboard team index at the moment the round ends.
-    soloShuffleMyTeamIndexAtDeath = nil
-    local myGUID = UnitGUID("player")
-    if myGUID then
-        local numScores = GetNumBattlefieldScores()
-        for i = 1, numScores do
-            local info = C_PvP.GetScoreInfo(i)
-            if info and info.guid == myGUID then
-                soloShuffleMyTeamIndexAtDeath = info.faction
-                break
-            end
-        end
-    end
+    -- Freeze our allies for THIS round.
+    -- In Solo Shuffle, party1/party2 are your teammates for the current round.
+    soloShuffleAlliesGUIDAtDeath = {}
 
-    -- Mark that this round has ended. The *existing* PVP_MATCH_ACTIVE logic
-    -- will see this and actually create the history row at the scoreboard-safe
-    -- moment.
-    playerDeathSeen = true
+    local g = UnitGUID("player")
+    if g then soloShuffleAlliesGUIDAtDeath[g] = true end
+
+    g = UnitGUID("party1")
+    if g then soloShuffleAlliesGUIDAtDeath[g] = true end
+
+    g = UnitGUID("party2")
+    if g then soloShuffleAlliesGUIDAtDeath[g] = true end
 end
 
 -- Initialize and register events
