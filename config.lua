@@ -2209,8 +2209,9 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 					local ratingChange2 = tonumber(scoreInfo.ratingChange) or 0
 					local newrating2 = rating2 + ratingChange2
 	
-					local isSS = C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle()
-					if isSS and playerData.isFriendly then
+                    local isSS = C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle()
+                    local alliesGUID = soloShuffleAlliesGUIDAtDeath
+                    if isSS and alliesGUID and guid2 and alliesGUID[guid2] then
 						friendlyTotalDamage2 = friendlyTotalDamage2 + damage2
 						friendlyTotalHealing2 = friendlyTotalHealing2 + healing2
 						friendlyRatingTotal2 = friendlyRatingTotal2 + newrating2
