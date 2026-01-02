@@ -2392,8 +2392,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 				    end
 			    end)
             end
-        end)
-    end
+        end
+    end)
 end
 
 local function convertToTimestamp(dateString)
