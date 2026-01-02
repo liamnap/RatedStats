@@ -2052,7 +2052,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             else
                 enemyTotalDamage = enemyTotalDamage + damageDone
                 enemyTotalHealing = enemyTotalHealing + healingDone
-                enemyRatingTotal = enemyRatingTotal + + playerData.rating + playerData.ratingChange
+                enemyRatingTotal = enemyRatingTotal + playerData.rating + playerData.ratingChange
                 enemyRatingChangeTotal = enemyRatingChangeTotal + playerData.ratingChange
                 enemyPlayerCount = enemyPlayerCount + 1
                 table.insert(enemyPlayers, playerData)
