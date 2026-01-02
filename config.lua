@@ -962,16 +962,8 @@ function RefreshDataEvent(self, event, ...)
             -- treat this PVP_MATCH_ACTIVE as the point where the scoreboard is
             -- final and create the row now.
             if self.isSoloShuffle and roundIndex and playerDeathSeen then
-                -- Never create or advance rounds from delayed updates
-                if not historyTable or not historyTable[1] then
-                    print("[RS-DEBUG]: Thinks its a delayed update so skipping entry")
-                    return
-                end
-
 				local thisRound = roundIndex
 				roundIndex = roundIndex + 1
-				soloShuffleMyTeamIndexAtDeath = nil
-                soloShuffleAlliesGUIDAtDeath = nil
 			
 				C_Timer.After(1, function()
 					local cr, mmr = GetCRandMMR(7)
@@ -979,25 +971,23 @@ function RefreshDataEvent(self, event, ...)
 					Database.CurrentCRforSoloShuffle = cr
 					Database.CurrentMMRforSoloShuffle = mmr
 					GetPlayerStatsEndOfMatch(cr, mmr, historyTable, thisRound, "SoloShuffle", 7, startTime)
+
+				    soloShuffleMyTeamIndexAtDeath = nil
+                    soloShuffleAlliesGUIDAtDeath = nil
 				end)
+
+                print("[RS-DEBUG]: playerDeathSeen has been reset")
+                playerDeathSeen = false
 
                 C_Timer.After(45, function()
                     GetTalents:Start()
                 end)
-
-                if roundIndex < 6 then
-                    roundIndex = roundIndex + 1
-                end
             end
 
             previousRoundsWon = roundsWon or 0
             -- Reset per-round flags for the upcoming round.
             lastLoggedRound = {}
             scoreboardDeaths = {}
-            C_Timer.After(30, function()
-                print("[RS-DEBUG]: playerDeathSeen has been reset")
-                playerDeathSeen = false
-            end)
             scoreboardKBTotal = 0
 	
 			elseif C_PvP.IsRatedArena() or C_PvP.IsRatedBattleground() or C_PvP.IsSoloRBG() then
