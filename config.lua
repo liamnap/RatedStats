@@ -2070,7 +2070,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             end
         end
     end
-
+    
     local function GetPlayedGames(categoryID)
         return select(4, GetPersonalRatedInfo(categoryID))
     end
@@ -2084,6 +2084,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     end
     
     for _, player in ipairs(enemyPlayers) do
+    end
+
     end
 
     -- Calculate average newrating for friendly and enemy teams
@@ -2316,79 +2318,79 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                         end
                     end
                 end
+            end
     
-                -- Calculate average newrating for friendly and enemy teams
-                local friendlyAvgCR = friendlyPlayerCount > 0 and math.floor(friendlyRatingTotal / friendlyPlayerCount) or "N/A"
-                local enemyAvgCR = enemyPlayerCount > 0 and math.floor(enemyRatingTotal / enemyPlayerCount) or "N/A"
-    
-                -- Calculate average ratingChange for friendly and enemy teams
-                local friendlyAvgRatingChange = friendlyPlayerCount > 0 and math.floor(friendlyRatingChangeTotal / friendlyPlayerCount) or "N/A"
-                local enemyAvgRatingChange = enemyPlayerCount > 0 and math.floor(enemyRatingChangeTotal / enemyPlayerCount) or "N/A"
-    
-                -- Now update the corresponding entry in historyTable based on matchID
-                for _, entry in ipairs(historyTable) do
-                    if entry.matchID == matchIDToUpdate then
-                        -- Update the match entry with the new totals and averages
-                        entry.friendlyTotalDamage = friendlyTotalDamage
-                        entry.friendlyTotalHealing = friendlyTotalHealing
-                        entry.enemyTotalDamage = enemyTotalDamage
-                        entry.enemyTotalHealing = enemyTotalHealing
-                        entry.friendlyAvgCR = friendlyAvgCR
-                        entry.enemyAvgCR = enemyAvgCR
-                        entry.friendlyRatingChange = friendlyAvgRatingChange
-                        entry.enemyRatingChange = enemyAvgRatingChange
-                        -- Update playerStats with the new player data
-    --                    entry.playerStats = playerStats
-                        break
-                    end
+            -- Calculate average newrating for friendly and enemy teams
+            local friendlyAvgCR = friendlyPlayerCount > 0 and math.floor(friendlyRatingTotal / friendlyPlayerCount) or "N/A"
+            local enemyAvgCR = enemyPlayerCount > 0 and math.floor(enemyRatingTotal / enemyPlayerCount) or "N/A"
+
+            -- Calculate average ratingChange for friendly and enemy teams
+            local friendlyAvgRatingChange = friendlyPlayerCount > 0 and math.floor(friendlyRatingChangeTotal / friendlyPlayerCount) or "N/A"
+            local enemyAvgRatingChange = enemyPlayerCount > 0 and math.floor(enemyRatingChangeTotal / enemyPlayerCount) or "N/A"
+
+            -- Now update the corresponding entry in historyTable based on matchID
+            for _, entry in ipairs(historyTable) do
+                if entry.matchID == matchIDToUpdate then
+                    -- Update the match entry with the new totals and averages
+                    entry.friendlyTotalDamage = friendlyTotalDamage
+                    entry.friendlyTotalHealing = friendlyTotalHealing
+                    entry.enemyTotalDamage = enemyTotalDamage
+                    entry.enemyTotalHealing = enemyTotalHealing
+                    entry.friendlyAvgCR = friendlyAvgCR
+                    entry.enemyAvgCR = enemyAvgCR
+                    entry.friendlyRatingChange = friendlyAvgRatingChange
+                    entry.enemyRatingChange = enemyAvgRatingChange
+                    -- Update playerStats with the new player data
+--                    entry.playerStats = playerStats
+                    break
                 end
-	
-                -- Save the updated data
-                SaveData()
-			
-			    if GetTalents then
-				    GetTalents:ReallyClearMemory() -- now safe to clear everything
-			    end
-			
-			    -- Re-run filters to refresh the UI with the new match included
-			    local tabIDByCategoryID = {
-				    [7] = 1, -- Solo Shuffle
-				    [1] = 2, -- 2v2
-				    [2] = 3, -- 3v3
-				    [4] = 4, -- RBG
-				    [9] = 5, -- Solo RBG
-			    }
-			
-			    local tabID = tabIDByCategoryID[categoryID]
-			    if tabID and RSTATS.UIConfig and RSTATS.ContentFrames then
-				    RatedStatsFilters[tabID] = {} -- ✅ Optional: wipe filters when adding a match
-				    RSTATS.__LastHistoryCount = RSTATS.__LastHistoryCount or {}
-				    RSTATS.__LastHistoryCount[tabID] = #(Database.SoloShuffleHistory or {})
-			
-				    -- ✅ Soft-refresh UI: update the correct tab
-				    C_Timer.After(0.1, function()
-    					-- Select the correct content frame
-	    				local content = RSTATS.ScrollContents[tabID]
-		    			local frame   = RSTATS.ContentFrames[tabID]
-			    		local mmrID   = ({
-				    		[1] = 7,
-					    	[2] = 1,
-						    [3] = 2,
-						    [4] = 4,
-						    [5] = 9
-					    })[tabID]
-			
-					    if content and frame then
-						    -- Clear match frames cache so DisplayHistory redraws fresh
-						    content.matchFrames = {}
-						    content.matchFrameByID = {}
-			
-						    local mmrLabel = DisplayCurrentCRMMR(frame, mmrID)
-						    FilterAndSearchMatches(RatedStatsSearchBox:GetText())
-						    RSTATS:UpdateStatsView(filterKey, tabID)
-					    end
-				    end)
-                end
+            end
+
+            -- Save the updated data
+            SaveData()
+		
+		    if GetTalents then
+			    GetTalents:ReallyClearMemory() -- now safe to clear everything
+		    end
+		
+		    -- Re-run filters to refresh the UI with the new match included
+		    local tabIDByCategoryID = {
+			    [7] = 1, -- Solo Shuffle
+			    [1] = 2, -- 2v2
+			    [2] = 3, -- 3v3
+			    [4] = 4, -- RBG
+			    [9] = 5, -- Solo RBG
+		    }
+		
+		    local tabID = tabIDByCategoryID[categoryID]
+		    if tabID and RSTATS.UIConfig and RSTATS.ContentFrames then
+			    RatedStatsFilters[tabID] = {} -- ✅ Optional: wipe filters when adding a match
+			    RSTATS.__LastHistoryCount = RSTATS.__LastHistoryCount or {}
+			    RSTATS.__LastHistoryCount[tabID] = #(Database.SoloShuffleHistory or {})
+		
+			    -- ✅ Soft-refresh UI: update the correct tab
+			    C_Timer.After(0.1, function()
+					-- Select the correct content frame
+    				local content = RSTATS.ScrollContents[tabID]
+	    			local frame   = RSTATS.ContentFrames[tabID]
+		    		local mmrID   = ({
+			    		[1] = 7,
+				    	[2] = 1,
+					    [3] = 2,
+					    [4] = 4,
+					    [5] = 9
+				    })[tabID]
+		
+				    if content and frame then
+					    -- Clear match frames cache so DisplayHistory redraws fresh
+					    content.matchFrames = {}
+					    content.matchFrameByID = {}
+		
+					    local mmrLabel = DisplayCurrentCRMMR(frame, mmrID)
+					    FilterAndSearchMatches(RatedStatsSearchBox:GetText())
+					    RSTATS:UpdateStatsView(filterKey, tabID)
+				    end
+			    end)
             end
         end)
     end
