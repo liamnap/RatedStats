@@ -2318,7 +2318,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                     entry.friendlyRatingChange = friendlyAvgRatingChange
                     entry.enemyRatingChange = enemyAvgRatingChange
                     -- Update playerStats with the new player data
-                    entry.playerStats = playerStats
+--                    entry.playerStats = playerStats
                     break
                 end
             end
