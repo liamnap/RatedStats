@@ -4533,20 +4533,13 @@ local function OnSoloShuffleStateChanged(event, ...)
         return
     end
 
-    -- Look for a "Death" stage in the payload; don't assume a fixed arg index.
-    local isDeath = false
-    local numArgs = select("#", ...)
-    for i = 1, numArgs do
-        if select(i, ...) == "Death" then
-            isDeath = true
-            break
-        end
-    end
-
-    -- Either not a death, or we've already marked this round as having a death.
-    if not isDeath or playerDeathSeen then
+    -- Each Solo Shuffle round end triggers PVP_MATCH_STATE_CHANGED.
+    -- We do NOT inspect payloads; the event itself is the round delimiter.
+    if playerDeathSeen then
         return
     end
+
+    playerDeathSeen = true
 
     -- Freeze our scoreboard team index at the moment the round ends.
     soloShuffleMyTeamIndexAtDeath = nil
