@@ -2278,40 +2278,40 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                             playerData.honorLevel = tonumber(scoreInfo.honorLevel) or 0
 ---                            playerData.roundsWon = roundsWon or 0
     
-                            -- Calculate totals based on player's faction
-						if C_PvP.IsRatedSoloShuffle then
-							if playerData.isFriendly then
-                                friendlyTotalDamage = friendlyTotalDamage + playerData.damage
-							    friendlyTotalHealing = friendlyTotalHealing + playerData.healing
-							    friendlyRatingTotal = friendlyRatingTotal + playerData.rating + playerData.ratingChange
-							    friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
-							    friendlyPlayerCount = friendlyPlayerCount + 1
-							    table.insert(friendlyPlayers, playerData)
-                            else
-                                enemyTotalDamage = enemyTotalDamage + playerData.damage
-							    enemyTotalHealing = enemyTotalHealing + playerData.healing
-							    enemyRatingTotal = enemyRatingTotal + playerData.rating + playerData.ratingChange
-							    enemyRatingChangeTotal = enemyRatingChangeTotal + playerData.ratingChange
-							    enemyPlayerCount = enemyPlayerCount + 1
-							    table.insert(enemyPlayers, playerData)
-                            end
-						else
-                            if playerData.faction == teamFaction then
-							    friendlyTotalDamage = friendlyTotalDamage + playerData.damage
-							    friendlyTotalHealing = friendlyTotalHealing + playerData.healing
-							    friendlyRatingTotal = friendlyRatingTotal + playerData.rating + playerData.ratingChange
-							    friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
-							    friendlyPlayerCount = friendlyPlayerCount + 1
-							    table.insert(friendlyPlayers, playerData)
+                            -- Calculate totals based on player's team 
+						    if C_PvP.IsRatedSoloShuffle then
+							    if playerData.isFriendly then
+                                    friendlyTotalDamage = friendlyTotalDamage + playerData.damage
+							        friendlyTotalHealing = friendlyTotalHealing + playerData.healing
+							        friendlyRatingTotal = friendlyRatingTotal + playerData.rating + playerData.ratingChange
+							        friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
+							        friendlyPlayerCount = friendlyPlayerCount + 1
+							        table.insert(friendlyPlayers, playerData)
+                                else
+                                    enemyTotalDamage = enemyTotalDamage + playerData.damage
+							        enemyTotalHealing = enemyTotalHealing + playerData.healing
+							        enemyRatingTotal = enemyRatingTotal + playerData.rating + playerData.ratingChange
+							        enemyRatingChangeTotal = enemyRatingChangeTotal + playerData.ratingChange
+							        enemyPlayerCount = enemyPlayerCount + 1
+							        table.insert(enemyPlayers, playerData)
+                                end
 						    else
-							    enemyTotalDamage = enemyTotalDamage + playerData.damage
-							    enemyTotalHealing = enemyTotalHealing + playerData.healing
-							    enemyRatingTotal = enemyRatingTotal + playerData.rating + playerData.ratingChange
-							    enemyRatingChangeTotal = enemyRatingChangeTotal + playerData.ratingChange
-							    enemyPlayerCount = enemyPlayerCount + 1
-							    table.insert(enemyPlayers, playerData)
-						    end
-    
+                                if playerData.faction == teamFaction then
+							        friendlyTotalDamage = friendlyTotalDamage + playerData.damage
+							        friendlyTotalHealing = friendlyTotalHealing + playerData.healing
+							        friendlyRatingTotal = friendlyRatingTotal + playerData.rating + playerData.ratingChange
+							        friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
+							        friendlyPlayerCount = friendlyPlayerCount + 1
+							        table.insert(friendlyPlayers, playerData)
+						        else
+    							    enemyTotalDamage = enemyTotalDamage + playerData.damage
+							        enemyTotalHealing = enemyTotalHealing + playerData.healing
+							        enemyRatingTotal = enemyRatingTotal + playerData.rating + playerData.ratingChange
+							        enemyRatingChangeTotal = enemyRatingChangeTotal + playerData.ratingChange
+							        enemyPlayerCount = enemyPlayerCount + 1
+							        table.insert(enemyPlayers, playerData)
+						        end
+                            end
                             -- Debug output to confirm update
                         end
                     end
