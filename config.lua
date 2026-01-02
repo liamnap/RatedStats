@@ -2033,21 +2033,21 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() and soloShuffleAlliesGUIDAtDeath and guid and soloShuffleAlliesGUIDAtDeath[guid] then
                 friendlyTotalDamage = friendlyTotalDamage + damageDone
                 friendlyTotalHealing = friendlyTotalHealing + healingDone
-                friendlyRatingTotal = friendlyRatingTotal + playerData.newrating
+                friendlyRatingTotal = friendlyRatingTotal + playerData.rating + playerData.ratingChange
                 friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
                 friendlyPlayerCount = friendlyPlayerCount + 1
                 table.insert(friendlyPlayers, playerData)
             elseif not (C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle()) and playerData.faction == teamFaction then
                 friendlyTotalDamage = friendlyTotalDamage + damageDone
                 friendlyTotalHealing = friendlyTotalHealing + healingDone
-                friendlyRatingTotal = friendlyRatingTotal + playerData.newrating
+                friendlyRatingTotal = friendlyRatingTotal + playerData.rating + playerData.ratingChange
                 friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
                 friendlyPlayerCount = friendlyPlayerCount + 1
                 table.insert(friendlyPlayers, playerData)
             else
                 enemyTotalDamage = enemyTotalDamage + damageDone
                 enemyTotalHealing = enemyTotalHealing + healingDone
-                enemyRatingTotal = enemyRatingTotal + playerData.newrating
+                enemyRatingTotal = enemyRatingTotal + + playerData.rating + playerData.ratingChange
                 enemyRatingChangeTotal = enemyRatingChangeTotal + playerData.ratingChange
                 enemyPlayerCount = enemyPlayerCount + 1
                 table.insert(enemyPlayers, playerData)
@@ -2261,23 +2261,23 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     
                             -- Calculate totals based on player's faction
 						if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() and soloShuffleAlliesGUIDAtDeath and guid and soloShuffleAlliesGUIDAtDeath[guid] then
-							friendlyTotalDamage = friendlyTotalDamage + damageDone
-							friendlyTotalHealing = friendlyTotalHealing + healingDone
-							friendlyRatingTotal = friendlyRatingTotal + playerData.newrating
+							friendlyTotalDamage = friendlyTotalDamage + playerData.damage
+							friendlyTotalHealing = friendlyTotalHealing + playerData.healing
+							friendlyRatingTotal = friendlyRatingTotal + playerData.rating + playerData.ratingChange
 							friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
 							friendlyPlayerCount = friendlyPlayerCount + 1
 							table.insert(friendlyPlayers, playerData)
 						elseif not (C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle()) and playerData.faction == teamFaction then
-							friendlyTotalDamage = friendlyTotalDamage + damageDone
-							friendlyTotalHealing = friendlyTotalHealing + healingDone
-							friendlyRatingTotal = friendlyRatingTotal + playerData.newrating
+							friendlyTotalDamage = friendlyTotalDamage + playerData.damage
+							friendlyTotalHealing = friendlyTotalHealing + playerData.healing
+							friendlyRatingTotal = friendlyRatingTotal + playerData.rating + playerData.ratingChange
 							friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
 							friendlyPlayerCount = friendlyPlayerCount + 1
 							table.insert(friendlyPlayers, playerData)
 						else
-							enemyTotalDamage = enemyTotalDamage + damageDone
-							enemyTotalHealing = enemyTotalHealing + healingDone
-							enemyRatingTotal = enemyRatingTotal + playerData.newrating
+							enemyTotalDamage = enemyTotalDamage + playerData.damage
+							enemyTotalHealing = enemyTotalHealing + playerData.healing
+							enemyRatingTotal = enemyRatingTotal + playerData.rating + playerData.ratingChange
 							enemyRatingChangeTotal = enemyRatingChangeTotal + playerData.ratingChange
 							enemyPlayerCount = enemyPlayerCount + 1
 							table.insert(enemyPlayers, playerData)
