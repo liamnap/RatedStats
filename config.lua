@@ -1017,7 +1017,7 @@ function RefreshDataEvent(self, event, ...)
 			end
 		end)
 
-elseif self.isSoloShuffle and (event == "UNIT_HEALTH" or event == "UNIT_AURA" or event == "COMBAT_LOG_EVENT_UNFILTERED") then
+    elseif self.isSoloShuffle and (event == "UNIT_HEALTH" or event == "UNIT_AURA" or event == "COMBAT_LOG_EVENT_UNFILTERED") then
 
         -- Solo Shuffle death is now driven by PVP_MATCH_STATE_CHANGED ("Death")
         -- via OnSoloShuffleStateChanged(). We no longer try to infer death from
