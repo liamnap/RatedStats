@@ -775,17 +775,28 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
     local friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing = 0, 0, 0, 0
     local battlefieldWinner = GetBattlefieldWinner() == 0 and "Horde" or "Alliance"  -- Convert to "Horde" or "Alliance"
     local friendlyWinLoss = battlefieldWinner == teamFaction and "+   W" or "+   L"  -- Determine win/loss status
-	local previousRoundsWon = previousRoundsWon or 0
-    local roundsWon = roundsWon or 0
+	previousRoundsWon = previousRoundsWon or 0
+    roundsWon = roundsWon or 0
 	local duration = GetBattlefieldInstanceRunTime() / 1000  -- duration in seconds
 	local damp = C_Commentator.GetDampeningPercent()
 	
 	if C_PvP.IsRatedSoloShuffle() and roundIndex then
+		-- Hard guard: Solo Shuffle rounds are 1..6. If upstream forgot to reset, don't let it poison math/UI.
+		if type(roundIndex) ~= "number" or roundIndex < 1 or roundIndex > 6 then
+			roundIndex = 1
+		end
+
+		-- If startTime wasn't recorded, derive it from the current round duration.
+		if type(startTime) ~= "number" then
+			startTime = endTime - duration
+		end
+
 		local totalPreviousDuration = 0
 		local totalRoundsToLookBack = roundIndex - 1
 
 		-- Sum durations of previous rounds
-		for i = #historyTable, 1, -1 do
+		-- historyTable newest-first (index 1). So walk forward from 1 to pick the immediately previous rounds.
+		for i = 1, #historyTable do
 			local entry = historyTable[i]
 			if entry and entry.duration and totalRoundsToLookBack > 0 and type(entry.duration) == "number" then
 				totalPreviousDuration = totalPreviousDuration + entry.duration
@@ -793,7 +804,8 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
 			end
 		end
 	
-		duration = endTime - startTime - totalPreviousDuration
+		duration = (endTime - startTime) - totalPreviousDuration
+		if duration < 0 then duration = 0 end
 	end
 
 	-- Delay storing played games by 5 seconds to give the API time to update
