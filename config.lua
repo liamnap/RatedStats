@@ -962,6 +962,11 @@ function RefreshDataEvent(self, event, ...)
             -- treat this PVP_MATCH_ACTIVE as the point where the scoreboard is
             -- final and create the row now.
             if self.isSoloShuffle and roundIndex and playerDeathSeen then
+                -- Never create or advance rounds from delayed updates
+                if not historyTable or not historyTable[1] then
+                    return
+                end
+
 				local thisRound = roundIndex
 				roundIndex = roundIndex + 1
 				playerDeathSeen = false
@@ -2153,10 +2158,12 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 		end
 	end
 
-    table.insert(historyTable, 1, entry) -- Insert at the beginning to keep the latest at the top
-    SaveData() -- Updated to call SaveData function
+     if not (C_PvP.IsRatedSoloShuffle() and roundIndex >= 1 and roundIndex <= 5) then
+        table.insert(historyTable, 1, entry)
+        SaveData()
+    end
 
-	--- Solo Shuffle logic with a 15-second delay only for round 1-5
+	--- Solo Shuffle logic with a 20-second delay only for round 1-5
 	if C_PvP.IsRatedSoloShuffle() and roundIndex >= 1 and roundIndex <= 5 then
 	
 		local matchIDToUpdate = appendHistoryMatchID
@@ -2214,7 +2221,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 					break
 				end
 			end
-	
+
+            table.insert(historyTable, 1, entry)	
 			SaveData()
 		end)
 	end
