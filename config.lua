@@ -2086,8 +2086,6 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     for _, player in ipairs(enemyPlayers) do
     end
 
-    end
-
     -- Calculate average newrating for friendly and enemy teams
     local friendlyAvgCR = friendlyPlayerCount > 0 and math.floor(friendlyRatingTotal / friendlyPlayerCount) or "N/A"
     local enemyAvgCR = enemyPlayerCount > 0 and math.floor(enemyRatingTotal / enemyPlayerCount) or "N/A"
