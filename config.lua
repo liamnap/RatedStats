@@ -4612,7 +4612,6 @@ function Initialize()
     frame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 	frame:RegisterEvent("UNIT_HEALTH")
 	frame:RegisterEvent("UNIT_AURA")
-	frame:RegisterEvent("PVP_RATED_STATS_UPDATE")
     
     frame:SetScript("OnEvent", function(self, event, ...)
         if event == "PLAYER_ENTERING_WORLD"
@@ -4621,7 +4620,6 @@ function Initialize()
             or event == "COMBAT_LOG_EVENT_UNFILTERED"
             or event == "UNIT_HEALTH"
             or event == "UNIT_AURA"
-            or event == "PVP_RATED_STATS_UPDATE"
         then
             RefreshDataEvent(self, event, ...)
         end
