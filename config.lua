@@ -1913,6 +1913,7 @@ end
 function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, allianceTeamScore, hordeTeamScore, roundsWon, categoryName, categoryID, damp)
     local appendHistoryMatchID = #historyTable + 1  -- Unique match ID
     local playerFullName = GetPlayerFullName() -- Get the player's full name
+    local myTeamIndex
 
     -- Fetch team information
     local friendlyTeamInfo = C_PvP.GetTeamInfo(0)  -- Assuming 0 is the index for friendly team
@@ -1994,10 +1995,12 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                 faction = translatedFaction,
                 teamIndex = teamIndex,
                 isFriendly = (
-                    C_PvP.IsRatedSoloShuffle()
-                    and soloShuffleAlliesGUIDAtDeath
+                    C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle()
                     and guid
-                    and soloShuffleAlliesGUIDAtDeath[guid]
+                    and (
+                        guid == UnitGUID("player")
+                        or (soloShuffleAlliesGUIDAtDeath and soloShuffleAlliesGUIDAtDeath[guid])
+                    )
                 ) or false,
                 race = raceName,
                 evaluatedrace = remappedRace,
@@ -2126,6 +2129,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 
     local entry = {
         matchID = appendHistoryMatchID,
+        isSoloShuffle = C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() or false,
         timestamp = endTime,
         cr = cr,
         mmr = mmr,
@@ -2977,7 +2981,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 			end
 	
 			-- Create the nested table (for match details) and parent it to the row.
-			local nestedTable = CreateNestedTable(matchFrame, match.playerStats or {}, match.teamFaction, match.isInitial, match.isMissedGame, match)
+			local nestedTable = CreateNestedTable(matchFrame, match.playerStats or {}, match.teamFaction, match.isInitial, match.isMissedGame, content, match)
 			nestedTable:SetParent(matchFrame)
 			nestedTable:SetPoint("TOPLEFT", matchFrame, "TOPLEFT", 0, -14)
 			nestedTable:SetFrameStrata("HIGH")
@@ -3532,7 +3536,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 newrating = "-", killingBlows = "-", honorableKills = "-", damage = "-", healing = "-", ratingChange = "-"
             })  -- Add placeholder entries for the enemy
         end
-    elseif matchEntry and C_PvP.IsRatedSoloShuffle() then
+    elseif matchEntry and matchEntry.isSoloShuffle then
         -- Solo Shuffle: trust persisted isFriendly
         for _, player in ipairs(playerStats) do
             if player.isFriendly then
