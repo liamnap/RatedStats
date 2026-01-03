@@ -2048,6 +2048,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                 cr = cr,  -- Keep original cr
                 mmr = mmr,
                 killingBlows = killingBlows,
+                deaths = deaths,
                 honorableKills = honorableKills,
                 damage = damageDone,
                 healing = healingDone,
@@ -3507,9 +3508,11 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
         end
     end
 
+    local isSS = C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle()
+
     local headers = {
-        "Character", "Faction", "Race", "Class", "Spec", "Hero", "Role", "CR", "KBs", "HKs", "Damage", "Healing", "Rating Chg",
-        "Character", "Faction", "Race", "Class", "Spec", "Hero", "Role", "CR", "KBs", "HKs", "Damage", "Healing", "Rating Chg"
+        "Character", "Faction", "Race", "Class", "Spec", "Hero", "Role", "CR", "KBs", (isSS and "Deaths" or "HKs"), "Damage", "Healing", "Rating Chg",
+        "Character", "Faction", "Race", "Class", "Spec", "Hero", "Role", "CR", "KBs", (isSS and "Deaths" or "HKs"), "Damage", "Healing", "Rating Chg"
     }
 
     local headerHeight = 18  -- Height of the header row
@@ -3617,7 +3620,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
             roleIcons[player.role] or player.role,  -- Replace numeric role with icon
             player.newrating, 
             player.killingBlows, 
-            player.honorableKills, 
+            (isSS and player.deaths or player.honorableKills), 
             FormatNumber(player.damage), 
             FormatNumber(player.healing), 
             player.ratingChange
@@ -3695,7 +3698,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
             roleIcons[player.role] or player.role,  -- Replace numeric role with icon
             player.newrating, 
             player.killingBlows, 
-            player.honorableKills, 
+            (isSS and player.deaths or player.honorableKills), 
             FormatNumber(player.damage), 
             FormatNumber(player.healing), 
             player.ratingChange
