@@ -2249,17 +2249,6 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 			end
 
 			-- Update the *existing* per-player stats from the scoreboard snapshot.
-			local byGUID, byName = {}, {}
-			for _, p in ipairs(target.playerStats) do
-				if p.guid then
-					byGUID[p.guid] = p
-				end
-				if p.name then
-					byName[p.name] = p
-				end
-			end
-
-			-- Update the *existing* per-player stats from the scoreboard snapshot.
 			for i = 1, GetNumBattlefieldScores() do
 				local scoreInfo = C_PvP.GetScoreInfo(i)
 				if scoreInfo then
@@ -2270,7 +2259,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 					local guid2 = scoreInfo.guid
 
 					for _, p in ipairs(target.playerStats) do
-						if (guid2 and p.guid and p.guid == guid2) or (p.name == name2) then
+						if p.name == name2 then
 							p.killingBlows = tonumber(scoreInfo.killingBlows) or 0
 							p.honorableKills = tonumber(scoreInfo.honorableKills) or 0
 							p.deaths = tonumber(scoreInfo.deaths) or 0
