@@ -2277,7 +2277,6 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 						p.mmrChange = tonumber(scoreInfo.mmrChange) or 0
 						p.postmatchMMR = tonumber(scoreInfo.postmatchMMR) or 0
 						p.honorLevel = tonumber(scoreInfo.honorLevel) or 0
-						p.newrating = (p.rating or 0) + (p.ratingChange or 0)
 					end
 				end
 			end
@@ -4674,21 +4673,31 @@ local function OnSoloShuffleStateChanged(event, ...)
         return
     end
 
-    -- Mark round as ended
-    playerDeathSeen = true
-
-    -- Freeze our allies for THIS round.
-    -- In Solo Shuffle, party1/party2 are your teammates for the current round.
-    soloShuffleAlliesGUIDAtDeath = {}
+    -- Freeze our allies for THIS round, but only when we have the full set.
+    -- In Solo Shuffle, player + party1 + party2 should be 3 GUIDs.
+    local allies = {}
 
     local g = UnitGUID("player")
-    if g then soloShuffleAlliesGUIDAtDeath[g] = true end
+    if g then allies[g] = true end
 
     g = UnitGUID("party1")
-    if g then soloShuffleAlliesGUIDAtDeath[g] = true end
+    if g then allies[g] = true end
 
     g = UnitGUID("party2")
-    if g then soloShuffleAlliesGUIDAtDeath[g] = true end
+    if g then allies[g] = true end
+
+    local count = 0
+    for _ in pairs(allies) do
+        count = count + 1
+    end
+
+    -- Not ready yet: do NOT latch. Wait for the next state change event.
+    if count < 3 then
+        return
+    end
+
+    soloShuffleAlliesGUIDAtDeath = allies
+    playerDeathSeen = true
 end
 
 -- Initialize and register events
