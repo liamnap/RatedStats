@@ -2370,6 +2370,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                             -- Update the playerData fields with new stats
                             playerData.killingBlows = tonumber(scoreInfo.killingBlows) or 0
                             playerData.honorableKills = tonumber(scoreInfo.honorableKills) or 0
+                            playerData.deaths = tonumber(scoreInfo.deaths) or 0
                             playerData.damage = tonumber(scoreInfo.damageDone) or 0
                             playerData.healing = tonumber(scoreInfo.healingDone) or 0
                             playerData.rating = tonumber(scoreInfo.rating) or 0
