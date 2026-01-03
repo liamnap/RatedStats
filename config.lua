@@ -957,6 +957,15 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
 
     AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, allianceTeamScore, hordeTeamScore, roundsWon, categoryName, categoryID, damp)
 
+    -- Safe to clear AFTER stats capture:
+    -- GetPlayerStatsEndOfMatch has consumed soloShuffleAlliesGUIDAtDeath/KBAtDeath
+    -- for totals + W/L, and AppendHistory has consumed them for per-player "isFriendly".
+    if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() then
+        soloShuffleMyTeamIndexAtDeath = nil
+        soloShuffleAlliesGUIDAtDeath  = nil
+        soloShuffleAlliesKBAtDeath    = nil
+    end
+
 	-- Call CheckPlayerTalents to process talents for new matches
 --	CheckPlayerTalents(playerName, true)  -- `true` indicates this is a new game and should check talents
 
@@ -1043,10 +1052,6 @@ function RefreshDataEvent(self, event, ...)
 					Database.CurrentCRforSoloShuffle = cr
 					Database.CurrentMMRforSoloShuffle = mmr
 					GetPlayerStatsEndOfMatch(cr, mmr, historyTable, thisRound, "SoloShuffle", 7, startTime)
-
-				    soloShuffleMyTeamIndexAtDeath = nil
-                    soloShuffleAlliesGUIDAtDeath = nil
-                    soloShuffleAlliesKBAtDeath   = nil
 				end)
 
                 playerDeathSeen = false
