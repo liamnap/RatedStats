@@ -2300,7 +2300,6 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 								end
 							end
 
-							break
 						end
 					end
 				end
@@ -2403,7 +2402,6 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 						        end
                             end
                             -- Debug output to confirm update
-                            break
                         end
                     end
                 end
