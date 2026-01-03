@@ -755,6 +755,9 @@ local function OnWidgetUpdate(_, event, widgetInfo)
     end
 end
 
+local soloShuffleLastFriendlyKBTotal = nil
+local soloShuffleLastEnemyKBTotal    = nil
+
 -- Main frame for registering events
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("PVP_MATCH_ACTIVE")
@@ -772,6 +775,16 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
     -- belonged to at the moment the round ended, not whatever reshuffles the
     -- scoreboard UI may have done afterwards.
     local alliesGUID = soloShuffleAlliesGUIDAtDeath
+
+    -- Ensure "my team" set always includes me (defensive; depends on how you fill soloShuffleAlliesGUIDAtDeath)
+    if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() then
+        alliesGUID = alliesGUID or {}
+        local myGUID = UnitGUID("player")
+        if myGUID then
+            alliesGUID[myGUID] = true
+        end
+    end
+
     local friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing = 0, 0, 0, 0
     local battlefieldWinner = GetBattlefieldWinner() == 0 and "Horde" or "Alliance"  -- Convert to "Horde" or "Alliance"
     local friendlyWinLoss = battlefieldWinner == teamFaction and "+   W" or "+   L"  -- Determine win/loss status
@@ -780,6 +793,53 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
 	local duration = GetBattlefieldInstanceRunTime() / 1000  -- duration in seconds
 	local damp = C_Commentator.GetDampeningPercent()
 	
+    -- ------------------------------------------------------------
+    -- Solo Shuffle: increment roundsWon via scoreboard KB delta.
+    -- Uses alliesGUID captured at PVP_MATCH_STATE_CHANGED ("Death"),
+    -- NOT whatever the scoreboard UI reshuffles later.
+    --
+    -- No extra guard variable: we just update roundsWon and keep your
+    -- existing (roundsWon > previousRoundsWon) W/L logic.
+    -- ------------------------------------------------------------
+    if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() and roundIndex then
+        alliesGUID = alliesGUID or {}
+        local myGUID = UnitGUID("player")
+        if myGUID then
+            alliesGUID[myGUID] = true
+        end
+
+        -- Snapshot BEFORE we possibly increment this round.
+        previousRoundsWon = roundsWon
+
+        local friendlyKBNow, enemyKBNow = 0, 0
+        for i = 1, GetNumBattlefieldScores() do
+            local scoreInfo = C_PvP.GetScoreInfo(i)
+            if scoreInfo and scoreInfo.guid then
+                local kb = tonumber(scoreInfo.killingBlows) or 0
+                if alliesGUID[scoreInfo.guid] then
+                    friendlyKBNow = friendlyKBNow + kb
+                else
+                    enemyKBNow = enemyKBNow + kb
+                end
+            end
+        end
+
+        local friendlyPrev = tonumber(soloShuffleLastFriendlyKBTotal) or 0
+        local enemyPrev    = tonumber(soloShuffleLastEnemyKBTotal) or 0
+        local friendlyDelta = friendlyKBNow - friendlyPrev
+        local enemyDelta    = enemyKBNow    - enemyPrev
+
+        -- If my team gained more KB than enemy since last round, count it as a round win.
+        -- If 0/0/0 (or equal deltas), we treat as not-a-win (loss/timeout) as you requested.
+        if friendlyDelta > enemyDelta then
+            roundsWon = roundsWon + 1
+        end
+
+        -- Persist totals for next round delta calculation (win or loss).
+        soloShuffleLastFriendlyKBTotal = friendlyKBNow
+        soloShuffleLastEnemyKBTotal    = enemyKBNow
+    end
+
 	if C_PvP.IsRatedSoloShuffle() and roundIndex then
 		-- Hard guard: Solo Shuffle rounds are 1..6. If upstream forgot to reset, don't let it poison math/UI.
 		if type(roundIndex) ~= "number" or roundIndex < 1 or roundIndex > 6 then
@@ -988,7 +1048,6 @@ function RefreshDataEvent(self, event, ...)
                     soloShuffleAlliesGUIDAtDeath = nil
 				end)
 
-                print("[RS-DEBUG]: playerDeathSeen has been reset")
                 playerDeathSeen = false
 
                 C_Timer.After(45, function()
@@ -1022,28 +1081,6 @@ function RefreshDataEvent(self, event, ...)
 			end
 		end)
 
-    elseif self.isSoloShuffle and (event == "UNIT_HEALTH" or event == "UNIT_AURA" or event == "COMBAT_LOG_EVENT_UNFILTERED") then
-
-        -- Solo Shuffle death is now driven by PVP_MATCH_STATE_CHANGED ("Death")
-        -- via OnSoloShuffleStateChanged(). We no longer try to infer death from
-        -- UNIT_HEALTH / UNIT_AURA / KB deltas because that breaks on Feign, Ice
-        -- Block, etc. and CLEU is being restricted in Midnight.
-
-        if event == "UNIT_HEALTH" or event == "UNIT_AURA" then
-            -- Ignore these for Solo Shuffle death handling now.
-            return
-        end
-
-		if event == "COMBAT_LOG_EVENT_UNFILTERED" then
-			local _, subEvent, _, _, sourceName, _, _, destGUID, destName, destFlags, _, _, _, overkill = CombatLogGetCurrentEventInfo()
-	
-			-- ✅ WIN: Party kill against a real player
-			if subEvent == "PARTY_KILL" and bit.band(destFlags or 0, COMBATLOG_OBJECT_TYPE_PLAYER) > 0 then
-				previousRoundsWon = roundsWon or 0
-				roundsWon = (roundsWon or 0) + 1
-			end
-		end
-
     elseif event == "PVP_MATCH_COMPLETE" then
         C_Timer.After(1, function()
 			if GetTalents then
@@ -1066,10 +1103,11 @@ function RefreshDataEvent(self, event, ...)
                 roundsWon = nil
                 previousRoundsWon = nil
                 playerDeathSeen = false
-                print("[RS-DEBUG]: playerDeathSeen has been reset.")
                 scoreboardKBTotal = nil
 				soloShuffleMyTeamIndexAtDeath = nil
                 soloShuffleAlliesGUIDAtDeath = nil
+                soloShuffleLastFriendlyKBTotal = nil
+                soloShuffleLastEnemyKBTotal    = nil
             elseif C_PvP.IsRatedArena() then
                 local matchBracket = C_PvP.GetActiveMatchBracket()
                 if matchBracket == 0 then
@@ -4582,13 +4620,11 @@ local function OnSoloShuffleStateChanged(event, ...)
 
     -- One latch per round; multiple state changes are normal.
     if playerDeathSeen then
-        print("[RS-DEBUG]: playerDeathSeen not reset")
         return
     end
 
     -- Mark round as ended
     playerDeathSeen = true
-    print("[RS-DEBUG]: playerDeathSeen marked as true based on pvp match state change")
 
     -- Freeze our allies for THIS round.
     -- In Solo Shuffle, party1/party2 are your teammates for the current round.
@@ -4621,9 +4657,6 @@ function Initialize()
         if event == "PLAYER_ENTERING_WORLD"
             or event == "PVP_MATCH_COMPLETE"
             or event == "PVP_MATCH_ACTIVE"
-            or event == "COMBAT_LOG_EVENT_UNFILTERED"
-            or event == "UNIT_HEALTH"
-            or event == "UNIT_AURA"
         then
             RefreshDataEvent(self, event, ...)
         end
