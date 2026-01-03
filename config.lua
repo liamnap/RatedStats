@@ -3020,7 +3020,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 			end
 	
 			-- Create the nested table (for match details) and parent it to the row.
-			local nestedTable = CreateNestedTable(matchFrame, match.playerStats or {}, match.teamFaction, match.isInitial, match.isMissedGame, content, match)
+			local nestedTable = CreateNestedTable(matchFrame, match.playerStats or {}, match.teamFaction, match.isInitial, match.isMissedGame, content, match, tabID)
 			nestedTable:SetParent(matchFrame)
 			nestedTable:SetPoint("TOPLEFT", matchFrame, "TOPLEFT", 0, -14)
 			nestedTable:SetFrameStrata("HIGH")
@@ -3424,7 +3424,7 @@ local function CreateClickableName(parent, stats, matchEntry, x, y, columnWidth,
   return nameText
 end
 
-function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMissedGame, content, matchEntry)
+function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMissedGame, content, matchEntry, tabID)
 	local nestedTable = CreateFrame("Frame", "NestedTable_" .. (parent:GetName() or "unknown"), parent, "BackdropTemplate")
 
     -- Determine the match type using the correct function
@@ -3508,7 +3508,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
         end
     end
 
-    local isSS = C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle()
+    local isSS = (tabID == 1)
 
     local headers = {
         "Character", "Faction", "Race", "Class", "Spec", "Hero", "Role", "CR", "KBs", (isSS and "Deaths" or "HKs"), "Damage", "Healing", "Rating Chg",
