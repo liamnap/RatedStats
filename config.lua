@@ -2259,6 +2259,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 				end
 			end
 
+			-- Update the *existing* per-player stats from the scoreboard snapshot.
 			for i = 1, GetNumBattlefieldScores() do
 				local scoreInfo = C_PvP.GetScoreInfo(i)
 				if scoreInfo then
@@ -2266,19 +2267,22 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 					if name2 == UnitName("player") then
 						name2 = playerFullName
 					end
+					local guid2 = scoreInfo.guid
 
-					local p = (scoreInfo.guid and byGUID[scoreInfo.guid]) or byName[name2]
-					if p then
-						p.killingBlows = tonumber(scoreInfo.killingBlows) or 0
-						p.honorableKills = tonumber(scoreInfo.honorableKills) or 0
-						p.deaths = tonumber(scoreInfo.deaths) or 0
-						p.damage = tonumber(scoreInfo.damageDone) or 0
-						p.healing = tonumber(scoreInfo.healingDone) or 0
-						p.rating = tonumber(scoreInfo.rating) or 0
-						p.ratingChange = tonumber(scoreInfo.ratingChange) or 0
-						p.mmrChange = tonumber(scoreInfo.mmrChange) or 0
-						p.postmatchMMR = tonumber(scoreInfo.postmatchMMR) or 0
-						p.honorLevel = tonumber(scoreInfo.honorLevel) or 0
+					for _, p in ipairs(target.playerStats) do
+						if (guid2 and p.guid and p.guid == guid2) or (p.name == name2) then
+							p.killingBlows = tonumber(scoreInfo.killingBlows) or 0
+							p.honorableKills = tonumber(scoreInfo.honorableKills) or 0
+							p.deaths = tonumber(scoreInfo.deaths) or 0
+							p.damage = tonumber(scoreInfo.damageDone) or 0
+							p.healing = tonumber(scoreInfo.healingDone) or 0
+							p.rating = tonumber(scoreInfo.rating) or 0
+							p.ratingChange = tonumber(scoreInfo.ratingChange) or 0
+							p.mmrChange = tonumber(scoreInfo.mmrChange) or 0
+							p.postmatchMMR = tonumber(scoreInfo.postmatchMMR) or 0
+							p.honorLevel = tonumber(scoreInfo.honorLevel) or 0
+							break
+						end
 					end
 				end
 			end
