@@ -699,6 +699,7 @@ local soloShuffleMyTeamIndexAtDeath = nil
 -- Solo Shuffle: per-round allies (GUID set) captured at the moment the round ends.
 -- This is the only reliable way to force "my team" on the left in SS.
 local soloShuffleAlliesGUIDAtDeath = nil
+local soloShuffleAlliesKBAtDeath   = nil  -- Solo Shuffle: per-round ally KB snapshot at round end
 
 local RBGScoreWidgets = {
     [529]  = 1671, -- Arathi Basin
@@ -794,15 +795,19 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
 	local damp = C_Commentator.GetDampeningPercent()
 	
     -- ------------------------------------------------------------
-    -- Solo Shuffle: increment roundsWon via scoreboard KB delta.
-    -- Uses alliesGUID captured at PVP_MATCH_STATE_CHANGED ("Death"),
-    -- NOT whatever the scoreboard UI reshuffles later.
+    -- Solo Shuffle: determine THIS round's win via KB increment on the 3 allies
+    -- captured at PVP_MATCH_STATE_CHANGED ("Death").
     --
-    -- No extra guard variable: we just update roundsWon and keep your
-    -- existing (roundsWon > previousRoundsWon) W/L logic.
+    -- Why: SS players rotate teams. A running total delta across *different*
+    -- ally sets causes "ghost wins" when a player with existing KB rotates onto
+    -- your next team. So we snapshot the 3 allies' KB at Death, then on the next
+    -- PVP_MATCH_ACTIVE we check whether any of those 3 gained +1 KB.
+    --
+    -- No extra guard variable: we still only update roundsWon and keep your
+    -- existing (roundsWon > previousRoundsWon) W/L logic below.
     -- ------------------------------------------------------------
     if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() and roundIndex then
-        alliesGUID = alliesGUID or {}
+        alliesGUID = soloShuffleAlliesGUIDAtDeath or alliesGUID or {}
         local myGUID = UnitGUID("player")
         if myGUID then
             alliesGUID[myGUID] = true
@@ -811,33 +816,28 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
         -- Snapshot BEFORE we possibly increment this round.
         previousRoundsWon = roundsWon
 
-        local friendlyKBNow, enemyKBNow = 0, 0
-        for i = 1, GetNumBattlefieldScores() do
-            local scoreInfo = C_PvP.GetScoreInfo(i)
-            if scoreInfo and scoreInfo.guid then
-                local kb = tonumber(scoreInfo.killingBlows) or 0
-                if alliesGUID[scoreInfo.guid] then
-                    friendlyKBNow = friendlyKBNow + kb
-                else
-                    enemyKBNow = enemyKBNow + kb
+        local wonThisRound = false
+        if soloShuffleAlliesKBAtDeath then
+            for i = 1, GetNumBattlefieldScores() do
+                local scoreInfo = C_PvP.GetScoreInfo(i)
+                if scoreInfo and scoreInfo.guid and alliesGUID[scoreInfo.guid] then
+                    local prevKB = soloShuffleAlliesKBAtDeath[scoreInfo.guid]
+                    if prevKB ~= nil then
+                        local nowKB = tonumber(scoreInfo.killingBlows) or 0
+                        if nowKB > prevKB then
+                            wonThisRound = true
+                            break
+                        end
+                    end
                 end
             end
         end
 
-        local friendlyPrev = tonumber(soloShuffleLastFriendlyKBTotal) or 0
-        local enemyPrev    = tonumber(soloShuffleLastEnemyKBTotal) or 0
-        local friendlyDelta = friendlyKBNow - friendlyPrev
-        local enemyDelta    = enemyKBNow    - enemyPrev
-
-        -- If my team gained more KB than enemy since last round, count it as a round win.
-        -- If 0/0/0 (or equal deltas), we treat as not-a-win (loss/timeout) as you requested.
-        if friendlyDelta > enemyDelta then
+        -- If any of the 3 allies gained a KB since Death, count it as a round win.
+        -- If not, treat it as not-a-win (loss/timeout) as you requested.
+        if wonThisRound then
             roundsWon = roundsWon + 1
         end
-
-        -- Persist totals for next round delta calculation (win or loss).
-        soloShuffleLastFriendlyKBTotal = friendlyKBNow
-        soloShuffleLastEnemyKBTotal    = enemyKBNow
     end
 
 	if C_PvP.IsRatedSoloShuffle() and roundIndex then
@@ -1046,6 +1046,7 @@ function RefreshDataEvent(self, event, ...)
 
 				    soloShuffleMyTeamIndexAtDeath = nil
                     soloShuffleAlliesGUIDAtDeath = nil
+                    soloShuffleAlliesKBAtDeath   = nil
 				end)
 
                 playerDeathSeen = false
@@ -1106,6 +1107,7 @@ function RefreshDataEvent(self, event, ...)
                 scoreboardKBTotal = nil
 				soloShuffleMyTeamIndexAtDeath = nil
                 soloShuffleAlliesGUIDAtDeath = nil
+                soloShuffleAlliesKBAtDeath   = nil
                 soloShuffleLastFriendlyKBTotal = nil
                 soloShuffleLastEnemyKBTotal    = nil
             elseif C_PvP.IsRatedArena() then
@@ -4696,7 +4698,28 @@ local function OnSoloShuffleStateChanged(event, ...)
         return
     end
 
+    -- Snapshot allies' Killing Blows at the moment the round ends.
+    -- We will compare this snapshot against the next PVP_MATCH_ACTIVE scoreboard to decide win/loss.
+    local kbSnapshot = {}
+    for i = 1, GetNumBattlefieldScores() do
+        local scoreInfo = C_PvP.GetScoreInfo(i)
+        if scoreInfo and scoreInfo.guid and allies[scoreInfo.guid] then
+            kbSnapshot[scoreInfo.guid] = tonumber(scoreInfo.killingBlows) or 0
+        end
+    end
+
+    local kbCount = 0
+    for _ in pairs(kbSnapshot) do
+        kbCount = kbCount + 1
+    end
+
+    -- Not ready yet: do NOT latch. Wait for the next state change event.
+    if kbCount < 3 then
+        return
+    end
+
     soloShuffleAlliesGUIDAtDeath = allies
+    soloShuffleAlliesKBAtDeath   = kbSnapshot
     playerDeathSeen = true
 end
 
