@@ -2234,59 +2234,112 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 		local matchIDToUpdate = appendHistoryMatchID
 	
 		C_Timer.After(20, function()
+			-- Find the exact history entry we just inserted.
+			local target
+			for _, e in ipairs(historyTable) do
+				if e.matchID == matchIDToUpdate then
+					target = e
+					break
+				end
+			end
+			if not target or not target.playerStats then
+				return
+			end
+
+			-- Update the *existing* per-player stats from the scoreboard snapshot.
+			local byGUID, byName = {}, {}
+			for _, p in ipairs(target.playerStats) do
+				if p.guid then
+					byGUID[p.guid] = p
+				end
+				if p.name then
+					byName[p.name] = p
+				end
+			end
+
+			for i = 1, GetNumBattlefieldScores() do
+				local scoreInfo = C_PvP.GetScoreInfo(i)
+				if scoreInfo then
+					local name2 = scoreInfo.name
+					if name2 == UnitName("player") then
+						name2 = playerFullName
+					end
+
+					local p = (scoreInfo.guid and byGUID[scoreInfo.guid]) or byName[name2]
+					if p then
+						p.killingBlows = tonumber(scoreInfo.killingBlows) or 0
+						p.honorableKills = tonumber(scoreInfo.honorableKills) or 0
+						p.deaths = tonumber(scoreInfo.deaths) or 0
+						p.damage = tonumber(scoreInfo.damageDone) or 0
+						p.healing = tonumber(scoreInfo.healingDone) or 0
+						p.rating = tonumber(scoreInfo.rating) or 0
+						p.ratingChange = tonumber(scoreInfo.ratingChange) or 0
+						p.mmrChange = tonumber(scoreInfo.mmrChange) or 0
+						p.postmatchMMR = tonumber(scoreInfo.postmatchMMR) or 0
+						p.honorLevel = tonumber(scoreInfo.honorLevel) or 0
+						p.newrating = (p.rating or 0) + (p.ratingChange or 0)
+					end
+				end
+			end
+
+			-- Recompute totals from the updated playerStats (this keeps your UI row consistent).
 			local friendlyTotalDamage2, friendlyTotalHealing2 = 0, 0
 			local enemyTotalDamage2, enemyTotalHealing2 = 0, 0
 			local friendlyRatingTotal2, enemyRatingTotal2 = 0, 0
 			local friendlyRatingChangeTotal2, enemyRatingChangeTotal2 = 0, 0
 			local friendlyPlayerCount2, enemyPlayerCount2 = 0, 0
-	
-			-- Recompute totals from the scoreboard snapshot at this time.
-			for i = 1, GetNumBattlefieldScores() do
-				local scoreInfo = C_PvP.GetScoreInfo(i)
-				if scoreInfo then
-					local guid2 = scoreInfo.guid
-					local damage2 = tonumber(scoreInfo.damageDone) or 0
-					local healing2 = tonumber(scoreInfo.healingDone) or 0
-					local rating2 = tonumber(scoreInfo.rating) or 0
-					local ratingChange2 = tonumber(scoreInfo.ratingChange) or 0
-					local newrating2 = rating2 + ratingChange2
-	
-                    local isSS = C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle()
-                    local alliesGUID = ssAlliesGUID
-                    if isSS and alliesGUID and guid2 and alliesGUID[guid2] then
-						friendlyTotalDamage2 = friendlyTotalDamage2 + damage2
-						friendlyTotalHealing2 = friendlyTotalHealing2 + healing2
-						friendlyRatingTotal2 = friendlyRatingTotal2 + newrating2
-						friendlyRatingChangeTotal2 = friendlyRatingChangeTotal2 + ratingChange2
+
+			for _, p in ipairs(target.playerStats) do
+				local dmg = tonumber(p.damage) or 0
+				local heal = tonumber(p.healing) or 0
+				local newr = (tonumber(p.rating) or 0) + (tonumber(p.ratingChange) or 0)
+				local rc = tonumber(p.ratingChange) or 0
+
+				if target.isSoloShuffle then
+					if p.isFriendly then
+						friendlyTotalDamage2 = friendlyTotalDamage2 + dmg
+						friendlyTotalHealing2 = friendlyTotalHealing2 + heal
+						friendlyRatingTotal2 = friendlyRatingTotal2 + newr
+						friendlyRatingChangeTotal2 = friendlyRatingChangeTotal2 + rc
 						friendlyPlayerCount2 = friendlyPlayerCount2 + 1
 					else
-						enemyTotalDamage2 = enemyTotalDamage2 + damage2
-						enemyTotalHealing2 = enemyTotalHealing2 + healing2
-						enemyRatingTotal2 = enemyRatingTotal2 + newrating2
-						enemyRatingChangeTotal2 = enemyRatingChangeTotal2 + ratingChange2
+						enemyTotalDamage2 = enemyTotalDamage2 + dmg
+						enemyTotalHealing2 = enemyTotalHealing2 + heal
+						enemyRatingTotal2 = enemyRatingTotal2 + newr
+						enemyRatingChangeTotal2 = enemyRatingChangeTotal2 + rc
+						enemyPlayerCount2 = enemyPlayerCount2 + 1
+					end
+				else
+					if p.faction == teamFaction then
+						friendlyTotalDamage2 = friendlyTotalDamage2 + dmg
+						friendlyTotalHealing2 = friendlyTotalHealing2 + heal
+						friendlyRatingTotal2 = friendlyRatingTotal2 + newr
+						friendlyRatingChangeTotal2 = friendlyRatingChangeTotal2 + rc
+						friendlyPlayerCount2 = friendlyPlayerCount2 + 1
+					else
+						enemyTotalDamage2 = enemyTotalDamage2 + dmg
+						enemyTotalHealing2 = enemyTotalHealing2 + heal
+						enemyRatingTotal2 = enemyRatingTotal2 + newr
+						enemyRatingChangeTotal2 = enemyRatingChangeTotal2 + rc
 						enemyPlayerCount2 = enemyPlayerCount2 + 1
 					end
 				end
 			end
-	
+
 			local friendlyAvgCR2 = friendlyPlayerCount2 > 0 and math.floor(friendlyRatingTotal2 / friendlyPlayerCount2) or "N/A"
 			local enemyAvgCR2 = enemyPlayerCount2 > 0 and math.floor(enemyRatingTotal2 / enemyPlayerCount2) or "N/A"
 			local friendlyAvgRatingChange2 = friendlyPlayerCount2 > 0 and math.floor(friendlyRatingChangeTotal2 / friendlyPlayerCount2) or "N/A"
 			local enemyAvgRatingChange2 = enemyPlayerCount2 > 0 and math.floor(enemyRatingChangeTotal2 / enemyPlayerCount2) or "N/A"
-	
-            for _, e in ipairs(historyTable) do
-                if e.matchID == matchIDToUpdate then
-                    e.friendlyTotalDamage = friendlyTotalDamage2
-                    e.friendlyTotalHealing = friendlyTotalHealing2
-                    e.enemyTotalDamage = enemyTotalDamage2
-                    e.enemyTotalHealing = enemyTotalHealing2
-                    e.friendlyAvgCR = friendlyAvgCR2
-                    e.enemyAvgCR = enemyAvgCR2
-                    e.friendlyRatingChange = friendlyAvgRatingChange2
-                    e.enemyRatingChange = enemyAvgRatingChange2
-                    break
-                end
-            end
+
+			target.friendlyTotalDamage = friendlyTotalDamage2
+			target.friendlyTotalHealing = friendlyTotalHealing2
+			target.enemyTotalDamage = enemyTotalDamage2
+			target.enemyTotalHealing = enemyTotalHealing2
+			target.friendlyAvgCR = friendlyAvgCR2
+			target.enemyAvgCR = enemyAvgCR2
+			target.friendlyRatingChange = friendlyAvgRatingChange2
+			target.enemyRatingChange = enemyAvgRatingChange2
+
 			SaveData()
 		end)
 	end
@@ -2317,8 +2370,9 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                         name = playerFullName
                     end
     
+					local guid2 = scoreInfo.guid
                     for _, playerData in ipairs(playerStats) do
-                        if playerData.name == name then
+						if (guid2 and playerData.guid and playerData.guid == guid2) or playerData.name == name then
                             -- Update the playerData fields with new stats
                             playerData.killingBlows = tonumber(scoreInfo.killingBlows) or 0
                             playerData.honorableKills = tonumber(scoreInfo.honorableKills) or 0
@@ -2339,14 +2393,12 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 							        friendlyRatingTotal = friendlyRatingTotal + playerData.rating + playerData.ratingChange
 							        friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
 							        friendlyPlayerCount = friendlyPlayerCount + 1
-							        table.insert(friendlyPlayers, playerData)
                                 else
                                     enemyTotalDamage = enemyTotalDamage + playerData.damage
 							        enemyTotalHealing = enemyTotalHealing + playerData.healing
 							        enemyRatingTotal = enemyRatingTotal + playerData.rating + playerData.ratingChange
 							        enemyRatingChangeTotal = enemyRatingChangeTotal + playerData.ratingChange
 							        enemyPlayerCount = enemyPlayerCount + 1
-							        table.insert(enemyPlayers, playerData)
                                 end
 						    else
                                 if playerData.faction == teamFaction then
@@ -2355,17 +2407,16 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 							        friendlyRatingTotal = friendlyRatingTotal + playerData.rating + playerData.ratingChange
 							        friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
 							        friendlyPlayerCount = friendlyPlayerCount + 1
-							        table.insert(friendlyPlayers, playerData)
 						        else
     							    enemyTotalDamage = enemyTotalDamage + playerData.damage
 							        enemyTotalHealing = enemyTotalHealing + playerData.healing
 							        enemyRatingTotal = enemyRatingTotal + playerData.rating + playerData.ratingChange
 							        enemyRatingChangeTotal = enemyRatingChangeTotal + playerData.ratingChange
 							        enemyPlayerCount = enemyPlayerCount + 1
-							        table.insert(enemyPlayers, playerData)
 						        end
                             end
                             -- Debug output to confirm update
+                            break
                         end
                     end
                 end
