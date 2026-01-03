@@ -905,7 +905,7 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
             local name = scoreInfo.name
             local killingBlows = scoreInfo.killingBlows
             local honorableKills = scoreInfo.honorableKills
-            local deaths = scoreInfo.deaths
+            local deaths = tonumber(scoreInfo.deaths) or 0
             local honorGained = scoreInfo.honorGained
             local faction = scoreInfo.faction
             local raceName = scoreInfo.raceName
