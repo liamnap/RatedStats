@@ -1952,6 +1952,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     local appendHistoryMatchID = #historyTable + 1  -- Unique match ID
     local playerFullName = GetPlayerFullName() -- Get the player's full name
     local myTeamIndex
+    local ssAlliesGUID = soloShuffleAlliesGUIDAtDeath or nil
 
     -- Fetch team information
     local friendlyTeamInfo = C_PvP.GetTeamInfo(0)  -- Assuming 0 is the index for friendly team
@@ -2037,7 +2038,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                     and guid
                     and (
                         guid == UnitGUID("player")
-                        or (soloShuffleAlliesGUIDAtDeath and soloShuffleAlliesGUIDAtDeath[guid])
+                        or (ssAlliesGUID and ssAlliesGUID[guid])
                     )
                 ) or false,
                 race = raceName,
@@ -2089,7 +2090,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             enemyTotalDamage = tonumber(enemyTotalDamage) or 0
             enemyTotalHealing = tonumber(enemyTotalHealing) or 0
 
-            if C_PvP.IsRatedSoloShuffle then
+            if C_PvP.IsRatedSoloShuffle() then
                 if playerData.isFriendly then
                     friendlyTotalDamage = friendlyTotalDamage + damageDone
                     friendlyTotalHealing = friendlyTotalHealing + healingDone
@@ -2224,10 +2225,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 		end
 	end
 
-    if not (C_PvP.IsRatedSoloShuffle() and roundIndex >= 1 and roundIndex <= 5) then
-        table.insert(historyTable, 1, entry)
-        SaveData()
-    end
+    table.insert(historyTable, 1, entry)
+    SaveData()
 
 	--- Solo Shuffle logic with a 20-second delay only for round 1-5
 	if C_PvP.IsRatedSoloShuffle() and roundIndex >= 1 and roundIndex <= 5 then
@@ -2253,7 +2252,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 					local newrating2 = rating2 + ratingChange2
 	
                     local isSS = C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle()
-                    local alliesGUID = soloShuffleAlliesGUIDAtDeath
+                    local alliesGUID = ssAlliesGUID
                     if isSS and alliesGUID and guid2 and alliesGUID[guid2] then
 						friendlyTotalDamage2 = friendlyTotalDamage2 + damage2
 						friendlyTotalHealing2 = friendlyTotalHealing2 + healing2
@@ -2275,21 +2274,19 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 			local friendlyAvgRatingChange2 = friendlyPlayerCount2 > 0 and math.floor(friendlyRatingChangeTotal2 / friendlyPlayerCount2) or "N/A"
 			local enemyAvgRatingChange2 = enemyPlayerCount2 > 0 and math.floor(enemyRatingChangeTotal2 / enemyPlayerCount2) or "N/A"
 	
-			for _, entry in ipairs(historyTable) do
-				if entry.matchID == matchIDToUpdate then
-					entry.friendlyTotalDamage = friendlyTotalDamage2
-					entry.friendlyTotalHealing = friendlyTotalHealing2
-					entry.enemyTotalDamage = enemyTotalDamage2
-					entry.enemyTotalHealing = enemyTotalHealing2
-					entry.friendlyAvgCR = friendlyAvgCR2
-					entry.enemyAvgCR = enemyAvgCR2
-					entry.friendlyRatingChange = friendlyAvgRatingChange2
-					entry.enemyRatingChange = enemyAvgRatingChange2
-					break
-				end
-			end
-
-            table.insert(historyTable, 1, entry)	
+            for _, e in ipairs(historyTable) do
+                if e.matchID == matchIDToUpdate then
+                    e.friendlyTotalDamage = friendlyTotalDamage2
+                    e.friendlyTotalHealing = friendlyTotalHealing2
+                    e.enemyTotalDamage = enemyTotalDamage2
+                    e.enemyTotalHealing = enemyTotalHealing2
+                    e.friendlyAvgCR = friendlyAvgCR2
+                    e.enemyAvgCR = enemyAvgCR2
+                    e.friendlyRatingChange = friendlyAvgRatingChange2
+                    e.enemyRatingChange = enemyAvgRatingChange2
+                    break
+                end
+            end
 			SaveData()
 		end)
 	end
@@ -2335,7 +2332,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 ---                            playerData.roundsWon = roundsWon or 0
     
                             -- Calculate totals based on player's team 
-						    if C_PvP.IsRatedSoloShuffle then
+						    if C_PvP.IsRatedSoloShuffle() then
 							    if playerData.isFriendly then
                                     friendlyTotalDamage = friendlyTotalDamage + playerData.damage
 							        friendlyTotalHealing = friendlyTotalHealing + playerData.healing
