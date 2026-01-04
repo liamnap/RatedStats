@@ -855,7 +855,7 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
 		local totalRoundsToLookBack = roundIndex - 1
 
 		-- Sum durations of previous rounds
-		for i = #historyTable, 1, -1 do
+		for i = 1, #historyTable do
 			local entry = historyTable[i]
 			if entry and entry.duration and totalRoundsToLookBack > 0 and type(entry.duration) == "number" then
 				totalPreviousDuration = totalPreviousDuration + entry.duration
