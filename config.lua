@@ -1054,8 +1054,6 @@ function RefreshDataEvent(self, event, ...)
 					GetPlayerStatsEndOfMatch(cr, mmr, historyTable, thisRound, "SoloShuffle", 7, startTime)
 				end)
 
-                playerDeathSeen = false
-
                 C_Timer.After(45, function()
                     GetTalents:Start()
                 end)
@@ -2351,6 +2349,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 
             table.insert(historyTable, 1, ssRoundData)
 			SaveData()
+            playerDeathSeen = false
 		end)
 	end
 
