@@ -2229,8 +2229,12 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 		end
 	end
 
-    table.insert(historyTable, 1, entry)
-    SaveData()
+    if C_PvP.IsRatedSoloShuffle() and roundIndex >= 1 and roundIndex <= 5 then
+        -- Skip table insert for now, let the 20second delay handle it
+    else
+        table.insert(historyTable, 1, entry)
+        SaveData()
+    end
 
 	--- Solo Shuffle logic with a 20-second delay only for round 1-5
 	if C_PvP.IsRatedSoloShuffle() and roundIndex >= 1 and roundIndex <= 5 then
@@ -2313,22 +2317,40 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 			local friendlyAvgRatingChange = friendlyPlayerCount > 0 and math.floor(friendlyRatingChangeTotal / friendlyPlayerCount) or "N/A"
 			local enemyAvgRatingChange = enemyPlayerCount > 0 and math.floor(enemyRatingChangeTotal / enemyPlayerCount) or "N/A"
 
-			for _, entry in ipairs(historyTable) do
-				if entry.matchID == matchIDToUpdate then
-                    print("[RS-DEBUG]: Updating matchID: ", matchIDToUpdate)
-					entry.friendlyTotalDamage = friendlyTotalDamage
-					entry.friendlyTotalHealing = friendlyTotalHealing
-					entry.enemyTotalDamage = enemyTotalDamage
-					entry.enemyTotalHealing = enemyTotalHealing
-					entry.friendlyAvgCR = friendlyAvgCR
-					entry.enemyAvgCR = enemyAvgCR
-					entry.friendlyRatingChange = friendlyAvgRatingChange
-					entry.enemyRatingChange = enemyAvgRatingChange
-					entry.playerStats = playerStats
-					break
-				end
-			end
+            local ssRoundData = {
+                matchID = appendHistoryMatchID,
+                isSoloShuffle = true,
+                timestamp = endTime,
+                cr = cr,
+                mmr = mmr,
+                isInitial = false,
+                friendlyWinLoss = friendlyWinLoss,
+                mapName = mapName,
+                endTime = endTime,
+                duration = duration,
+                damp = damp,
+                teamFaction = teamFaction,
+                myTeamIndex = myTeamIndex,
+                friendlyRaidLeader = friendlyRaidLeader,
+                friendlyAvgCR = friendlyAvgCR,
+                friendlyMMR = friendlyPostMatchMMR,
+                friendlyTotalDamage = friendlyTotalDamage,
+                friendlyTotalHealing = friendlyTotalHealing,
+                friendlyRatingChange = friendlyAvgRatingChange,
+                allianceTeamScore = allianceTeamScore,
+                enemyFaction = enemyFaction,
+                enemyRaidLeader = enemyRaidLeader,
+                enemyAvgCR = enemyAvgCR,
+                enemyMMR = enemyPostMatchMMR,
+                enemyTotalDamage = enemyTotalDamage,
+                enemyTotalHealing = enemyTotalHealing,
+                enemyRatingChange = enemyAvgRatingChange,
+                hordeTeamScore = hordeTeamScore,
+                roundsWon = roundsWon or 0,
+                playerStats = playerStats,
+            }
 
+            table.insert(historyTable, 1, ssRoundData)
 			SaveData()
 		end)
 	end
