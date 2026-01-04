@@ -2259,9 +2259,10 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 					if name == UnitName("player") then
 						name = playerFullName
 					end
+                    local guid2 = scoreInfo.guid
 
 					for _, playerData in ipairs(playerStats) do
-						if playerData.name == name then
+						if (guid2 and playerData.guid and playerData.guid == guid2) or playerData.name == name then
 							playerData.killingBlows   = tonumber(scoreInfo.killingBlows) or 0
 							playerData.honorableKills = tonumber(scoreInfo.honorableKills) or 0
 							playerData.deaths         = tonumber(scoreInfo.deaths) or 0
@@ -2303,7 +2304,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 									enemyPlayerCount = enemyPlayerCount + 1
 								end
 							end
-
+							-- Stop scanning playerStats for this scoreInfo row.
+							break
 						end
 					end
 				end
