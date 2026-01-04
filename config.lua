@@ -2236,6 +2236,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 	if C_PvP.IsRatedSoloShuffle() and roundIndex >= 1 and roundIndex <= 5 then
 	
 		local matchIDToUpdate = appendHistoryMatchID
+        print("[RS-DEBUG]: matchIDToUpdate: ", matchIDToUpdate)
 	
 		C_Timer.After(20, function()
 			friendlyTotalDamage = 0
@@ -2249,7 +2250,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 			friendlyPlayerCount = 0
 			enemyPlayerCount = 0
 
-			-- Fetch updated player stats after delay (name lookup, as per 2025 working logic)
+			-- Fetch updated player stats after delay
 			for i = 1, GetNumBattlefieldScores() do
 				local scoreInfo = C_PvP.GetScoreInfo(i)
 				if scoreInfo then
@@ -2270,10 +2271,12 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 							playerData.mmrChange      = tonumber(scoreInfo.mmrChange) or 0
 							playerData.postmatchMMR   = tonumber(scoreInfo.postmatchMMR) or 0
 							playerData.honorLevel     = tonumber(scoreInfo.honorLevel) or 0
+                            print("[RS-DEBUG]: ", playerData.name, "did", playerData.damage, "this round.")
 
 							-- Totals: Solo Shuffle uses the frozen ally team for this round; non-SS uses teamFaction.
 							if C_PvP.IsRatedSoloShuffle() then
 								if playerData.isFriendly then
+                                    print("[RS-DEBUG]: ", playerData.name, "is", playerData.isFriendly)
 									friendlyTotalDamage = friendlyTotalDamage + playerData.damage
 									friendlyTotalHealing = friendlyTotalHealing + playerData.healing
 									friendlyRatingTotal = friendlyRatingTotal + playerData.rating + playerData.ratingChange
