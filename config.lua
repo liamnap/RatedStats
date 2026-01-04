@@ -922,7 +922,6 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
             local roleAssigned = scoreInfo.roleAssigned
             local guid = scoreInfo.guid
             local stats = scoreInfo.stats
-            print("[RS-DEBUG]GPSEOM: ", name, "did", damageDone, "damage and", healingDone, "healing.")
 
             -- Ensure damageDone and healingDone are numbers
             damageDone = tonumber(damageDone) or 0
@@ -2070,7 +2069,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                 originalFaction = nil,
 ---                roundsWon = roundsWon or 0,
             }
-            print("[RS-DEBUG]AH: ", playerStats.name, "has", playerStats.damage, "damage and", playerStats.healing, "healing in playerStats")
+            print("[RS-DEBUG]AH: ", playerData.name, "has", playerData.damage, "damage and", playerData.healing, "healing in playerStats")
 
             -- Get combat log events
             local playerCombatLogEvents = GetCombatLogEventsForPlayer(playerData.name)
@@ -2243,6 +2242,11 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 		local matchIDToUpdate = appendHistoryMatchID
 	
 		C_Timer.After(20, function()
+            -- Force the client to request fresh scoreboard data.
+            -- Without the scoreboard UI open, the client may not request updates,
+            -- leaving C_PvP.GetScoreInfo() with stale/partial values.
+            RequestBattlefieldScoreData()
+
 			friendlyTotalDamage = 0
 			friendlyTotalHealing = 0
 			enemyTotalDamage = 0
