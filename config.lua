@@ -855,7 +855,6 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
 		local totalRoundsToLookBack = roundIndex - 1
 
 		-- Sum durations of previous rounds
-		-- historyTable newest-first (index 1). So walk forward from 1 to pick the immediately previous rounds.
 		for i = #historyTable, 1, -1 do
 			local entry = historyTable[i]
 			if entry and entry.duration and totalRoundsToLookBack > 0 and type(entry.duration) == "number" then
