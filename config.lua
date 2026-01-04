@@ -923,6 +923,7 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
             local roleAssigned = scoreInfo.roleAssigned
             local guid = scoreInfo.guid
             local stats = scoreInfo.stats
+            print("[RS-DEBUG]GPSEOM: ", name, "did", damageDone, "damage and", healingDone, "healing.")
 
             -- Ensure damageDone and healingDone are numbers
             damageDone = tonumber(damageDone) or 0
@@ -2012,6 +2013,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             local stats = scoreInfo.stats
             local guid = scoreInfo.guid
 ---            local roundsWon = roundsWon or 0  -- Capture rounds won
+            print("[RS-DEBUG]AH: ", name, "did", damageDone, "damage and", healingDone, "healing.")
          
             -- Display additional stats
             if stats then
