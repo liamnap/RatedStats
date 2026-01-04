@@ -2240,7 +2240,6 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 	if C_PvP.IsRatedSoloShuffle() and roundIndex >= 1 and roundIndex <= 5 then
 	
 		local matchIDToUpdate = appendHistoryMatchID
-        print("[RS-DEBUG]: matchIDToUpdate: ", matchIDToUpdate)
 	
 		C_Timer.After(20, function()
 			friendlyTotalDamage = 0
