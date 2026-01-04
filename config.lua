@@ -2082,9 +2082,6 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             playerData.originalFaction = originalFaction
             playerData.originalFactionSource = factionSource  -- Store the source of the original faction
             
-            -- Determine if race remapping is necessary
-            local remappedRace = raceFactionMapping[raceName]
-            
             -- Remap the player's race if necessary
             local remappedRace = raceFactionMapping[raceName]
             if playerData.originalFaction and playerData.originalFaction ~= playerData.faction and remappedRace then
@@ -2101,30 +2098,30 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                 if playerData.isFriendly then
                     friendlyTotalDamage = friendlyTotalDamage + damageDone
                     friendlyTotalHealing = friendlyTotalHealing + healingDone
-                    friendlyRatingTotal = friendlyRatingTotal + playerData.rating + playerData.ratingChange
+                    friendlyRatingTotal = friendlyRatingTotal + playerData.newrating
                     friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
                     friendlyPlayerCount = friendlyPlayerCount + 1
                     table.insert(friendlyPlayers, playerData)
                 else
                     enemyTotalDamage = enemyTotalDamage + damageDone
                     enemyTotalHealing = enemyTotalHealing + healingDone
-                    enemyRatingTotal = enemyRatingTotal + playerData.rating + playerData.ratingChange
+                    enemyRatingTotal = enemyRatingTotal + playerData.newrating
                     enemyRatingChangeTotal = enemyRatingChangeTotal + playerData.ratingChange
                     enemyPlayerCount = enemyPlayerCount + 1
-                    table.insert(enemyPlayers, playerData)  
+                    table.insert(enemyPlayers, playerData)
                 end
             else
                 if playerData.faction == teamFaction then
                     friendlyTotalDamage = friendlyTotalDamage + damageDone
                     friendlyTotalHealing = friendlyTotalHealing + healingDone
-                    friendlyRatingTotal = friendlyRatingTotal + playerData.rating + playerData.ratingChange
+                    friendlyRatingTotal = friendlyRatingTotal + playerData.newrating
                     friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
                     friendlyPlayerCount = friendlyPlayerCount + 1
                     table.insert(friendlyPlayers, playerData)
                 else
                     enemyTotalDamage = enemyTotalDamage + damageDone
                     enemyTotalHealing = enemyTotalHealing + healingDone
-                    enemyRatingTotal = enemyRatingTotal + playerData.rating + playerData.ratingChange
+                    enemyRatingTotal = enemyRatingTotal + playerData.newrating
                     enemyRatingChangeTotal = enemyRatingChangeTotal + playerData.ratingChange
                     enemyPlayerCount = enemyPlayerCount + 1
                     table.insert(enemyPlayers, playerData)
