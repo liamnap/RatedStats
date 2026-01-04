@@ -2242,10 +2242,6 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 		local matchIDToUpdate = appendHistoryMatchID
 	
 		C_Timer.After(20, function()
-            -- Force the client to request fresh scoreboard data.
-            -- Without the scoreboard UI open, the client may not request updates,
-            -- leaving C_PvP.GetScoreInfo() with stale/partial values.
-            RequestBattlefieldScoreData()
 
 			friendlyTotalDamage = 0
 			friendlyTotalHealing = 0
@@ -4753,7 +4749,7 @@ function Initialize()
     frame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 	frame:RegisterEvent("UNIT_HEALTH")
 	frame:RegisterEvent("UNIT_AURA")
-    
+        
     frame:SetScript("OnEvent", function(self, event, ...)
         if event == "PLAYER_ENTERING_WORLD"
             or event == "PVP_MATCH_COMPLETE"
@@ -4769,6 +4765,15 @@ function Initialize()
     shuffleFrame:RegisterEvent("PVP_MATCH_STATE_CHANGED")
     shuffleFrame:SetScript("OnEvent", function(_, event, ...)
         OnSoloShuffleStateChanged(event, ...)
+    end)
+
+    -- Force the client to request fresh scoreboard data.
+    -- Without the scoreboard UI open, the client may not request updates,
+    -- leaving C_PvP.GetScoreInfo() with stale/partial values.
+    local pvpScoreFrame = CreateFrame("Frame")
+    pvpScoreFrame:RegisterEvent("UPDATE_BATTLEFIELD_SCORE")
+    pvpScoreFrame:SetScript("OnEvent", function(_, event, ...)
+        RequestBattlefieldScoreData()
     end)
 end
 
