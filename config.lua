@@ -926,7 +926,6 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
             -- Ensure damageDone and healingDone are numbers
             damageDone = tonumber(damageDone) or 0
             healingDone = tonumber(healingDone) or 0
-            print("[RS-DEBUG]GPSEOM: ", name, "did", damageDone, "damage and", healingDone, "healing, now converted to number.")
 
             if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() and alliesGUID then
                 -- Solo Shuffle: friendly == me + party1 + party2 for THIS round.
@@ -2012,7 +2011,6 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             local stats = scoreInfo.stats
             local guid = scoreInfo.guid
 ---            local roundsWon = roundsWon or 0  -- Capture rounds won
-            print("[RS-DEBUG]AH: ", name, "did", damageDone, "damage and", healingDone, "healing.")
          
             -- Display additional stats
             if stats then
@@ -2069,7 +2067,6 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                 originalFaction = nil,
 ---                roundsWon = roundsWon or 0,
             }
-            print("[RS-DEBUG]AH: ", playerData.name, "has", playerData.damage, "damage and", playerData.healing, "healing in playerStats")
 
             -- Get combat log events
             local playerCombatLogEvents = GetCombatLogEventsForPlayer(playerData.name)
@@ -2276,7 +2273,6 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 							playerData.mmrChange      = tonumber(scoreInfo.mmrChange) or 0
 							playerData.postmatchMMR   = tonumber(scoreInfo.postmatchMMR) or 0
 							playerData.honorLevel     = tonumber(scoreInfo.honorLevel) or 0
-                            print("[RS-DEBUG]AH: ", playerData.name, "now has", playerData.damage, "damage and", playerData.healing, "healing within SS round.")
 
 							-- Totals: Solo Shuffle uses the frozen ally team for this round; non-SS uses teamFaction.
 							if C_PvP.IsRatedSoloShuffle() then
