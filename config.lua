@@ -3776,7 +3776,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
             roleIcons[player.role] or player.role,  -- Replace numeric role with icon
             player.newrating, 
             player.killingBlows, 
-            (isSS and player.deaths or player.honorableKills), 
+            (isSS and player.wins or player.honorableKills), 
             FormatNumber(player.damage), 
             FormatNumber(player.healing), 
             player.ratingChange
