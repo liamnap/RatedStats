@@ -2266,7 +2266,6 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 							playerData.killingBlows   = tonumber(scoreInfo.killingBlows) or 0
 							playerData.honorableKills = tonumber(scoreInfo.honorableKills) or 0
 							playerData.deaths         = tonumber(scoreInfo.deaths) or 0
-                            print("[RS-DEBUG]AH: ", playerData.name, "has", playerData.deaths, "deaths")
 							playerData.damage         = tonumber(scoreInfo.damageDone) or 0
 							playerData.healing        = tonumber(scoreInfo.healingDone) or 0
 							playerData.rating         = tonumber(scoreInfo.rating) or 0
@@ -2389,7 +2388,6 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                             playerData.killingBlows = tonumber(scoreInfo.killingBlows) or 0
                             playerData.honorableKills = tonumber(scoreInfo.honorableKills) or 0
                             playerData.deaths = tonumber(scoreInfo.deaths) or 0
-                            print("[RS-DEBUG]AH: ", playerData.name, "has", playerData.deaths, "deaths")
                             playerData.damage = tonumber(scoreInfo.damageDone) or 0
                             playerData.healing = tonumber(scoreInfo.healingDone) or 0
                             playerData.rating = tonumber(scoreInfo.rating) or 0
@@ -3569,11 +3567,9 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
         end
     end
 
-    local isSS = (tabID == 1)
-
     local headers = {
-        "Character", "Faction", "Race", "Class", "Spec", "Hero", "Role", "CR", "KBs", (isSS and "Deaths" or "HKs"), "Damage", "Healing", "Rating Chg",
-        "Character", "Faction", "Race", "Class", "Spec", "Hero", "Role", "CR", "KBs", (isSS and "Deaths" or "HKs"), "Damage", "Healing", "Rating Chg"
+        "Character", "Faction", "Race", "Class", "Spec", "Hero", "Role", "CR", "KBs", "HKs", "Damage", "Healing", "Rating Chg",
+        "Character", "Faction", "Race", "Class", "Spec", "Hero", "Role", "CR", "KBs", "HKs", "Damage", "Healing", "Rating Chg"
     }
 
     local headerHeight = 18  -- Height of the header row
@@ -3681,7 +3677,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
             roleIcons[player.role] or player.role,  -- Replace numeric role with icon
             player.newrating, 
             player.killingBlows, 
-            (isSS and player.deaths or player.honorableKills), 
+            player.honorableKills, 
             FormatNumber(player.damage), 
             FormatNumber(player.healing), 
             player.ratingChange
