@@ -2274,6 +2274,21 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 							playerData.postmatchMMR   = tonumber(scoreInfo.postmatchMMR) or 0
 							playerData.honorLevel     = tonumber(scoreInfo.honorLevel) or 0
 
+							-- Solo Shuffle rounds won comes from scoreInfo.stats
+							do
+								local wins = 0
+								if scoreInfo.stats then
+									for _, stat in ipairs(scoreInfo.stats) do
+										-- "ROUNDS_WON" is the in-game identifier Blizzard uses for the column
+										if stat.name == "ROUNDS_WON" then
+											wins = tonumber(stat.pvpStatValue) or 0
+											break
+										end
+									end
+								end
+								playerData.wins = wins
+							end
+
 							-- Totals: Solo Shuffle uses the frozen ally team for this round; non-SS uses teamFaction.
 							if C_PvP.IsRatedSoloShuffle() then
 								if playerData.isFriendly then
@@ -2395,8 +2410,22 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                             playerData.mmrChange = tonumber(scoreInfo.mmrChange) or 0
                             playerData.postmatchMMR = tonumber(scoreInfo.postmatchMMR) or 0
                             playerData.honorLevel = tonumber(scoreInfo.honorLevel) or 0
----                            playerData.roundsWon = roundsWon or 0
-    
+
+							-- Solo Shuffle rounds won comes from scoreInfo.stats
+							do
+								local wins = 0
+								if scoreInfo.stats then
+									for _, stat in ipairs(scoreInfo.stats) do
+										-- "ROUNDS_WON" is the in-game identifier Blizzard uses for the column
+										if stat.name == "ROUNDS_WON" then
+											wins = tonumber(stat.pvpStatValue) or 0
+											break
+										end
+									end
+								end
+								playerData.wins = wins
+							end    
+                            
                             -- Calculate totals based on player's team 
 						    if C_PvP.IsRatedSoloShuffle() then
 							    if playerData.isFriendly then
@@ -3567,9 +3596,11 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
         end
     end
 
+    local isSS = (tabID == 1)
+
     local headers = {
-        "Character", "Faction", "Race", "Class", "Spec", "Hero", "Role", "CR", "KBs", "HKs", "Damage", "Healing", "Rating Chg",
-        "Character", "Faction", "Race", "Class", "Spec", "Hero", "Role", "CR", "KBs", "HKs", "Damage", "Healing", "Rating Chg"
+        "Character", "Faction", "Race", "Class", "Spec", "Hero", "Role", "CR", "KBs", (isSS and "Wins" or "HKs"), "Damage", "Healing", "Rating Chg",
+        "Character", "Faction", "Race", "Class", "Spec", "Hero", "Role", "CR", "KBs", (isSS and "Wins" or "HKs"), "Damage", "Healing", "Rating Chg"
     }
 
     local headerHeight = 18  -- Height of the header row
@@ -3677,7 +3708,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
             roleIcons[player.role] or player.role,  -- Replace numeric role with icon
             player.newrating, 
             player.killingBlows, 
-            player.honorableKills, 
+            (isSS and player.wins or player.honorableKills), 
             FormatNumber(player.damage), 
             FormatNumber(player.healing), 
             player.ratingChange
