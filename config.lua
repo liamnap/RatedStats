@@ -2266,6 +2266,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 							playerData.killingBlows   = tonumber(scoreInfo.killingBlows) or 0
 							playerData.honorableKills = tonumber(scoreInfo.honorableKills) or 0
 							playerData.deaths         = tonumber(scoreInfo.deaths) or 0
+                            print("[RS-DEBUG]AH: ", playerData.name, "has", playerData.deaths, "deaths")
 							playerData.damage         = tonumber(scoreInfo.damageDone) or 0
 							playerData.healing        = tonumber(scoreInfo.healingDone) or 0
 							playerData.rating         = tonumber(scoreInfo.rating) or 0
@@ -2388,6 +2389,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                             playerData.killingBlows = tonumber(scoreInfo.killingBlows) or 0
                             playerData.honorableKills = tonumber(scoreInfo.honorableKills) or 0
                             playerData.deaths = tonumber(scoreInfo.deaths) or 0
+                            print("[RS-DEBUG]AH: ", playerData.name, "has", playerData.deaths, "deaths")
                             playerData.damage = tonumber(scoreInfo.damageDone) or 0
                             playerData.healing = tonumber(scoreInfo.healingDone) or 0
                             playerData.rating = tonumber(scoreInfo.rating) or 0
