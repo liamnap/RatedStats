@@ -2065,7 +2065,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                 honorLevel = honorLevel,
                 newrating = newrating,  -- New field for adjusted rating
                 originalFaction = nil,
----                roundsWon = roundsWon or 0,
+    ---                roundsWon = roundsWon or 0,
             }
 
             -- Get combat log events
@@ -2277,15 +2277,10 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 							-- Solo Shuffle rounds won comes from scoreInfo.stats
 							do
 								local wins = 0
-								if scoreInfo.stats then
-									for _, stat in ipairs(scoreInfo.stats) do
-										-- "ROUNDS_WON" is the in-game identifier Blizzard uses for the column
-										if stat.name == "ROUNDS_WON" then
-											wins = tonumber(stat.pvpStatValue) or 0
-											break
-										end
-									end
-								end
+                                if scoreInfo.stats and #scoreInfo.stats > 0 then
+                                    -- Solo Shuffle stat column is the first stat entry
+                                    wins = tonumber(scoreInfo.stats[1].pvpStatValue) or 0 -- roundsWon from SS stats Scoreboard, not main Scoreboard
+                                end
 								playerData.wins = wins
 							end
 
@@ -2414,18 +2409,13 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 							-- Solo Shuffle rounds won comes from scoreInfo.stats
 							do
 								local wins = 0
-								if scoreInfo.stats then
-									for _, stat in ipairs(scoreInfo.stats) do
-										-- "ROUNDS_WON" is the in-game identifier Blizzard uses for the column
-										if stat.name == "ROUNDS_WON" then
-											wins = tonumber(stat.pvpStatValue) or 0
-											break
-										end
-									end
-								end
+                                if scoreInfo.stats and #scoreInfo.stats > 0 then
+                                    -- Solo Shuffle stat column is the first stat entry
+                                    wins = tonumber(scoreInfo.stats[1].pvpStatValue) or 0 -- roundsWon from SS stats Scoreboard, not main Scoreboard
+                                end
 								playerData.wins = wins
 							end    
-                            
+
                             -- Calculate totals based on player's team 
 						    if C_PvP.IsRatedSoloShuffle() then
 							    if playerData.isFriendly then
