@@ -4771,6 +4771,7 @@ function Initialize()
             or event == "PVP_MATCH_ACTIVE"
         then
             RefreshDataEvent(self, event, ...)
+            RequestBattlefieldScoreData()
         end
     end)
 
@@ -4780,15 +4781,6 @@ function Initialize()
     shuffleFrame:RegisterEvent("PVP_MATCH_STATE_CHANGED")
     shuffleFrame:SetScript("OnEvent", function(_, event, ...)
         OnSoloShuffleStateChanged(event, ...)
-    end)
-
-    -- Force the client to request fresh scoreboard data.
-    -- Without the scoreboard UI open, the client may not request updates,
-    -- leaving C_PvP.GetScoreInfo() with stale/partial values.
-    local pvpScoreFrame = CreateFrame("Frame")
-    pvpScoreFrame:RegisterEvent("UPDATE_BATTLEFIELD_SCORE")
-    pvpScoreFrame:SetScript("OnEvent", function(_, event, ...)
-        RequestBattlefieldScoreData()
     end)
 end
 
