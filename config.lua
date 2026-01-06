@@ -770,8 +770,36 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
     local mapID = GetCurrentMapID()
     local mapName = GetMapName(mapID) or "Unknown"
     local endTime = GetTimestamp()
-    local teamFaction = GetPlayerFactionGroup()  -- Returns "Horde" or "Alliance"
-    local enemyFaction = teamFaction == "Horde" and "Alliance" or "Horde"  -- Opposite faction
+    local isSoloShuffle = (C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle()) or false
+    local isArena = (C_PvP.IsRatedArena and C_PvP.IsRatedArena()) and not isSoloShuffle
+
+    -- Default (BG logic): Horde/Alliance
+    local teamFaction = GetPlayerFactionGroup()  -- "Horde" or "Alliance"
+    local enemyFaction = teamFaction == "Horde" and "Alliance" or "Horde"
+
+    -- Arena: overwrite to Purple/Gold using numeric team index.
+    -- Purple = 0, Gold = 1
+    local myArenaTeamIndex
+    if isArena then
+        local myGUID = UnitGUID("player")
+        for i = 1, GetNumBattlefieldScores() do
+            local s = C_PvP.GetScoreInfo(i)
+            if s and s.guid and s.guid == myGUID then
+                myArenaTeamIndex = s.faction
+                break
+            end
+        end
+        if myArenaTeamIndex ~= nil then
+            if myArenaTeamIndex == 1 then
+                teamFaction = "Gold"
+                enemyFaction = "Purple"
+            else
+                teamFaction = "Purple"
+                enemyFaction = "Gold"
+            end
+        end
+    end
+
     -- For Solo Shuffle we want to anchor "my team" based on the team index we
     -- belonged to at the moment the round ended, not whatever reshuffles the
     -- scoreboard UI may have done afterwards.
@@ -787,8 +815,17 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
     end
 
     local friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing = 0, 0, 0, 0
-    local battlefieldWinner = GetBattlefieldWinner() == 0 and "Horde" or "Alliance"  -- Convert to "Horde" or "Alliance"
-    local friendlyWinLoss = battlefieldWinner == teamFaction and "+   W" or "+   L"  -- Determine win/loss status
+    -- Win/Loss:
+    -- - Arena uses numeric team index (0/1)
+    -- - BG uses Horde/Alliance mapping (0 Horde, 1 Alliance)
+    local battlefieldWinnerRaw = GetBattlefieldWinner()
+    local friendlyWinLoss
+    if isArena and myArenaTeamIndex ~= nil then
+        friendlyWinLoss = (battlefieldWinnerRaw == myArenaTeamIndex) and "+   W" or "+   L"
+    else
+        local battlefieldWinner = (battlefieldWinnerRaw == 0) and "Horde" or "Alliance"
+        friendlyWinLoss = (battlefieldWinner == teamFaction) and "+   W" or "+   L"
+    end
 	previousRoundsWon = previousRoundsWon or 0
     roundsWon = roundsWon or 0
 	local duration = GetBattlefieldInstanceRunTime() / 1000  -- duration in seconds
@@ -937,13 +974,28 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
                     enemyTotalHealing = enemyTotalHealing + healingDone
                 end
             else
-                -- Non-shuffle brackets keep the old Horde/Alliance logic.
-                if faction == teamFaction then
-                    friendlyTotalDamage = friendlyTotalDamage + damageDone
-                    friendlyTotalHealing = friendlyTotalHealing + healingDone
-                elseif faction == enemyFaction then
-                    enemyTotalDamage = enemyTotalDamage + damageDone
-                    enemyTotalHealing = enemyTotalHealing + healingDone
+                -- Non-SS:
+               -- Arena uses numeric team index; BG can be Horde/Alliance (string) or 0/1 (number).
+               if isArena and myArenaTeamIndex ~= nil then
+                   if faction == myArenaTeamIndex then
+                       friendlyTotalDamage = friendlyTotalDamage + damageDone
+                       friendlyTotalHealing = friendlyTotalHealing + healingDone
+                   else
+                       enemyTotalDamage = enemyTotalDamage + damageDone
+                       enemyTotalHealing = enemyTotalHealing + healingDone
+                   end
+               else
+                   local factionKey = faction
+                   if type(factionKey) == "number" then
+                       factionKey = (factionKey == 0) and "Horde" or "Alliance"
+                   end
+                   if factionKey == teamFaction then
+                       friendlyTotalDamage = friendlyTotalDamage + damageDone
+                       friendlyTotalHealing = friendlyTotalHealing + healingDone
+                   elseif factionKey == enemyFaction then
+                       enemyTotalDamage = enemyTotalDamage + damageDone
+                       enemyTotalHealing = enemyTotalHealing + healingDone
+                   end
                 end
             end
         end
@@ -1957,6 +2009,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     local playerFullName = GetPlayerFullName() -- Get the player's full name
     local myTeamIndex
     local ssAlliesGUID = soloShuffleAlliesGUIDAtDeath or nil
+    local isSoloShuffle = (C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle()) or false
+    local isArena = (C_PvP.IsRatedArena and C_PvP.IsRatedArena()) and not isSoloShuffle
 
     -- Fetch team information
     local friendlyTeamInfo = C_PvP.GetTeamInfo(0)  -- Assuming 0 is the index for friendly team
@@ -1974,6 +2028,18 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     local friendlyPlayerCount, enemyPlayerCount = 0, 0
     local friendlyRatingChangeTotal, enemyRatingChangeTotal = 0, 0
 	
+    -- Pre-pass: in arenas, grab MY team index so we can keep "my team" left consistently.
+    if isArena then
+        local myGUID = UnitGUID("player")
+        for i = 1, GetNumBattlefieldScores() do
+            local s = C_PvP.GetScoreInfo(i)
+            if s and s.guid and s.guid == myGUID then
+                myTeamIndex = s.faction
+                break
+            end
+        end
+    end
+
     for i = 1, GetNumBattlefieldScores() do
         local scoreInfo = C_PvP.GetScoreInfo(i)
         if scoreInfo then
@@ -2108,14 +2174,24 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                     table.insert(enemyPlayers, playerData)
                 end
             else
-                if playerData.faction == teamFaction then
-                    friendlyTotalDamage = friendlyTotalDamage + damageDone
-                    friendlyTotalHealing = friendlyTotalHealing + healingDone
-                    friendlyRatingTotal = friendlyRatingTotal + playerData.newrating
-                    friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
-                    friendlyPlayerCount = friendlyPlayerCount + 1
-                    table.insert(friendlyPlayers, playerData)
-                else
+                -- Arena: separate by numeric team index so "my team" is always left.
+                if isArena and myTeamIndex ~= nil then
+                    if playerData.teamIndex == myTeamIndex then
+                        friendlyTotalDamage = friendlyTotalDamage + damageDone
+                        friendlyTotalHealing = friendlyTotalHealing + healingDone
+                        friendlyRatingTotal = friendlyRatingTotal + playerData.newrating
+                        friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
+                        friendlyPlayerCount = friendlyPlayerCount + 1
+                        table.insert(friendlyPlayers, playerData)
+                    else
+                        enemyTotalDamage = enemyTotalDamage + damageDone
+                        enemyTotalHealing = enemyTotalHealing + healingDone
+                        enemyRatingTotal = enemyRatingTotal + playerData.newrating
+                        enemyRatingChangeTotal = enemyRatingChangeTotal + playerData.ratingChange
+                        enemyPlayerCount = enemyPlayerCount + 1
+                        table.insert(enemyPlayers, playerData)
+                    end
+                elseif playerData.faction == teamFaction then
                     enemyTotalDamage = enemyTotalDamage + damageDone
                     enemyTotalHealing = enemyTotalHealing + healingDone
                     enemyRatingTotal = enemyRatingTotal + playerData.newrating
@@ -2127,6 +2203,17 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
         end
     end
     
+    -- Overwrite the match-level labels for arenas (what DisplayHistory shows under "Team").
+    if isArena and myTeamIndex ~= nil then
+        if myTeamIndex == 1 then
+            teamFaction = "Gold"
+            enemyFaction = "Purple"
+        else
+            teamFaction = "Purple"
+            enemyFaction = "Gold"
+        end
+    end
+
     local function GetPlayedGames(categoryID)
         return select(4, GetPersonalRatedInfo(categoryID))
     end
