@@ -2792,7 +2792,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
     -- 3) Create headers
     local scoreHeaderText = (tabID == 2 or tabID == 3) and "" or "Score"
 	local c = function(text) return RSTATS:ColorText(text) end
-    local factionHeaderText = (tabID == 2 or tabID == 3) and "Team" or "Faction"
+    local factionHeaderText = (tabID == 1 or tabID == 2 or tabID == 3) and "Team" or "Faction"
 	local headers = {
 		c("Win/Loss"), c(scoreHeaderText), c("Map"), c("Match End Time"), c("Duration"), "", "",
 		c(factionHeaderText), c("Raid Leader"), c("Avg CR"), c("MMR"), c("Damage"), c("Healing"), c("Avg Rat Chg"), "",
