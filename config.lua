@@ -2204,7 +2204,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     end
     
     -- Overwrite the match-level labels for arenas (what DisplayHistory shows under "Team").
-    if isArena and myTeamIndex ~= nil then
+    if (C_PvP.IsRatedArena() or C_PvP.IsRatedSoloShuffle()) and myTeamIndex ~= nil then
         if myTeamIndex == 1 then
             teamFaction = "Gold"
             enemyFaction = "Purple"
