@@ -1794,6 +1794,9 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             local name = scoreInfo.name
             if name == UnitName("player") then
                 name = playerFullName
+            elseif name and not name:find("-", 1, true) then
+                -- Normalize same-realm names to Name-Realm so PendingPvPTalents + display matching works.
+                name = name .. "-" .. GetRealmName()
             end
 
             -- Get faction group tag and localized faction
@@ -2068,6 +2071,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 					local name = scoreInfo.name
 					if name == UnitName("player") then
 						name = playerFullName
+                    elseif name and not name:find("-", 1, true) then
+                        name = name .. "-" .. GetRealmName()
 					end
                     local guid2 = scoreInfo.guid
 
@@ -2199,6 +2204,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                     local name = scoreInfo.name
                     if name == UnitName("player") then
                         name = playerFullName
+                    elseif name and not name:find("-", 1, true) then
+                        name = name .. "-" .. GetRealmName()
                     end
     
 					local guid2 = scoreInfo.guid
@@ -3054,6 +3061,7 @@ local function CreateFriendAndTalentButtons(stats, matchEntry, parent)
             loadout = detected.loadout
         end
     end
+    if loadout and type(loadout) == "string" and loadout ~= "" and (not issecretvalue or not issecretvalue(loadout)) then
         parent.loadoutBox:SetText(loadout)
     else
         parent.loadoutBox:SetText("No Loadout Available")
