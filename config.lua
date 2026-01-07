@@ -3120,10 +3120,12 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     end
 
     local isSS = (tabID == 1)
+    local is2v2 = (tabID == 2)
+    local is3v3 = (tabID == 3)
 
     local headers = {
-        "Character", "Faction", "Race", "Class", "Spec", "Role", "CR", "KBs", (isSS and "Wins" or "HKs"), "Damage", "Healing", "Rating Chg", (isSS and "" or "Objective"),
-        "Character", "Faction", "Race", "Class", "Spec", "Role", "CR", "KBs", (isSS and "Wins" or "HKs"), "Damage", "Healing", "Rating Chg", (isSS and "" or "Objective")
+        "Character", "Faction", "Race", "Class", "Spec", "Role", "CR", "KBs", (isSS and "Wins" or "HKs"), "Damage", "Healing", "Rating Chg", (isSS or is2v2 or is3v3 and "" or "Objective"),
+        "Character", "Faction", "Race", "Class", "Spec", "Role", "CR", "KBs", (isSS and "Wins" or "HKs"), "Damage", "Healing", "Rating Chg", (isSS or is2v2 or is3v3 and "" or "Objective")
     }
 
     local headerHeight = 18  -- Height of the header row
