@@ -3,8 +3,6 @@ PendingPvPTalents = PendingPvPTalents or {}
 RSTATS.DetectedPlayerTalents = RSTATS.DetectedPlayerTalents or {}
 
 local completedUnits = {}
-local TrackedCLEUSpells = {}
-local TrackedPlayerSpells = {}
 local GUIDToUnitToken = {}
 local FriendlyInspectQueue = {}
 local InspectInProgress = false
@@ -37,29 +35,6 @@ end
 
 local function IsRatedPvP()
     return C_PvP.IsRatedBattleground() or C_PvP.IsRatedArena() or C_PvP.IsRatedSoloShuffle() or C_PvP.IsSoloRBG()
-end
-
-local function HasAuraBySpellID(unit, spellID)
-	if not UnitExists(unit) then return false end
-
-	auraScanCache[unit] = auraScanCache[unit] or {}
-	local cache = auraScanCache[unit]
-
-	-- If we already built the aura table this frame, use it
-	if not cache.timestamp or cache.timestamp ~= GetTime() then
-		cache.map = {}
-		cache.timestamp = GetTime()
-
-		for i = 1, math.huge do
-			local aura = C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL")
-			if not aura then break end
-			if aura.spellId then
-				cache.map[aura.spellId] = true
-			end
-		end
-	end
-
-	return cache.map[spellID] or false
 end
 
 local function GetUnitTokenByGUID(guid)
@@ -149,24 +124,11 @@ local function ProcessInspectQueue()
         local talents = RSTATS.DetectedPlayerTalents[guid] or {}
 
         local importString = C_Traits.GenerateInspectImportString(unit)
-        if importString and importString ~= "" then
+        if importString and type(importString) == "string" and importString ~= "" and (not issecretvalue or not issecretvalue(importString)) then
             talents.loadout = importString
             talents.nameplate = unit
-
-            for i = 1, 3 do
-                local pvpTalent = C_SpecializationInfo.GetInspectSelectedPvpTalent(unit, i)
-                if pvpTalent then
-                    talents["pvptalent" .. i] = pvpTalent
-                end
-            end
-
-            RSTATS.DetectedPlayerTalents[guid] = talents
-
-			if not NeedsRescan(guid)
-			and talents.playerTrackedSpells
-			and #talents.playerTrackedSpells >= 50 then
-				completedUnits[guid] = true
-			end
+			RSTATS.DetectedPlayerTalents[guid] = talents
+			completedUnits[guid] = true
         else
             -- ❌ Requeue if missing data
             table.insert(FriendlyInspectQueue, unit)
@@ -181,20 +143,14 @@ local function ScanSelfTalents()
     local guid = UnitGUID("player")
     if not guid then return end
 
+    local importString = C_Traits.GenerateInspectImportString("player")
     local talents = {
         nameplate = "player",
-        loadout = C_Traits.GenerateInspectImportString("player"),
+        loadout = (importString and type(importString) == "string" and importString ~= "" and (not issecretvalue or not issecretvalue(importString))) and importString or nil,
     }
 
-    for i = 1, 3 do
-        local slotInfo = C_SpecializationInfo.GetPvpTalentSlotInfo(i)
-        if slotInfo and slotInfo.selectedTalentID then
-            talents["pvptalent" .. i] = slotInfo.selectedTalentID
-        end
-    end
-
     RSTATS.DetectedPlayerTalents[guid] = talents
-    completedUnits[guid] = true
+    if talents.loadout then completedUnits[guid] = true end
 end
 
 local function ScanFriendlyUnitTalents(unitToken)
@@ -215,14 +171,6 @@ local function ScanFriendlyUnitTalents(unitToken)
             nameplate = unitToken,
             loadout = C_Traits.GenerateInspectImportString(unitToken),
         }
-
-        -- PvP Talents
-        for i = 1, 3 do
-            local talentID = C_SpecializationInfo.GetInspectSelectedPvpTalent(unitToken, i)
-            if talentID then
-                talents["pvptalent" .. i] = talentID
-            end
-        end
 
         -- Merge/update into DetectedPlayerTalents
         RSTATS.DetectedPlayerTalents[guid] = RSTATS.DetectedPlayerTalents[guid] or {}
@@ -423,7 +371,6 @@ function GetTalents:Start()
 	completedUnits = {}
 	retryCount = 0
 	GUIDToUnitToken = {}
-	auraScanCache = {}
 
 	GetRelevantUnits(function(unit, guid)
 		if not unit or not guid then return end
@@ -437,8 +384,6 @@ function GetTalents:Start()
 			else
 				QueueInspect(unit)
 			end
-		else
-			GetTalents:ProcessHerosandEnemyUnit(unit)
 		end
 	end)
 	
@@ -464,154 +409,6 @@ function GetTalents:ReallyClearMemory()
     GUIDToUnitToken = {}
     PendingPvPTalents = {}
     RSTATS.DetectedPlayerTalents = {}
-    TrackedCLEUSpells = {}
-	auraScanCache = {}
 end
-
-local CLEUFrame = CreateFrame("Frame")
-CLEUFrame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-
-CLEUFrame:SetScript("OnEvent", function()
-	if not IsRatedPvP() then return end
-
-	local timestamp, subevent,
-		hideCaster,
-		sourceGUID, sourceName, sourceFlags, sourceRaidFlags,
-		destGUID, destName, destFlags, destRaidFlags,
-		spellID, spellName, spellSchool =
-		CombatLogGetCurrentEventInfo()
-
-	if not sourceName or not spellID or not spellName then return end
-	if bit.band(sourceFlags, COMBATLOG_OBJECT_TYPE_PLAYER) ~= COMBATLOG_OBJECT_TYPE_PLAYER then return end
-	if not GUIDToUnitToken[sourceGUID] then return end
-	
-	-- NEW: catch trinket/item uses by name pattern
-    if type(spellName) == "string" and (
-        spellName:match("Insignia$") 
-     or spellName:match("Medallion$") 
-     or spellName:match("Badge$") 
-     or spellName:find("Emblem$") 
-     or spellName:match("Adapted")
-    ) then
-        TrackedPlayerSpells[sourceGUID] = TrackedPlayerSpells[sourceGUID] or {}
-        TrackedPlayerSpells[sourceGUID][spellID] = true
-        -- also update entry.playerTrackedSpells if you like immediately
-    end	
-	
-	if completedUnits[sourceGUID] then return end
-
-	local unitToken = GetUnitTokenByGUID(sourceGUID)
-	local class = nil
-	if unitToken and UnitExists(unitToken) then
-		_, class = UnitClass(unitToken)
-	end
-	if not class then return end
-
-	local entry = RSTATS.DetectedPlayerTalents[sourceGUID]
-	if not entry then
-		entry = {}
-		RSTATS.DetectedPlayerTalents[sourceGUID] = entry
-	end
-
-	------------------------------------------------------------------
-	--  Decide if we should record the spell
-	------------------------------------------------------------------
-	local allowThisSpell = false
-
-	if C_Spell.IsPvPTalentSpell and C_Spell.IsPvPTalentSpell(spellID) then
-		allowThisSpell = true
-	end
-	
-	if class and HeroClassLookup then
-		local classLookup = HeroClassLookup[class]
-		if classLookup and classLookup[spellID] then
-			allowThisSpell = true
-		end
-	end
-
-	-- ✅ Record the spell (only runs if allowThisSpell is true)
-	TrackedCLEUSpells[sourceGUID] = TrackedCLEUSpells[sourceGUID] or {}
-	if TrackedCLEUSpells[sourceGUID][spellID] then return end
-	TrackedCLEUSpells[sourceGUID][spellID] = true
-
-	TrackedPlayerSpells[sourceGUID] = TrackedPlayerSpells[sourceGUID] or {}
-	TrackedPlayerSpells[sourceGUID][spellID] = true
-
-	entry.name = entry.name or sourceName
-	entry.guid = entry.guid or sourceGUID
-	entry.spellHits = (entry.spellHits or 0) + 1
-
-	-- Flatten tracked spells
-	local seenSpellNames = {}
-	local flatSpells = {}
-	for id in pairs(TrackedPlayerSpells[sourceGUID]) do
-		if type(id) == "number" then
-			local spellInfo = C_Spell.GetSpellInfo(id)
-			local name = spellInfo and spellInfo.name
-			if name and not seenSpellNames[name] then
-				seenSpellNames[name] = true
-				table.insert(flatSpells, id)
-			end
-		end
-	end
-	table.sort(flatSpells)
-	entry.playerTrackedSpells = flatSpells
-
-	-- PvP Talent auto-detect
-	if C_Spell.IsPvPTalentSpell(spellID) then
-		for i = 1, 3 do
-			if not entry["pvptalent" .. i] then
-				entry["pvptalent" .. i] = spellID
-				break
-			end
-		end
-	end
-
-	-- Try to infer hero spec
-	local bestHero = nil
-	local bestMatches = 0
-	for heroName, spellList in pairs(HERO_TALENTS or {}) do
-		local specClass = (next(spellList) and spellList[next(spellList)].class) or nil
-		if specClass and class and specClass == class then
-			local matches = 0
-			for _, spell in pairs(spellList) do
-				local ids = spell.spellID
-				if type(ids) ~= "table" then ids = { ids } end
-				
-				for _, id in ipairs(ids) do
-					if TrackedPlayerSpells[sourceGUID][id] then
-						matches = matches + 1
-						break
-					end
-				end
-			end
-			if matches > bestMatches then
-				bestMatches = matches
-				bestHero = heroName
-			end
-		end
-	end
-
-	if bestHero and bestMatches >= 1 then
-		if entry.heroSpec ~= bestHero then
-			entry.heroSpec = bestHero
-		end
-	end
-
-	if entry.playerTrackedSpells and #entry.playerTrackedSpells >= 10 then
-		-- If heroSpec is still missing, try to assign it now
-		if not entry.heroSpec then
-			local unit = GetUnitTokenByGUID(sourceGUID)
-			if unit and UnitExists(unit) then
-				GetTalents:ProcessHeroCheck(unit)
-			end
-		end
-	
-		-- If fully resolved, mark as completed
-		if not NeedsRescan(sourceGUID) then
-			completedUnits[sourceGUID] = true
-		end
-	end
-end)
 
 return GetTalents
