@@ -3006,7 +3006,6 @@ local function CreateCopyNameFrame(stats, matchEntry)
 end
 
 local function CreateClickableName(parent, stats, matchEntry, x, y, columnWidth, rowHeight)
-  -- stats = matchEntry.playerStats[i], contains .name + .loadout + .playerTrackedSpells
   local playerName = stats.name
 
   local nameText = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -3429,7 +3428,7 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
 		contentFrame.instructionLabel:SetPoint("TOP", contentFrame, "TOP", 0, -10)
 		contentFrame.instructionLabel:SetJustifyH("CENTER")
 	end
-	contentFrame.instructionLabel:SetText("Click on rows to expand.    \nClick on a player name to copy name, see trinkets, pvp talents, loadout codes or get a Spells List.\nAchievements Tracking uses memory due to a large filesize, right click minimap to toggle it ON/OFF.\nBattle.net Add Friend button on nameplates, for when you meet good peeps!")
+	contentFrame.instructionLabel:SetText("Click on rows to expand.    \nClick on a player name to copy name and any friendly team member to see their talents (loadout code).\nAchievements Tracking uses memory due to a large filesize, right click minimap to toggle it ON/OFF.\nBattle.net Add Friend button on nameplates, for when you meet good peeps!")
     
     -- Return the last label for potential further positioning
     return contentFrame.mmrLabel
