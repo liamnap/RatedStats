@@ -589,6 +589,88 @@ frame:RegisterEvent("PVP_MATCH_COMPLETE")
 frame:RegisterEvent("UPDATE_UI_WIDGET")
 frame:SetScript("OnEvent", OnWidgetUpdate)
 
+local function BuildObjectiveTextFromStats(stats)
+    if type(stats) ~= "table" or #stats == 0 then
+        return "-"
+    end
+
+    local byName = {}
+    local ordered = {}
+
+    for _, s in ipairs(stats) do
+        local name = (s.name or ""):lower()
+        local val  = tonumber(s.pvpStatValue) or 0
+        if name ~= "" then
+            byName[name] = val
+        end
+        ordered[#ordered + 1] = { orderIndex = tonumber(s.orderIndex) or 0, value = val }
+    end
+
+    local function findAny(substrings)
+        for _, sub in ipairs(substrings) do
+            for n, v in pairs(byName) do
+                if n:find(sub, 1, true) then
+                    return v
+                end
+            end
+        end
+        return nil
+    end
+
+    local baseCaps = findAny({ "bases assaulted", "bases captured" })
+    local baseDefs = findAny({ "bases defended" })
+    local flagCaps = findAny({ "flags captured", "flag captures" })
+    local flagRets = findAny({ "flags returned", "flag returns" })
+
+    -- EOTS: flag caps + base caps/defs
+    if flagCaps ~= nil and baseCaps ~= nil then
+        baseDefs = baseDefs or 0
+        return string.format("%d / %d / %d", flagCaps, baseCaps, baseDefs)
+    end
+
+    -- WSG / Twin Peaks: flag caps + returns
+    if flagCaps ~= nil and flagRets ~= nil then
+        return string.format("%d / %d", flagCaps, flagRets)
+    end
+
+    -- AB / DWG / BfG: base caps/defs
+    if baseCaps ~= nil and baseDefs ~= nil then
+        return string.format("%d / %d", baseCaps, baseDefs)
+    end
+
+    -- Deephaul Ravine: crystal + cart points (prefer crystal detection so SSM doesn't steal it)
+    local crystalPts = findAny({ "crystal points", "deephaul crystal", "crystal score", "crystals captured" })
+    if crystalPts ~= nil then
+        local cartPts = findAny({ "cart points", "mine cart points", "cart score" }) or 0
+        return string.format("%d / %d", crystalPts, cartPts)
+    end
+
+    -- Temple of Kotmogu: orbs + points
+    local orbsHeld  = findAny({ "orbs held", "orb holds", "orb possessions", "orb possession" })
+    if orbsHeld ~= nil then
+        local orbPts = findAny({ "orb points", "points", "score" }) or 0
+        return string.format("%d / %d", orbsHeld, orbPts)
+    end
+
+    -- Silvershard Mines: cart points (and sometimes cart captures)
+    local cartCaps = findAny({ "carts captured", "mine carts captured", "carts controlled", "mine carts controlled" })
+    local cartPts  = findAny({ "cart points", "mine cart points", "points", "score" })
+    if cartCaps ~= nil and cartPts ~= nil then
+        return string.format("%d / %d", cartCaps, cartPts)
+    end
+    if cartPts ~= nil then
+        return tostring(cartPts)
+    end
+
+    -- Fallback: show first 3 stats by orderIndex (still better than blank)
+    table.sort(ordered, function(a, b) return a.orderIndex < b.orderIndex end)
+    local parts = {}
+    for i = 1, math.min(3, #ordered) do
+        parts[#parts + 1] = tostring(ordered[i].value)
+    end
+    return (#parts > 0) and table.concat(parts, " / ") or "-"
+end
+
 local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categoryName, categoryID, startTime)
     local mapID = GetCurrentMapID()
     local mapName = GetMapName(mapID) or "Unknown"
@@ -653,7 +735,9 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
     roundsWon = roundsWon or 0
 	local duration = GetBattlefieldInstanceRunTime() / 1000  -- duration in seconds
 	local damp = C_Commentator.GetDampeningPercent()
-	
+    -- BG objectives (per-player), pulled from scoreInfo.stats
+    local objectiveByGUID = {}
+
     -- ------------------------------------------------------------
     -- Solo Shuffle: determine THIS round's win via KB increment on the 3 allies
     -- captured at PVP_MATCH_STATE_CHANGED ("Death").
@@ -782,6 +866,9 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
             local roleAssigned = scoreInfo.roleAssigned
             local guid = scoreInfo.guid
             local stats = scoreInfo.stats
+            if guid then
+                objectiveByGUID[guid] = BuildObjectiveTextFromStats(stats)
+            end
 
             -- Ensure damageDone and healingDone are numbers
             damageDone = tonumber(damageDone) or 0
@@ -829,7 +916,7 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
     -- Unregister the events after obtaining the raid leader information
     UnregisterRaidLeaderEvents()
 
-    AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, allianceTeamScore, hordeTeamScore, roundsWon, categoryName, categoryID, damp)
+    AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, allianceTeamScore, hordeTeamScore, roundsWon, categoryName, categoryID, damp, objectiveByGUID)
 
     -- Safe to clear AFTER stats capture:
     -- GetPlayerStatsEndOfMatch has consumed soloShuffleAlliesGUIDAtDeath/KBAtDeath
@@ -1665,7 +1752,7 @@ local mapShortName = {
 	["Cage of Carnage"] = "COC",
 }
 
-function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, allianceTeamScore, hordeTeamScore, roundsWon, categoryName, categoryID, damp)
+function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, allianceTeamScore, hordeTeamScore, roundsWon, categoryName, categoryID, damp, objectiveByGUID)
     local appendHistoryMatchID = #historyTable + 1  -- Unique match ID
     local playerFullName = GetPlayerFullName() -- Get the player's full name
     local myTeamIndex
@@ -1790,7 +1877,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                 postmatchMMR = postmatchMMR,
                 honorLevel = honorLevel,
                 newrating = newrating,  -- New field for adjusted rating
-    ---                roundsWon = roundsWon or 0,
+                objective = (objectiveByGUID and guid and objectiveByGUID[guid]) or "-"
             }
 
             -- Ensure all damage and healing values are numbers
@@ -3235,7 +3322,8 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
             (isSS and player.wins or player.honorableKills), 
             FormatNumber(player.damage), 
             FormatNumber(player.healing), 
-            player.ratingChange
+            player.ratingChange,
+            ((isSS or is2v2 or is3v3) and "" or (player.objective or "-"))
         }) do
             if i == 2 then
                 CreateIconWithTooltip(nestedTable, stat, player.faction, columnPositions[i], rowOffset, columnWidths[i], rowHeight)
@@ -3277,7 +3365,8 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
             (isSS and player.wins or player.honorableKills), 
             FormatNumber(player.damage), 
             FormatNumber(player.healing), 
-            player.ratingChange
+            player.ratingChange,
+            ((isSS or is2v2 or is3v3) and "" or (player.objective or "-"))
         }) do
             local ci    = COLS_PER_TEAM + i
             local xPos  = columnPositions[ci]
