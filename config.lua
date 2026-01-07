@@ -1636,6 +1636,35 @@ local function CreateIconWithTooltip(parentFrame, content, tooltipText, xOffset,
     end
 end
 
+local mapShortName = {
+    -- Battlegrounds
+    ["Warsong Gulch"] = "WSG",
+    ["Arathi Basin"] = "AB",
+    ["Eye of the Storm"] = "EOTS",
+    ["The Battle for Gilneas"] = "TBfG",
+    ["Twin Peaks"] = "TP",
+    ["Silvershard Mines"] = "SSM",
+    ["Temple of Kotmogu"] = "TOK",
+    ["Deepwind Gorge"] = "DWG",
+    ["Seething Shore"] = "SS",
+    ["Deephaul Ravine"] = "DHR",
+
+    -- Arenas
+    ["Nagrand Arena"] = "NA",
+    ["Blade's Edge Arena"] = "BEA",
+    ["Dalaran Arena"] = "DA",
+    ["Ruins of Lordaeron"] = "ROL",
+    ["The Tiger's Peak"] = "TTP",
+    ["Tol'viron Arena"] = "TV",
+    ["Empyrean Domain"] = "ED",
+    ["Mugambala"] = "M",
+    ["Hook Point"] = "HP",
+    ["Enigma Crucible"] = "EC",
+    ["Valdrakken Arena"] = "VA",
+    ["Nokhudon Proving Grounds"] = "NPG",
+	["Cage of Carnage"] = "COC",
+}
+
 function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, allianceTeamScore, hordeTeamScore, roundsWon, categoryName, categoryID, damp)
     local appendHistoryMatchID = #historyTable + 1  -- Unique match ID
     local playerFullName = GetPlayerFullName() -- Get the player's full name
