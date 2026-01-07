@@ -11,7 +11,6 @@
 
 core.lua
 filters.lua
-herotalents.lua
 gettalents.lua
 stats.lua
 config.lua
