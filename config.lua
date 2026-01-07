@@ -3336,6 +3336,45 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
             elseif i == 6 then
                 -- Add role tooltip
                 CreateIconWithTooltip(nestedTable, stat, roleTooltips[player.role], columnPositions[i], rowOffset, columnWidths[i], rowHeight)
+            elseif i == 13 then
+                local textValue = stat or "-"
+                local fs = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+                fs:SetFont(GetUnicodeSafeFont(), entryFontSize)
+                fs:SetJustifyH("CENTER")
+                fs:SetPoint("CENTER", nestedTable, "TOPLEFT", columnPositions[i] + (columnWidths[i] / 2), rowOffset - (rowHeight / 2))
+                fs:SetText(tostring(textValue))
+
+                -- Add objective tooltip
+                fs:EnableMouse(true)
+                fs:SetScript("OnEnter", function()
+                    GameTooltip:SetOwner(fs, "ANCHOR_RIGHT")
+                    GameTooltip:ClearLines()
+
+                    -- Show friendly label based on map name
+                    local mapLabel = matchEntry and matchEntry.mapName or ""
+                    local tooltipText
+                    if mapShortName[mapLabel] == "EOTS" then
+                        tooltipText = "Flags Capped / Bases Capped / Bases Defended"
+                    elseif mapShortName[mapLabel] == "WSG" or mapShortName[mapLabel] == "TP" then
+                        tooltipText = "Flags Capped / Flags Returned"
+                    elseif mapShortName[mapLabel] == "AB" or mapShortName[mapLabel] == "DWG" or mapShortName[mapLabel] == "BfG" then
+                        tooltipText = "Bases Capped / Bases Defended"
+                    elseif mapShortName[mapLabel] == "TOK" then
+                        tooltipText = "Orbs Held / Points"
+                    elseif mapShortName[mapLabel] == "SSM" then
+                        tooltipText = "Carts / Points"
+                    elseif mapShortName[mapLabel] == "DHR" then
+                        tooltipText = "Crystal Points / Cart Points"
+                    else
+                        tooltipText = "Objective"
+                    end
+
+                    GameTooltip:AddLine(tooltipText, 1, 1, 1)
+                    GameTooltip:Show()
+                end)
+                fs:SetScript("OnLeave", function()
+                    GameTooltip:Hide()
+                end)
             else
                 local textValue = stat or "-"  -- Provide a default value if stat is nil
                 local text = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -3384,6 +3423,45 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
             elseif i == 6 then
                 -- Add role tooltip
                 CreateIconWithTooltip(nestedTable, stat, roleTooltips[player.role], xPos, rowOffset, width, rowHeight)
+            elseif i == 13 then
+                local textValue = stat or "-"
+                local fs = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+                fs:SetFont(GetUnicodeSafeFont(), entryFontSize)
+                fs:SetJustifyH("CENTER")
+                fs:SetPoint("CENTER", nestedTable, "TOPLEFT", columnPositions[i] + (columnWidths[i] / 2), rowOffset - (rowHeight / 2))
+                fs:SetText(tostring(textValue))
+
+                -- Add objective tooltip
+                fs:EnableMouse(true)
+                fs:SetScript("OnEnter", function()
+                    GameTooltip:SetOwner(fs, "ANCHOR_RIGHT")
+                    GameTooltip:ClearLines()
+
+                    -- Show friendly label based on map name
+                    local mapLabel = matchEntry and matchEntry.mapName or ""
+                    local tooltipText
+                    if mapShortName[mapLabel] == "EOTS" then
+                        tooltipText = "Flags Capped / Bases Capped / Bases Defended"
+                    elseif mapShortName[mapLabel] == "WSG" or mapShortName[mapLabel] == "TP" then
+                        tooltipText = "Flags Capped / Flags Returned"
+                    elseif mapShortName[mapLabel] == "AB" or mapShortName[mapLabel] == "DWG" or mapShortName[mapLabel] == "BfG" then
+                        tooltipText = "Bases Capped / Bases Defended"
+                    elseif mapShortName[mapLabel] == "TOK" then
+                        tooltipText = "Orbs Held / Points"
+                    elseif mapShortName[mapLabel] == "SSM" then
+                        tooltipText = "Carts / Points"
+                    elseif mapShortName[mapLabel] == "DHR" then
+                        tooltipText = "Crystal Points / Cart Points"
+                    else
+                        tooltipText = "Objective"
+                    end
+
+                    GameTooltip:AddLine(tooltipText, 1, 1, 1)
+                    GameTooltip:Show()
+                end)
+                fs:SetScript("OnLeave", function()
+                    GameTooltip:Hide()
+                end)
             else
                 local textValue = stat or "-"  -- Provide a default value if stat is nil
                 local text = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
