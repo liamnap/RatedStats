@@ -1219,7 +1219,7 @@ function GetInitialCRandMMR()
             playerStats = {
                 {
                     name = playerFullName,
-                    originalFaction = UnitFactionGroup("player"),
+                    faction = UnitFactionGroup("player"),
                     race = UnitRace("player"),
                     class = UnitClass("player"),
                     spec = GetSpecialization() and select(2, GetSpecializationInfo(GetSpecialization())) or "N/A",
@@ -1238,7 +1238,7 @@ function GetInitialCRandMMR()
         for i = 1, 1 do
 			table.insert(entry.playerStats, {
 				name = "-",
-				originalFaction = "-",
+				faction = "-",
 				race = "-",
 				class = "-",
 				spec = "-",
@@ -1356,7 +1356,7 @@ function CheckForMissedGames()
 				playerStats = {
 					{
 						name = GetPlayerFullName(),
-						originalFaction = UnitFactionGroup("player"),
+						faction = UnitFactionGroup("player"),
 						race = UnitRace("player"),
 						class = UnitClass("player"),
 						spec = GetSpecialization() and select(2, GetSpecializationInfo(GetSpecialization())) or "N/A",
@@ -1375,7 +1375,7 @@ function CheckForMissedGames()
 			for i = 1, 1 do
 				table.insert(entry.playerStats, {
 					name = "-",
-					originalFaction = "-",
+					faction = "-",
 					race = "-",
 					class = "-",
 					spec = "-",
@@ -1773,7 +1773,6 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                     )
                 ) or false,
                 race = raceName,
-                evaluatedrace = remappedRace,
                 class = className,
                 spec = talentSpec,
                 role = roleAssigned,
@@ -1791,26 +1790,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                 postmatchMMR = postmatchMMR,
                 honorLevel = honorLevel,
                 newrating = newrating,  -- New field for adjusted rating
-                originalFaction = nil,
     ---                roundsWon = roundsWon or 0,
             }
-
-            -- Get combat log events
-            local playerCombatLogEvents = GetCombatLogEventsForPlayer(playerData.name)
-            playerCombatLogEvents = playerCombatLogEvents or {}
-            
-            -- Determine original faction based on combat log events
-            local originalFaction, factionSource = DetermineOriginalFaction(playerData, playerCombatLogEvents)
-     
-            -- Set the originalFaction in playerData
-            playerData.originalFaction = originalFaction
-            playerData.originalFactionSource = factionSource  -- Store the source of the original faction
-            
-            -- Remap the player's race if necessary
-            local remappedRace = raceFactionMapping[raceName]
-            if playerData.originalFaction and playerData.originalFaction ~= playerData.faction and remappedRace then
-                playerData.race = remappedRace
-            end
 
             -- Ensure all damage and healing values are numbers
             friendlyTotalDamage = tonumber(friendlyTotalDamage) or 0
@@ -3141,8 +3122,8 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     local isSS = (tabID == 1)
 
     local headers = {
-        "Character", "Faction", "Race", "Class", "Spec", "Role", "CR", "KBs", (isSS and "Wins" or "HKs"), "Damage", "Healing", "Rating Chg", "Objective",
-        "Character", "Faction", "Race", "Class", "Spec", "Role", "CR", "KBs", (isSS and "Wins" or "HKs"), "Damage", "Healing", "Rating Chg", "Objective"
+        "Character", "Faction", "Race", "Class", "Spec", "Role", "CR", "KBs", (isSS and "Wins" or "HKs"), "Damage", "Healing", "Rating Chg", (isSS and "" or "Objective"),
+        "Character", "Faction", "Race", "Class", "Spec", "Role", "CR", "KBs", (isSS and "Wins" or "HKs"), "Damage", "Healing", "Rating Chg", (isSS and "" or "Objective")
     }
 
     local headerHeight = 18  -- Height of the header row
@@ -3203,7 +3184,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
         table.insert(friendlyPlayers, playerStats[1])  -- Assume the player is the first entry
         for i = 1, playersPerTeam do
             table.insert(enemyPlayers, {
-                name = "-", originalFaction = "-", race = "-", class = "-", spec = "-", role = "-", 
+                name = "-", faction = "-", race = "-", class = "-", spec = "-", role = "-", 
                 newrating = "-", killingBlows = "-", honorableKills = "-", damage = "-", healing = "-", ratingChange = "-"
             })  -- Add placeholder entries for the enemy
         end
@@ -3242,7 +3223,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
 		CreateClickableName(nestedTable, player, matchEntry, columnPositions[1], rowOffset, columnWidths[1], rowHeight)
         for i, stat in ipairs({
 			"",
-            factionIcons[player.originalFaction] or player.originalFaction, 
+            factionIcons[player.faction] or player.faction, 
             raceIcons[player.race] or player.race, 
             classIcons[player.class] or player.class, 
             specIcons[player.spec] or player.spec, 
@@ -3255,7 +3236,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
             player.ratingChange
         }) do
             if i == 2 then
-                CreateIconWithTooltip(nestedTable, stat, player.originalFaction, columnPositions[i], rowOffset, columnWidths[i], rowHeight)
+                CreateIconWithTooltip(nestedTable, stat, player.faction, columnPositions[i], rowOffset, columnWidths[i], rowHeight)
             elseif i == 3 then
                 CreateIconWithTooltip(nestedTable, stat, player.race, columnPositions[i], rowOffset, columnWidths[i], rowHeight)
             elseif i == 4 then
@@ -3284,7 +3265,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
         CreateClickableName(nestedTable, player, matchEntry, columnPositions[COLS_PER_TEAM + 1], rowOffset, columnWidths[COLS_PER_TEAM + 1], rowHeight)
         for i, stat in ipairs({
 			"",
-            factionIcons[player.originalFaction] or player.originalFaction, 
+            factionIcons[player.faction] or player.faction, 
             raceIcons[player.race] or player.race, 
             classIcons[player.class] or player.class, 
             specIcons[player.spec] or player.spec,
@@ -3302,7 +3283,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
 			
 
             if i == 2 then
-                CreateIconWithTooltip(nestedTable, stat, player.originalFaction, xPos, rowOffset, width, rowHeight)
+                CreateIconWithTooltip(nestedTable, stat, player.faction, xPos, rowOffset, width, rowHeight)
             elseif i == 3 then
                 CreateIconWithTooltip(nestedTable, stat, player.race, xPos, rowOffset, width, rowHeight)
             elseif i == 4 then
