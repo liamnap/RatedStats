@@ -1942,7 +1942,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 		-- 2. Inject from DetectedPlayerTalents (loadout only)
 		if player.guid then
 			local detected = RSTATS.DetectedPlayerTalents[player.guid]
-			if detected and detected.loadout and player.loadout == nil and (not issecretvalue or not issecretvalue(pending.loadout)) then
+			if detected and detected.loadout and player.loadout == nil and (not issecretvalue or not issecretvalue(detected.loadout)) then
 				player.loadout = detected.loadout
 				player.talentSource = player.talentSource or "detected"
 			end
