@@ -1,180 +1,3 @@
--- Function to print only match entries from SoloShuffleHistory
-function PrintSoloRBGMatchEntries(historyTable)
-    if not historyTable or #historyTable == 0 then
-        return
-    end
-
-    -- Iterate over the matches in the history table
-    for i, matchEntry in ipairs(historyTable) do
-        -- Attempt to convert timestamp to human-readable format
-        if type(matchEntry.timestamp) == "number" then
-            local formattedDate = date("%Y-%m-%d %H:%M:%S", matchEntry.timestamp)
-        else
-        end
-    end
-end
-
-SLASH_RATEDSTATSDEBUG1 = "/rsdebug"
-SlashCmdList["RATEDSTATSDEBUG"] = function()
-    local categoryMappings = {
-        { id = 7, name = "SoloShuffle", tableKey = "SoloShuffleHistory" },
-        { id = 1, name = "2v2", tableKey = "v2History" },
-        { id = 2, name = "3v3", tableKey = "v3History" },
-        { id = 4, name = "RBG", tableKey = "RBGHistory" },
-        { id = 9, name = "SoloRBG", tableKey = "SoloRBGHistory" },
-    }
-
-    for _, info in ipairs(categoryMappings) do
-        local historyTable = Database[info.tableKey]
-
-        if historyTable and #historyTable > 0 then
-            local entry = historyTable[1]  -- 🔹 Latest match (at the top)
-
-            print("==========")
-            print("Latest Match in", info.name)
-            print("Match ID:", entry.matchID or "N/A")
-            print("Map:", entry.mapName or "Unknown")
-            print("Players with detected talents:")
-
-            for _, stats in ipairs(entry.playerStats or {}) do
-                local hasUseful =
-                    (stats.pvptalent1 and stats.pvptalent1 ~= "N/A") or
-                    (stats.pvptalent2 and stats.pvptalent2 ~= "N/A") or
-                    (stats.pvptalent3 and stats.pvptalent3 ~= "N/A") or
-                    (stats.heroSpec and stats.heroSpec ~= "N/A") or
-                    (stats.loadout and stats.loadout ~= "N/A" and stats.loadout ~= "")
-
-                if hasUseful then
-                    print("-----------")
-                    print("Name:", stats.name or "Unknown")
-                    print("GUID:", stats.guid or "Unknown")
-
-                    if stats.nameplate and stats.nameplate ~= "N/A" then
-                        print("  Nameplate:", stats.nameplate)
-                    end
-
-                    if stats.loadout and stats.loadout ~= "N/A" and stats.loadout ~= "" then
-                        print("  Loadout:", stats.loadout)
-                    end
-
-                    for i = 1, 3 do
-                        local talentID = stats["pvptalent" .. i]
-                        if talentID and talentID ~= "N/A" then
-                            local talentName = "UnknownSpell"
-                            if stats.loadout and stats.loadout ~= "N/A" and stats.loadout ~= "" then
-                                -- Friendly player: assume proper PvP Talent ID
-                                talentName = select(2, GetPvpTalentInfoByID(talentID)) or "UnknownTalent"
-                            else
-                                -- Enemy player: it's a spellID
-                                local spellInfo = C_Spell.GetSpellInfo(talentID)
-            talentName = (spellInfo and spellInfo.name) or "UnknownSpell"
-                            end
-                            print("  PvP Talent " .. i .. ":", talentName, "(" .. talentID .. ")")
-                        end
-                    end
-
-                    if stats.heroSpec and stats.heroSpec ~= "N/A" then
-                        print("  Hero Spec:", stats.heroSpec)
-                    end
-
-					if stats.playerTrackedSpells and next(stats.playerTrackedSpells) then
-						local spellList = {}
-						for _, spellID in ipairs(stats.playerTrackedSpells) do
-							local spellInfo = C_Spell.GetSpellInfo(spellID)
-							if spellInfo and spellInfo.name then
-								table.insert(spellList, spellInfo.name .. " (" .. spellID .. ")")
-							else
-								table.insert(spellList, tostring(spellID))
-							end
-						end
-						table.sort(spellList)
-						print("  Player Tracked Spells:", table.concat(spellList, ", "))
-					end
-                end
-            end
-        end
-    end
-end
-
-SLASH_SHOWSPELLS1 = "/showspells"
-SlashCmdList["SHOWSPELLS"] = function()
-    local tabs = {
-      { name = "SoloShuffle", tableKey = "SoloShuffleHistory" },
-      { name = "2v2",         tableKey = "v2History"         },
-      { name = "3v3",         tableKey = "v3History"         },
-      { name = "RBG",         tableKey = "RBGHistory"        },
-      { name = "SoloRBG",     tableKey = "SoloRBGHistory"    },
-    }
-
-    for _, info in ipairs(tabs) do
-        local history = Database[info.tableKey]
-        if history and #history > 0 then
-            DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00---- "..info.name.." ----|r")
-            for _, matchEntry in ipairs(history) do
-                local when = date("%Y-%m-%d %H:%M:%S", matchEntry.timestamp or time())
-
-                for _, stats in ipairs(matchEntry.playerStats or {}) do
-                    -- 1) Tracked spells
-                    local spells = stats.playerTrackedSpells or {}
-                    if #spells > 0 then
-                        DEFAULT_CHAT_FRAME:AddMessage(
-                          ("[%s] %s → Spells:"):format( when, stats.name or "Unknown" )
-                        )
-                        for _, spellID in ipairs(spells) do
-                            -- C_Spell.GetSpellInfo(spellID) now returns a table
-                            local sinfo = C_Spell.GetSpellInfo(spellID)
-                            local sname = (type(sinfo)=="table" and sinfo.name) or sinfo or "ID:"..spellID
-                            -- new SpellInfo table has field `iconID`
-                            local iconID = (type(sinfo)=="table" and sinfo.iconID) or nil
-                            DEFAULT_CHAT_FRAME:AddMessage(
-                              ("    • %s (%d) — iconID: %s"):format(
-                                sname, spellID, iconID or "n/a"
-                              )
-                            )
-                        end
-                    end
-
-                    -- 2) Gladiator's Medallion
-                    do
-                        local medID = stats.trinketSpellID
-                        if medID and medID > 0 then
-                            local minfo = C_Spell.GetSpellInfo(medID)
-                            local mname = (type(minfo)=="table" and minfo.name) or minfo or "ID:"..medID
-                            local mid   = (type(minfo)=="table" and minfo.iconID)
-                            DEFAULT_CHAT_FRAME:AddMessage(
-                              ("    Medallion: %s (%d) — iconID: %s")
-                              :format(mname, medID, mid or "n/a")
-                            )
-                        else
-                            DEFAULT_CHAT_FRAME:AddMessage("    Medallion: none")
-                        end
-                    end
-
-                    -- 3) PvP talents 1–3
-                    for i=1,3 do
-                        local tid = stats["pvptalent"..i]
-                        if tid and tid > 0 then
-                            -- SpecializationInfo API in 10.2+
-                            local tinfo = C_SpecializationInfo.GetPvpTalentInfo(tid)
-                            local tname = tinfo and tinfo.name or "ID:"..tid
-                            local tidx  = tinfo and tinfo.icon or "n/a"
-                            DEFAULT_CHAT_FRAME:AddMessage(
-                              ("    PvP Talent %d: %s (%d) — iconID: %s")
-                              :format(i, tname, tid, tidx)
-                            )
-                        else
-                            DEFAULT_CHAT_FRAME:AddMessage(
-                              ("    PvP Talent %d: none"):format(i)
-                            )
-                        end
-                    end
-                end
-            end
-        end
-    end
-end
-
-
 --------------------------------------
 -- Namespaces
 --------------------------------------
@@ -1813,197 +1636,6 @@ local function CreateIconWithTooltip(parentFrame, content, tooltipText, xOffset,
     end
 end
 
--- Helper function to sanitize player names by removing region suffix, but keeping the realm
-local function SanitizePlayerName(name)
-    if name then
-        -- Match anything before the second hyphen, which typically would be "Player-Realm-Region"
-        local sanitizedName = name:match("^(.-%-.+)%-") or name
-        return sanitizedName
-    end
-    return name
-end
-
--- Table to store combat log events
-local inPvPMatch = false  -- Flag to track if we are in a PvP match
-
-local function OnCombatLogEvent(self, event, ...)
-    if event == "PVP_MATCH_ACTIVE" then
-        inPvPMatch = true
-    elseif event == "PVP_MATCH_COMPLETE" then
-        inPvPMatch = false
-    elseif event == "COMBAT_LOG_EVENT_UNFILTERED" and inPvPMatch then
-        local timestamp, subevent, _, sourceGUID, sourceName, _, _, destGUID, destName, _, _, spellId, spellName = CombatLogGetCurrentEventInfo()
-
-        -- Only handle successful spell casts
-        if subevent == "SPELL_CAST_SUCCESS" then
-            if sourceName then
-                -- Define faction mappings for racial abilities
-                local racialFactionMapping = {
-                    ["Will to Survive"] = "Alliance",  -- Human
-                    ["Blood Fury"] = "Horde",  -- Orc
-                    ["War Stomp"] = "Horde",  -- Tauren
-                    ["Stoneform"] = "Alliance",  -- Dwarf
-                    ["Berserking"] = "Horde",  -- Troll
-                    ["Escape Artist"] = "Alliance",  -- Gnome
-                    ["Shadowmeld"] = "Alliance",  -- Night Elf
-                    ["Will of the Forsaken"] = "Horde",  -- Undead
-                    ["Arcane Torrent"] = "Horde",  -- Blood Elf
-                    ["Gift of the Naaru"] = "Alliance",  -- Draenei
-                    ["Quaking Palm"] = "Neutral",  -- Pandaren
-                }
-
-                -- Check for racial abilities
-                if racialFactionMapping[spellName] then
-
-                    local sanitizedSourceName = SanitizePlayerName(sourceName)
-                    -- Store the relevant event data
-                    combatLogEvents[sanitizedSourceName] = combatLogEvents[sanitizedSourceName] or {}
-                    table.insert(combatLogEvents[sanitizedSourceName], {
-                        spellId = spellId,
-                        spellName = spellName,
-                        timestamp = timestamp,
-                        eventType = "Racial",
-                        sourceName = sanitizedSourceName,
-                        faction = racialFactionMapping[spellName],  -- Store the determined faction
-                    })
-                end
-            end
-        elseif subevent == "SPELL_SUMMON" then
-            if destName == "Horde Battle Standard" or destName == "Alliance Battle Standard" then
-                local bannerFaction = (destName == "Horde Battle Standard") and "Horde" or "Alliance"
-
-                local sanitizedSourceName = SanitizePlayerName(sourceName)
-                -- Store the event details, associating the banner with the player
-                combatLogEvents[sanitizedSourceName] = combatLogEvents[sanitizedSourceName] or {}
-                table.insert(combatLogEvents[sanitizedSourceName], {
-                    spellId = spellId,
-                    spellName = spellName,
-                    timestamp = timestamp,
-                    sourceName = sanitizedSourceName,
-                    bannerFaction = bannerFaction,
-                    eventType = "Summon",
-                })
-            end
-        end
-    end
-end
-
--- Register the event handler for combat log events and PvP match start/end
-local frame = CreateFrame("Frame")
-frame:RegisterEvent("PVP_MATCH_ACTIVE")
-frame:RegisterEvent("PVP_MATCH_COMPLETE")
-frame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-frame:SetScript("OnEvent", OnCombatLogEvent)
-
--- Function to get combat log events for a specific player
-function GetCombatLogEventsForPlayer(playerName)
-    
-    -- Sanitize the playerName to match with the stored sourceNames
-    local sanitizedPlayerName = SanitizePlayerName(playerName)
-
-    if combatLogEvents[sanitizedPlayerName] then
-        for i, event in ipairs(combatLogEvents[sanitizedPlayerName]) do
-        end
-    else
-    end
-    
-    return combatLogEvents[sanitizedPlayerName] or {}
-end
-
--- Define the complete mapping for races
-local raceFactionMapping = {
-    ["Blood Elf"] = "Human", -- Horde to Alliance mapping
-    ["Orc"] = "Human",
-    ["Tauren"] = "Night Elf",
-    ["Troll"] = "Night Elf",
-    ["Undead"] = "Human",
-    ["Goblin"] = "Gnome",
-    ["Nightborne"] = "Night Elf",
-    ["Highmountain Tauren"] = "Dwarf",
-    ["Mag'har Orc"] = "Dwarf",
-    ["Zandalari Troll"] = "Night Elf",
-    ["Vulpera"] = "Gnome",
-
-    ["Human"] = "Blood Elf", -- Alliance to Horde mapping
-    ["Dwarf"] = "Orc",
-    ["Night Elf"] = "Tauren",
-    ["Gnome"] = "Goblin",
-    ["Draenei"] = "Troll",
-    ["Worgen"] = "Undead",
-    ["Void Elf"] = "Nightborne",
-    ["Lightforged Draenei"] = "Highmountain Tauren",
-    ["Dark Iron Dwarf"] = "Mag'har Orc",
-    ["Kul Tiran"] = "Zandalari Troll",
-    ["Mechagnome"] = "Vulpera",
-}
-
-local racialFactionMapping = {
-    ["Will to Survive"] = "Alliance",  -- Human
-    ["Blood Fury"] = "Horde",  -- Orc
-    ["War Stomp"] = "Horde",  -- Tauren
-    ["Stoneform"] = "Alliance",  -- Dwarf
-    ["Berserking"] = "Horde",  -- Troll
-    ["Escape Artist"] = "Alliance",  -- Gnome
-    ["Shadowmeld"] = "Alliance",  -- Night Elf
-    ["Will of the Forsaken"] = "Horde",  -- Undead
-    ["Arcane Torrent"] = "Horde",  -- Blood Elf
-    ["Gift of the Naaru"] = "Alliance",  -- Draenei
-    ["Quaking Palm"] = "Neutral",  -- Pandaren
-}
-
-local mapShortName = {
-    -- Battlegrounds
-    ["Warsong Gulch"] = "WSG",
-    ["Arathi Basin"] = "AB",
-    ["Eye of the Storm"] = "EOTS",
-    ["The Battle for Gilneas"] = "TBfG",
-    ["Twin Peaks"] = "TP",
-    ["Silvershard Mines"] = "SSM",
-    ["Temple of Kotmogu"] = "TOK",
-    ["Deepwind Gorge"] = "DWG",
-    ["Seething Shore"] = "SS",
-    ["Deephaul Ravine"] = "DHR",
-
-    -- Arenas
-    ["Nagrand Arena"] = "NA",
-    ["Blade's Edge Arena"] = "BEA",
-    ["Dalaran Arena"] = "DA",
-    ["Ruins of Lordaeron"] = "ROL",
-    ["The Tiger's Peak"] = "TTP",
-    ["Tol'viron Arena"] = "TV",
-    ["Empyrean Domain"] = "ED",
-    ["Mugambala"] = "M",
-    ["Hook Point"] = "HP",
-    ["Enigma Crucible"] = "EC",
-    ["Valdrakken Arena"] = "VA",
-    ["Nokhudon Proving Grounds"] = "NPG",
-	["Cage of Carnage"] = "COC",
-}
-
--- Function to determine the original faction of a player based on their combat log events
-function DetermineOriginalFaction(playerData, playerCombatLogEvents)
-    
-    -- Check for racial abilities in combat log events
-    for _, event in ipairs(playerCombatLogEvents) do
-        if event.sourceName == playerData.name then
-            local combatlogfaction = racialFactionMapping[event.spellName]
-            if combatlogfaction then
-                return combatlogfaction, "Racial"
-            end
-        end
-    end
-
-    -- If no racial ability is found, check for faction banners
-    for _, event in ipairs(playerCombatLogEvents) do
-        if event.sourceName == playerData.name and event.eventType == "Summon" and event.bannerFaction then
-            return event.bannerFaction, "Banner"
-        end
-    end
-
-    -- If no faction is determined from the above checks, use the player's current faction as the default
-    return playerData.faction, "Default"
-end
-
 function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, allianceTeamScore, hordeTeamScore, roundsWon, categoryName, categoryID, damp)
     local appendHistoryMatchID = #historyTable + 1  -- Unique match ID
     local playerFullName = GetPlayerFullName() -- Get the player's full name
@@ -2291,7 +1923,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 	for _, player in ipairs(playerStats) do
 		-- 1. Inject from PendingPvPTalents (inspect loadout only)
 		local pending = PendingPvPTalents[player.name]
-		if pending and pending.loadout and pending.loadout ~= "" then
+		if pending and pending.loadout and pending.loadout ~= "" and (not issecretvalue or not issecretvalue(pending.loadout)) then
 			player.loadout = pending.loadout
 			player.talentSource = "inspect"
 			PendingPvPTalents[player.name] = nil
@@ -2300,7 +1932,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 		-- 2. Inject from DetectedPlayerTalents (loadout only)
 		if player.guid then
 			local detected = RSTATS.DetectedPlayerTalents[player.guid]
-			if detected and detected.loadout and player.loadout == nil then
+			if detected and detected.loadout and player.loadout == nil and (not issecretvalue or not issecretvalue(pending.loadout)) then
 				player.loadout = detected.loadout
 				player.talentSource = player.talentSource or "detected"
 			end
@@ -3215,20 +2847,6 @@ local rowCounts = {
     ["Solo RBG"] = 8,
 }
 
--- Function to check and process player talents for new games
-local function CheckPlayerTalents(playerName, isNewGame)
-    if isNewGame then
-        -- Check the history table and process talents for new games only
-        local playerStats = Database.SoloShuffleHistory[playerName]
-        
-        if not playerStats.talentCode then
-            -- This is a new game, so retrieve and store the talent code
-            local talentCode = GetPlayerTalentCode(playerName)  -- You need to define this function to get the talent code
-            playerStats.talentCode = talentCode  -- Store the talent code in the player's stats
-        end
-    end
-end
-
 -- Function to send a Battle.net invite using player's GUID or BattleTag
 local function SendBattleNetInvite(playerName)
     local foundStats = nil
@@ -3294,210 +2912,50 @@ end
 -- Function to for Popout Details of Name/Spec/Loadout
 -- Pop-out content + layout tweaks
 local function CreateFriendAndTalentButtons(stats, matchEntry, parent)
-    -- ----------------------------------------------------------------------------
-    -- 0) clear any old icons
-    -- ----------------------------------------------------------------------------
+    -- Legacy cleanup (old spell icons)
     if parent.spellIcons then
-        for _, ic in ipairs(parent.spellIcons) do ic:Hide() end
+        for _, ic in ipairs(parent.spellIcons) do
+            ic:Hide()
+        end
     end
     parent.spellIcons = {}
 
-    -- ----------------------------------------------------------------------------
-    -- A) draw the four “PvP” icons row (always)
-    -- ----------------------------------------------------------------------------
-
-    do
-        local topOff    = -45
-        local padding   = 4
-        local size      = 20
-
-        -- build our list: medallion, pvp1, pvp2, pvp3
-		local pvp = {}
-	
-		-- 1) grab all “Prized …” trinkets from tracked spells
-		local found = {}
-        for _, spellID in ipairs(stats.playerTrackedSpells or {}) do
-            local sinfo = C_Spell.GetSpellInfo(spellID)
-            local sname = sinfo and sinfo.name
-            if sname then
-                -- look for Insignia/Medallion/Emblem at end, or Badge of Ferocity, or Sigil anywhere
-                if sname:match("Insignia$") 
-                or sname:match("Medallion$") 
-                or sname:match("Badge$") 
-                or sname:find("Emblem$") 
-                or sname:match("Adapted") then
-                    tinsert(found, spellID)
-                end
-            end
-        end
-	
-		-- 2) if we found at least one, insert them all; otherwise one placeholder
-		if #found > 0 then
-			for _, id in ipairs(found) do
-				tinsert(pvp, id)
-			end
-		else
-			tinsert(pvp, "X")
-		end
-	
-		-- 3) now append the three PvP talents as before
-		for i = 1, 3 do
-			local tid = stats["pvptalent"..i]
-			if tid and tid > 0 then
-				tinsert(pvp, tid)
-			else
-				tinsert(pvp, "X")
-			end
-		end
-
-        -- center that row
-        local count   = #pvp
-        local rowW    = count*size + (count-1)*padding
-        local startX  = (parent:GetWidth() - rowW)/2
-
-		for i, eid in ipairs(pvp) do
-			local btn = CreateFrame("Button", "PlayerPvPTalentFrame", parent, "BackdropTemplate")
-			btn:SetSize(size, size)
-			btn:SetPoint("TOPLEFT", parent, "TOPLEFT",
-						startX + (i-1)*(size+padding),
-						topOff)
-		
-			-- 1) pick your texture, remember if we fell back to the red-X
-			local isTalent       = (i > 1)
-			local lookupID       = tonumber(eid)     -- will be nil for "X"
-			local tex, didFallback, fromTalentInfo
-		
-			if not lookupID then
-				-- no ID at all → hard fallback
-				tex         = "Interface\\Icons\\Achievement_PVP_P_250K.blp"
-				didFallback = true
-		
-			elseif isTalent then
-				-- PvP talents: try talent→spell first
-				local tinfo = C_SpecializationInfo.GetPvpTalentInfo(lookupID)
-				if tinfo and tinfo.spellID then
-					fromTalentInfo = true
-					tex, _         = C_Spell.GetSpellTexture(tinfo.spellID)
-				end
-				-- next try the raw talentID as a “spell”
-				if not tex then
-					tex, _        = C_Spell.GetSpellTexture(lookupID)
-				end
-				-- last resort: red-X
-				if not tex then
-					tex           = "Interface\\Icons\\Achievement_PVP_P_250K.blp"
-					didFallback   = true
-				end
-		
-			else
-				-- medallion is a normal spellID
-				tex, _         = C_Spell.GetSpellTexture(lookupID)
-				if not tex then
-					tex         = select(3, C_Spell.GetSpellInfo(lookupID))
-				end
-			end
-		
-			btn.icon = btn:CreateTexture(nil, "BACKGROUND")
-			btn.icon:SetAllPoints(btn)
-			btn.icon:SetTexture(tex)
-		
-			-- 2) tooltip
-			btn:SetScript("OnEnter", function(self)
-				GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-				if didFallback then
-					GameTooltip:AddLine("Undetected",1,0,0)
-				elseif fromTalentInfo then
-					GameTooltip:SetPvpTalent(lookupID)
-				else
-					GameTooltip:SetSpellByID(lookupID)
-				end
-				GameTooltip:Show()
-			end)
-			btn:SetScript("OnLeave", GameTooltip_Hide)
-		
-			btn:Show()
-			tinsert(parent.spellIcons, btn)
-		end
+    -- 1) Loadout label
+    if not parent.loadoutLabel then
+        parent.loadoutLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        parent.loadoutLabel:SetPoint("TOP", parent, "TOP", 0, -60)
+        parent.loadoutLabel:SetText("Loadout Code:")
+        parent.loadoutLabel:SetFont(GetUnicodeSafeFont(), 8)
     end
+    parent.loadoutLabel:Show()
 
-    -- ----------------------------------------------------------------------------
-    -- B) loadout present? show that and stop
-    -- ----------------------------------------------------------------------------
-    if stats.loadout and stats.loadout ~= "" then
-        -- ensure our loadoutBox & label exist
-        if not parent.loadoutBox then
-            local eb = CreateFrame("EditBox", "PlayerLoadoutFrame", parent, "BackdropTemplate")
-            eb:SetSize(280, 40)
-            eb:SetPoint("TOP", parent, "TOP", 0, -80)
-            eb:SetFontObject(ChatFontNormal)
-            eb:SetAutoFocus(false)
-            eb:EnableMouse(true)
-            eb:SetScript("OnEscapePressed", eb.ClearFocus)
-            parent.loadoutBox = eb
-
-            local lbl = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-            lbl:SetPoint("TOPLEFT", eb, "TOPLEFT", 4, 4)
-            lbl:SetText("Loadout Copy:")
-            lbl:SetFont(GetUnicodeSafeFont(), 8)
-            parent.loadoutLabel = lbl
-        end
-
-        parent.loadoutLabel:Show()
-        parent.loadoutBox:Show()
-        parent.loadoutBox:SetText(stats.loadout)
+    -- 2) Loadout box
+    if not parent.loadoutBox then
+        parent.loadoutBox = CreateFrame("EditBox", nil, parent, "BackdropTemplate")
+        parent.loadoutBox:SetSize(220, 20)
+        parent.loadoutBox:SetPoint("TOP", parent.loadoutLabel, "BOTTOM", 0, -4)
+        parent.loadoutBox:SetAutoFocus(false)
         parent.loadoutBox:SetFont(GetUnicodeSafeFont(), 8, "OUTLINE")
-        parent.loadoutBox:HighlightText(0)
-        parent.loadoutBox:SetCursorPosition(0)
+        parent.loadoutBox:SetJustifyH("CENTER")
+        parent.loadoutBox:SetBackdrop({
+            bgFile   = "Interface\\Tooltips\\UI-Tooltip-Background",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile     = true, tileSize = 16, edgeSize = 16,
+            insets   = { left = 3, right = 3, top = 3, bottom = 3 },
+        })
+        parent.loadoutBox:SetBackdropColor(0,0,0,0.8)
+        parent.loadoutBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    end
+    parent.loadoutBox:Show()
 
-        return
+    local loadout = stats and stats.loadout
+    if loadout and type(loadout) == "string" and loadout ~= "" and (not issecretvalue or not issecretvalue(loadout)) then
+        parent.loadoutBox:SetText(loadout)
+    else
+        parent.loadoutBox:SetText("No Loadout Available")
     end
 
-    -- ----------------------------------------------------------------------------
-    -- C) no loadout → hide loadout UI and draw tracked-spell icons grid
-    -- ----------------------------------------------------------------------------
-    if parent.loadoutBox then parent.loadoutBox:Hide() end
-    if parent.loadoutLabel then parent.loadoutLabel:Hide() end
-
-    -- gather spells (history first, then detection)
-    local spells = stats.playerTrackedSpells
-               or ((stats.guid and RSTATS.DetectedPlayerTalents[stats.guid]
-                    and RSTATS.DetectedPlayerTalents[stats.guid].playerTrackedSpells)
-                   or {})
-
-    -- grid layout
-    local leftMarg  = 20
-    local padding   = 4
-    local iconSize  = 12
-    local topStart  = -40 - (24 + padding*2)  -- push below the PvP row
-    local usableW   = parent:GetWidth() - leftMarg*2
-    local cols      = math.max(1, math.floor(usableW / (iconSize + padding)))
-
-    for idx, spellID in ipairs(spells) do
-        local row = math.floor((idx-1) / cols)
-        local col = (idx-1) % cols
-
-        local x = leftMarg + col * (iconSize + padding)
-        local y = topStart - row * (iconSize + padding)
-
-        local icon = CreateFrame("Button", "PlayerSpellsFrame", parent)
-        icon:SetSize(iconSize, iconSize)
-        icon:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
-
-        local tex = (C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(spellID))
-                  or select(3, C_Spell.GetSpellInfo(spellID))
-        icon.texture = icon:CreateTexture(nil, "BACKGROUND")
-        icon.texture:SetAllPoints(icon)
-        icon.texture:SetTexture(tex)
-
-        icon:SetScript("OnEnter", function(self)
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetSpellByID(spellID)
-            GameTooltip:Show()
-        end)
-        icon:SetScript("OnLeave", GameTooltip_Hide)
-
-        tinsert(parent.spellIcons, icon)
-    end
+    parent.loadoutBox:HighlightText(0)
 end
 
 -- Pop-out frame + name box tweaks
@@ -3562,22 +3020,6 @@ local function CreateClickableName(parent, stats, matchEntry, x, y, columnWidth,
   clickableFrame:SetPoint("CENTER", nameText, "CENTER")
 
   clickableFrame:SetScript("OnClick", function()
-  
---    -- ───────────────────────────────────────────────────────────────────────────
---    -- DEBUG: print out whatever PvP-talent IDs (and trinket) we have
---    -- ───────────────────────────────────────────────────────────────────────────
---    local t1, t2, t3 = stats.pvptalent1, stats.pvptalent2, stats.pvptalent3
---    local med = stats.trinketSpellID
---    DEFAULT_CHAT_FRAME:AddMessage(
---      ("|cff00ccff[%s]|r PvP Talents → medallion:%s 1:%s 2:%s 3:%s"):format(
---        stats.name,
---        med  and tostring(med)  or "<nil>",
---        t1   and tostring(t1)   or "<nil>",
---        t2   and tostring(t2)   or "<nil>",
---        t3   and tostring(t3)   or "<nil>"
---      )
---    )
-
     CreateCopyNameFrame(stats, matchEntry)
   end)
 
@@ -3627,13 +3069,13 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
         0.024950,  --  50 / 2004
         0.029940,  --  60 / 2004
         0.019960,
-        0.019960,
         0.024950,
         0.019960,
         0.019960,
         0.029940,
         0.029940,
         0.039920,  --  80 / 2004
+        0.019960,
     }
     local COLS_PER_TEAM = #baseFracs                             -- still =13
     
@@ -3671,8 +3113,8 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     local isSS = (tabID == 1)
 
     local headers = {
-        "Character", "Faction", "Race", "Class", "Spec", "Hero", "Role", "CR", "KBs", (isSS and "Wins" or "HKs"), "Damage", "Healing", "Rating Chg",
-        "Character", "Faction", "Race", "Class", "Spec", "Hero", "Role", "CR", "KBs", (isSS and "Wins" or "HKs"), "Damage", "Healing", "Rating Chg"
+        "Character", "Faction", "Race", "Class", "Spec", "Role", "CR", "KBs", (isSS and "Wins" or "HKs"), "Damage", "Healing", "Rating Chg", "Objective",
+        "Character", "Faction", "Race", "Class", "Spec", "Role", "CR", "KBs", (isSS and "Wins" or "HKs"), "Damage", "Healing", "Rating Chg", "Objective"
     }
 
     local headerHeight = 18  -- Height of the header row
@@ -3692,7 +3134,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
 	enemyTeamHeader:SetText("Enemy Team")
 
     -- Create nested table header row
-	local totalColumnsPerTeam = 13
+	local totalColumnsPerTeam = COLS_PER_TEAM
 	local parentWidth = parent:GetWidth()
 	local columnWidth = (parentWidth * 0.5) / totalColumnsPerTeam
 	local headerY = -headerHeight  -- Keep vertical spacing consistent
@@ -3733,7 +3175,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
         table.insert(friendlyPlayers, playerStats[1])  -- Assume the player is the first entry
         for i = 1, playersPerTeam do
             table.insert(enemyPlayers, {
-                name = "-", originalFaction = "-", race = "-", class = "-", spec = "-", hero = "-", role = "-", 
+                name = "-", originalFaction = "-", race = "-", class = "-", spec = "-", role = "-", 
                 newrating = "-", killingBlows = "-", honorableKills = "-", damage = "-", healing = "-", ratingChange = "-"
             })  -- Add placeholder entries for the enemy
         end
@@ -3776,7 +3218,6 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
             raceIcons[player.race] or player.race, 
             classIcons[player.class] or player.class, 
             specIcons[player.spec] or player.spec, 
-			player.heroSpec or "",
             roleIcons[player.role] or player.role,  -- Replace numeric role with icon
             player.newrating, 
             player.killingBlows, 
@@ -3794,41 +3235,6 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
             elseif i == 5 then
                 CreateIconWithTooltip(nestedTable, stat, player.spec, columnPositions[i], rowOffset, columnWidths[i], rowHeight)
             elseif i == 6 then
-                -- hero‐talent column (guard against nil/undetected)
-                local heroName = player.heroSpec
-                if not heroName or not HERO_TALENTS[heroName] then
-                    -- no hero spec detected (or not in our table) → show “Undetected”
-                    local text = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-                    text:SetPoint("CENTER", nestedTable, "TOPLEFT",
-                                columnPositions[i] + columnWidths[i]/2,
-                                rowOffset - rowHeight/2)
-					text:SetFont(GetUnicodeSafeFont(), entryFontSize)
-                    text:SetText("Undetected")
-                else
-                   -- we have a mapping!
-                   local atlas = HERO_TALENTS[heroName].iconAtlas
-                   if atlas then
-                       CreateIconWithTooltip(
-                         nestedTable,
-                         atlas,
-                         heroName,
-                         columnPositions[i],
-                         rowOffset,
-                         columnWidths[i],
-                         rowHeight,
-                         true
-                       )
-                    else
-                        -- you could still fall back to text if you want
-                        local text = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-                        text:SetPoint("CENTER", nestedTable, "TOPLEFT",
-                                    columnPositions[i] + columnWidths[i]/2,
-                                    rowOffset - rowHeight/2)
-					 	text:SetFont(GetUnicodeSafeFont(), entryFontSize)
-                        text:SetText(heroName)
-                    end
-               end
-            elseif i == 7 then
                 -- Add role tooltip
                 CreateIconWithTooltip(nestedTable, stat, roleTooltips[player.role], columnPositions[i], rowOffset, columnWidths[i], rowHeight)
             else
@@ -3854,7 +3260,6 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
             raceIcons[player.race] or player.race, 
             classIcons[player.class] or player.class, 
             specIcons[player.spec] or player.spec,
-			player.heroSpec or "",
             roleIcons[player.role] or player.role,  -- Replace numeric role with icon
             player.newrating, 
             player.killingBlows, 
@@ -3876,39 +3281,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 CreateIconWithTooltip(nestedTable, stat, player.class, xPos, rowOffset, width, rowHeight)
             elseif i == 5 then
                 CreateIconWithTooltip(nestedTable, stat, player.spec, xPos, rowOffset, width, rowHeight)
-           elseif i == 6 then
-                -- hero‐talent column (guard against nil/undetected)
-				local heroName = player.heroSpec
-				if not heroName or not HERO_TALENTS[heroName] then
-					local text = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-					text:SetPoint("CENTER", nestedTable, "TOPLEFT",
-									xPos + (width / 2),
-									rowOffset - (rowHeight / 2))
-					text:SetFont(GetUnicodeSafeFont(), entryFontSize)
-					text:SetText("Undetected")
-				else
-					local atlas = HERO_TALENTS[heroName].iconAtlas
-					if atlas then
-						CreateIconWithTooltip(
-							nestedTable,
-							atlas,
-							heroName,
-							xPos,
-							rowOffset,
-							width,
-							rowHeight,
-							true
-						)
-					else
-						local text = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-						text:SetPoint("CENTER", nestedTable, "TOPLEFT",
-									xPos + (width / 2),
-									rowOffset - (rowHeight / 2))
-						text:SetFont(GetUnicodeSafeFont(), entryFontSize)
-						text:SetText(heroName)
-					end
-				end
-            elseif i == 7 then
+            elseif i == 6 then
                 -- Add role tooltip
                 CreateIconWithTooltip(nestedTable, stat, roleTooltips[player.role], xPos, rowOffset, width, rowHeight)
             else
@@ -4843,9 +4216,6 @@ function Initialize()
     frame:RegisterEvent("PVP_MATCH_COMPLETE")         -- Register for the PVP_MATCH_COMPLETE event
     frame:RegisterEvent("PVP_MATCH_ACTIVE")           -- Register for the PVP_MATCH_ACTIVE event
     frame:RegisterEvent("UPDATE_UI_WIDGET")
-    frame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-	frame:RegisterEvent("UNIT_HEALTH")
-	frame:RegisterEvent("UNIT_AURA")
         
     frame:SetScript("OnEvent", function(self, event, ...)
         if event == "PLAYER_ENTERING_WORLD"
