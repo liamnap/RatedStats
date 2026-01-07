@@ -2289,25 +2289,19 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     }
 
 	for _, player in ipairs(playerStats) do
-		-- 1. Inject from PendingPvPTalents (highest priority - direct inspect)
+		-- 1. Inject from PendingPvPTalents (inspect loadout only)
 		local pending = PendingPvPTalents[player.name]
-		if pending and (pending.loadout or pending.pvptalent1 or pending.pvptalent2 or pending.pvptalent3) then
-			for k, v in pairs(pending) do
-				player[k] = v
-			end
+		if pending and pending.loadout and pending.loadout ~= "" then
+			player.loadout = pending.loadout
 			player.talentSource = "inspect"
 			PendingPvPTalents[player.name] = nil
 		end
 	
-		-- 2. Inject from DetectedPlayerTalents (CLEU + Inspect hybrid via GUID)
+		-- 2. Inject from DetectedPlayerTalents (loadout only)
 		if player.guid then
 			local detected = RSTATS.DetectedPlayerTalents[player.guid]
-			if detected and (detected.heroSpec or detected.pvptalent1 or detected.loadout or detected.playerTrackedSpells) then
-				for k, v in pairs(detected) do
-					if k ~= "name" and player[k] == nil then
-						player[k] = v
-					end
-				end
+			if detected and detected.loadout and player.loadout == nil then
+				player.loadout = detected.loadout
 				player.talentSource = player.talentSource or "detected"
 			end
 		end
