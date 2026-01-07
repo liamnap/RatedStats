@@ -6,6 +6,7 @@ local completedUnits = {}
 local GUIDToUnitToken = {}
 local FriendlyInspectQueue = {}
 local InspectInProgress = false
+local InspectRetryByGUID = {}
 
 local scanning = false
 local maxRetries = 30
@@ -130,10 +131,16 @@ local function ProcessInspectQueue()
 			RSTATS.DetectedPlayerTalents[guid] = talents
 			completedUnits[guid] = true
         else
-            -- ❌ Requeue if missing data
-            table.insert(FriendlyInspectQueue, unit)
+            -- ❌ Requeue if missing/secret data, but don't loop forever
+            InspectRetryByGUID[guid] = (InspectRetryByGUID[guid] or 0) + 1
+            if InspectRetryByGUID[guid] <= maxRetries then
+                table.insert(FriendlyInspectQueue, unit)
+            else
+                completedUnits[guid] = true
+            end
         end
 
+        ClearInspectPlayer()
         InspectInProgress = false
         ProcessInspectQueue()
     end)
@@ -166,11 +173,15 @@ local function ScanFriendlyUnitTalents(unitToken)
         local guid = UnitGUID(unitToken)
 
         if not C_Traits.HasValidInspectData() then return end
-
         local talents = {
             nameplate = unitToken,
-            loadout = C_Traits.GenerateInspectImportString(unitToken),
+            loadout = nil,
         }
+
+        local importString = C_Traits.GenerateInspectImportString(unitToken)
+        if importString and type(importString) == "string" and importString ~= "" and (not issecretvalue or not issecretvalue(importString)) then
+            talents.loadout = importString
+        end
 
         -- Merge/update into DetectedPlayerTalents
         RSTATS.DetectedPlayerTalents[guid] = RSTATS.DetectedPlayerTalents[guid] or {}
@@ -259,6 +270,7 @@ function GetTalents:Start()
 	scanning = true
 	scannedUnits = {}
 	completedUnits = {}
+    InspectRetryByGUID = {}
 	retryCount = 0
 	GUIDToUnitToken = {}
 
