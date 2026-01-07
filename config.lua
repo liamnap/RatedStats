@@ -1792,8 +1792,9 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
         local scoreInfo = C_PvP.GetScoreInfo(i)
         if scoreInfo then
             local name = scoreInfo.name
-            if name == UnitName("player") then
-                name = playerFullName
+            elseif name and not name:find("-", 1, true) then
+                -- Normalize same-realm names to Name-Realm so PendingPvPTalents + display matching works.
+                name = name .. "-" .. GetRealmName()
             end
 
             -- Get faction group tag and localized faction
@@ -2068,6 +2069,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 					local name = scoreInfo.name
 					if name == UnitName("player") then
 						name = playerFullName
+                    elseif name and not name:find("-", 1, true) then
+                        name = name .. "-" .. GetRealmName()
 					end
                     local guid2 = scoreInfo.guid
 
@@ -2199,6 +2202,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                     local name = scoreInfo.name
                     if name == UnitName("player") then
                         name = playerFullName
+                    elseif name and not name:find("-", 1, true) then
+                        name = name .. "-" .. GetRealmName()
                     end
     
 					local guid2 = scoreInfo.guid
@@ -3046,7 +3051,14 @@ local function CreateFriendAndTalentButtons(stats, matchEntry, parent)
     parent.loadoutBox:Show()
 
     local loadout = stats and stats.loadout
-    if loadout and type(loadout) == "string" and loadout ~= "" and (not issecretvalue or not issecretvalue(loadout)) then
+
+    -- Fallback: loadout may not be injected into matchEntry yet; pull it from detected GUID storage.
+    if (not loadout or loadout == "") and stats and stats.guid and RSTATS and RSTATS.DetectedPlayerTalents then
+        local detected = RSTATS.DetectedPlayerTalents[stats.guid]
+        if detected and detected.loadout then
+            loadout = detected.loadout
+        end
+    end
         parent.loadoutBox:SetText(loadout)
     else
         parent.loadoutBox:SetText("No Loadout Available")
