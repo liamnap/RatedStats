@@ -1794,9 +1794,6 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             local name = scoreInfo.name
             if name == UnitName("player") then
                 name = playerFullName
-            elseif name and not name:find("-", 1, true) then
-                -- Normalize same-realm names to Name-Realm so PendingPvPTalents + display matching works.
-                name = name .. "-" .. GetRealmName()
             end
 
             -- Get faction group tag and localized faction
@@ -2071,8 +2068,6 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 					local name = scoreInfo.name
 					if name == UnitName("player") then
 						name = playerFullName
-                    elseif name and not name:find("-", 1, true) then
-                        name = name .. "-" .. GetRealmName()
 					end
                     local guid2 = scoreInfo.guid
 
@@ -2204,8 +2199,6 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                     local name = scoreInfo.name
                     if name == UnitName("player") then
                         name = playerFullName
-                    elseif name and not name:find("-", 1, true) then
-                        name = name .. "-" .. GetRealmName()
                     end
     
 					local guid2 = scoreInfo.guid
