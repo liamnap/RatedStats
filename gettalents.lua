@@ -214,33 +214,26 @@ local function TryInspectUnit(unitToken)
 			return
 		end
 	
-		local talents = RSTATS.DetectedPlayerTalents[guid] or {}
-		
-		for i = 1, 3 do
-			local pvpTalent = C_SpecializationInfo.GetInspectSelectedPvpTalent(unitToken, i)
-			if pvpTalent then
-				talents["pvptalent" .. i] = pvpTalent
-			end
-		end
-	
-		local importString = C_Traits.GenerateInspectImportString(unitToken)
-		talents.loadout = importString or nil
-		talents.nameplate = unitToken
-	
-		-- Only save and mark as completed if valid data
-		if importString and importString ~= "" then
-			PendingPvPTalents[fullName] = talents
-			RSTATS.DetectedPlayerTalents[guid] = RSTATS.DetectedPlayerTalents[guid] or {}
-			for k, v in pairs(talents) do
-				RSTATS.DetectedPlayerTalents[guid][k] = v
-			end
-			
-			if not NeedsRescan(guid)
-			and talents.playerTrackedSpells
-			and #talents.playerTrackedSpells >= 50 then
-				completedUnits[guid] = true
-			end
-		end
+        local talents = RSTATS.DetectedPlayerTalents[guid] or {}
+
+        local importString = C_Traits.GenerateInspectImportString(unitToken)
+        if importString
+            and type(importString) == "string"
+            and importString ~= ""
+            and (not issecretvalue or not issecretvalue(importString)) then
+
+            talents.loadout = importString
+            talents.nameplate = unitToken
+
+            -- Save loadout only (PvP talents / hero / spell tracking removed for Midnight)
+            PendingPvPTalents[fullName] = talents
+            RSTATS.DetectedPlayerTalents[guid] = RSTATS.DetectedPlayerTalents[guid] or {}
+            for k, v in pairs(talents) do
+                RSTATS.DetectedPlayerTalents[guid][k] = v
+            end
+
+            completedUnits[guid] = true
+        end
 	
 		ClearInspectPlayer()
 	end)
@@ -248,118 +241,15 @@ local function TryInspectUnit(unitToken)
     return true
 end
 
-function GetTalents:ProcessHeroCheck(unit)
-	local name, realm = UnitName(unit)
-	if not name or not UnitIsPlayer(unit) then return end
-
-	realm = realm and realm ~= "" and realm or GetRealmName()
-	local fullName = name .. "-" .. realm
-	local guid = UnitGUID(unit)
-	if not guid then return end
-
-	local entry = {
-		name = fullName,
-		nameplate = unit,
-		guid = guid,
-		heroSpec = nil,
-		pvptalent1 = nil,
-		pvptalent2 = nil,
-		pvptalent3 = nil,
-	}
-
-	local _, class = UnitClass(unit)
-	local bestHero = nil
-	local bestMatches = 0
-	
-	for heroName, spellList in pairs(HERO_TALENTS) do
-		local specClass = (next(spellList) and spellList[next(spellList)].class) or nil
-		local matches = 0
-		
-		for _, spell in pairs(spellList) do
-			local ids = spell.spellID
-			if type(ids) ~= "table" then ids = { ids } end
-			
-			for _, id in ipairs(ids) do
-				if TrackedPlayerSpells[guid] and TrackedPlayerSpells[guid][id] then
-					matches = matches + 1
-					break
-				elseif HasAuraBySpellID(unit, id) then
-					matches = matches + 1
-					break
-				end
-			end
-		end
-		
-		if specClass == class and matches > bestMatches then
-			bestMatches = matches
-			bestHero = heroName
-		end
-	end
-	
-	if bestHero and bestMatches >= 1 then
-		entry.heroSpec = bestHero
-	end
-
-	-- PvP Talents (from actual auras)
-	local cache = auraScanCache[unit]
-	if cache and cache.map then
-		for auraSpellID in pairs(cache.map) do
-			if C_Spell.IsPvPTalentSpell and C_Spell.IsPvPTalentSpell(auraSpellID) then
-				if not entry.pvptalent1 then
-					entry.pvptalent1 = auraSpellID
-				elseif not entry.pvptalent2 and entry.pvptalent1 ~= auraSpellID then
-					entry.pvptalent2 = auraSpellID
-				elseif not entry.pvptalent3 and entry.pvptalent2 ~= auraSpellID and entry.pvptalent1 ~= auraSpellID then
-					entry.pvptalent3 = auraSpellID
-				end
-			end
-		end
-	end
-
-	RSTATS.DetectedPlayerTalents[guid] = RSTATS.DetectedPlayerTalents[guid] or {}
-	for k, v in pairs(entry) do
-		RSTATS.DetectedPlayerTalents[guid][k] = v
-	end
-	
-	if not NeedsRescan(guid)
-	and entry.playerTrackedSpells
-	and #entry.playerTrackedSpells >= 50 then
-		completedUnits[guid] = true
-	end
-end
-
-function GetTalents:ProcessHerosandEnemyUnit(unit)
-	C_Timer.After(0.01, function()
-		GetTalents:ProcessHeroCheck(unit)
-	end)
-end
-
 function NeedsRescan(guid)
-	local entry = RSTATS.DetectedPlayerTalents[guid]
-	if not entry then return true end
+    local entry = RSTATS.DetectedPlayerTalents[guid]
+    if not entry then return true end
 
-    -- NEW: if we’ve collected more than 40 distinct spells, force “complete”
-    if entry.playerTrackedSpells and #entry.playerTrackedSpells > 40 then
-        return false
-    end
+    local unit = GUIDToUnitToken[guid]
+    if not unit or not UnitExists(unit) then return false end
+    if not UnitIsFriend("player", unit) then return false end
 
-	local unit = GUIDToUnitToken[guid]
-	local isFriendly = unit and UnitIsFriend("player", unit)
-
-	-- Both friendlies and enemies need PvP talents 1-3
-	for i = 1, 3 do
-		if not entry["pvptalent" .. i] then return true end
-	end
-	
-	-- Need hero spec resolved
-	if not entry.heroSpec then return true end
-	
-	-- Need at least one spell recorded
-	if not entry.playerTrackedSpells or #entry.playerTrackedSpells < 50 then
-		return true
-	end
-
-	return false
+    return not (entry.loadout and entry.loadout ~= "")
 end
 
 -- Start scanning logic
