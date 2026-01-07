@@ -3428,7 +3428,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 local fs = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
                 fs:SetFont(GetUnicodeSafeFont(), entryFontSize)
                 fs:SetJustifyH("CENTER")
-                fs:SetPoint("CENTER", nestedTable, "TOPLEFT", columnPositions[i] + (columnWidths[i] / 2), rowOffset - (rowHeight / 2))
+                fs:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
                 fs:SetText(tostring(textValue))
 
                 -- Add objective tooltip
@@ -3437,7 +3437,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                     GameTooltip:SetOwner(fs, "ANCHOR_RIGHT")
                     GameTooltip:ClearLines()
 
-                    -- Show friendly label based on map name
+                    -- Show enemy label based on map name
                     local mapLabel = matchEntry and matchEntry.mapName or ""
                     local tooltipText
                     if mapShortName[mapLabel] == "EOTS" then
