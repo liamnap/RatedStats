@@ -1792,6 +1792,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
         local scoreInfo = C_PvP.GetScoreInfo(i)
         if scoreInfo then
             local name = scoreInfo.name
+                name = playerFullName
             elseif name and not name:find("-", 1, true) then
                 -- Normalize same-realm names to Name-Realm so PendingPvPTalents + display matching works.
                 name = name .. "-" .. GetRealmName()
