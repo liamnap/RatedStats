@@ -24,9 +24,8 @@ local function GetPlayerDB()
 end
 
 function RSTATS:OpenSettings()
-    local category = Settings.GetCategory(CATEGORY_NAME)
-    if category then
-        Settings.OpenToCategory(category:GetID())
+    if Settings and Settings.OpenToCategory and self and self.SettingsCategoryID then
+        Settings.OpenToCategory(self.SettingsCategoryID)
     end
 end
 
@@ -61,7 +60,8 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
 
     -- Main addon category
     local category = Settings.RegisterVerticalLayoutCategory(CATEGORY_NAME)
-
+    -- Store the ID so the UI button can reliably open the correct page later
+    RSTATS.SettingsCategoryID = category:GetID()
     do
         local setting = Settings.RegisterAddOnSetting(
             category,
