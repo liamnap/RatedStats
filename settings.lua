@@ -178,7 +178,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "achievAnnounceSS",
                 db.settings,
                 Settings.VarType.Number,
-                "Announce Achievements in SS to",
+                "In SS tell",
                 3
             )
             Settings.CreateDropdown(subcategory, setting, function() return optsSS:GetData() end, nil)
@@ -191,7 +191,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "achievAnnounce2v2",
                 db.settings,
                 Settings.VarType.Number,
-                "Announce Achievements in 2v2 to",
+                "In 2v2 tell",
                 2
             )
             Settings.CreateDropdown(subcategory, setting, function() return opts2v2:GetData() end, nil)
@@ -204,7 +204,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "achievAnnounce3v3",
                 db.settings,
                 Settings.VarType.Number,
-                "Announce Achievements in 3v3 to",
+                "In 3v3 tell",
                 2
             )
             Settings.CreateDropdown(subcategory, setting, function() return opts3v3:GetData() end, nil)
@@ -217,7 +217,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "achievAnnounceRBG",
                 db.settings,
                 Settings.VarType.Number,
-                "Announce Achievements in RBG to",
+                "In RBG tell",
                 1
             )
             Settings.CreateDropdown(subcategory, setting, function() return optsRBG:GetData() end, nil)
@@ -230,7 +230,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "achievAnnounceRBGB",
                 db.settings,
                 Settings.VarType.Number,
-                "Announce Achievements in RBGB to",
+                "In RBGB tell",
                 1
             )
             Settings.CreateDropdown(subcategory, setting, function() return optsRBGB:GetData() end, nil)
