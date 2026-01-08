@@ -4174,8 +4174,8 @@ function Config:CreateMenu()
 
     -- Cover the baked-in "X" so we can place a gear instead
     UIConfig.SettingsButton.Cover = UIConfig.SettingsButton:CreateTexture(nil, "ARTWORK")
-    UIConfig.SettingsButton.Cover:SetPoint("TOPLEFT", 5, -5)
-    UIConfig.SettingsButton.Cover:SetPoint("BOTTOMRIGHT", -5, 5)
+    UIConfig.SettingsButton.Cover:SetPoint("TOPLEFT", 4, -4)
+    UIConfig.SettingsButton.Cover:SetPoint("BOTTOMRIGHT", -4, 4)
     UIConfig.SettingsButton.Cover:SetColorTexture(0.33, 0.06, 0.06, 0.95)
 
     -- Gear icon
