@@ -192,7 +192,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "Tell me of new updates",
                 true
             )
-            Settings.CreateDropdown(subcategory, setting, optsSS, nil)
+            Settings.CreateCheckbox(subcategory, setting, "Will announce on login if updates are available.")
         end
 
         do
@@ -205,7 +205,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "Announce on PvP queue",
                 true
             )
-            Settings.CreateDropdown(subcategory, setting, opts2v2, nil)
+            Settings.CreateCheckbox(subcategory, setting, "Will announce party/raid achievements when you all accept the PvP queue.")
         end
 
         if layout and CreateSettingsListSectionHeaderInitializer then
@@ -224,7 +224,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "Announce Solo Shuffle Achievements to",
                 3
             )
-            Settings.CreateDropdown(subcategory, setting, opts3v3, nil)
+            Settings.CreateDropdown(subcategory, setting, optsSS, nil)
         end
 
         do
@@ -237,7 +237,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "Announce 2v2 Achievements to",
                 2
             )
-            Settings.CreateDropdown(subcategory, setting, optsRBG, nil)
+            Settings.CreateDropdown(subcategory, setting, opts2v2, nil)
         end
 
         do
@@ -250,7 +250,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "Announce 3v3 Achievements to",
                 2
             )
-            Settings.CreateDropdown(subcategory, setting, optsRBGB, nil)
+            Settings.CreateDropdown(subcategory, setting, opts3v3, nil)
         end
 
         do
@@ -263,7 +263,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "Announce RBG Achievements to",
                 1
             )
-            Settings.CreateDropdown(subcategory, setting, GetAnnounceOptions, nil)
+            Settings.CreateDropdown(subcategory, setting, optsRBG, nil)
         end
 
         do
@@ -276,7 +276,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "Announce RBGB Achievements to",
                 1
             )
-            Settings.CreateDropdown(subcategory, setting, GetAnnounceOptions, nil)
+            Settings.CreateDropdown(subcategory, setting, optsRBGB, nil)
         end
     end
 
