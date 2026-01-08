@@ -3229,9 +3229,47 @@ end
 local function CreateClickableName(parent, stats, matchEntry, x, y, columnWidth, rowHeight)
   local playerName = stats.name
 
+  -- RatedStats_Achiev (optional): show highest PvP achievement icon if available
+  local achievIconPath
+  if type(C_AddOns) == "table" and type(C_AddOns.GetAddOnEnableState) == "function" then
+      if C_AddOns.GetAddOnEnableState("RatedStats_Achiev", nil) > 0
+          and type(_G.RSTATS_Achiev_GetHighestPvpRank) == "function"
+          and type(_G.RSTATS_Achiev_AddAchievementInfoToTooltip) == "function"
+      then
+          achievIconPath = select(1, _G.RSTATS_Achiev_GetHighestPvpRank(playerName))
+      end
+  end
+
+  local nameOffsetX = 0
+  local iconSize = 14
+
+  -- If we have an icon, place it inside the Character column and nudge the name right
+  if achievIconPath then
+      nameOffsetX = (iconSize * 0.5) + 2
+
+      local iconBtn = CreateFrame("Button", nil, parent)
+      iconBtn:SetSize(iconSize, iconSize)
+      iconBtn:SetPoint("CENTER", parent, "TOPLEFT", x + (iconSize * 0.5) + 2, y - rowHeight/2)
+
+      local iconTex = iconBtn:CreateTexture(nil, "OVERLAY")
+      iconTex:SetAllPoints()
+      iconTex:SetTexture(achievIconPath)
+
+      iconBtn:SetScript("OnEnter", function(self)
+          GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+          local baseName, realm = strsplit("-", playerName)
+          realm = realm or GetRealmName()
+          _G.RSTATS_Achiev_AddAchievementInfoToTooltip(GameTooltip, baseName, realm)
+          GameTooltip:Show()
+      end)
+      iconBtn:SetScript("OnLeave", function()
+          GameTooltip:Hide()
+      end)
+  end
+
   local nameText = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
   nameText:SetFont(GetUnicodeSafeFont(), 8, "OUTLINE")
-  nameText:SetPoint("CENTER", parent, "TOPLEFT", x + columnWidth/2, y - rowHeight/2)
+  nameText:SetPoint("CENTER", parent, "TOPLEFT", x + columnWidth/2 + nameOffsetX, y - rowHeight/2)
   nameText:SetText(playerName)
   nameText:SetFont(GetUnicodeSafeFont(), 8)
 
