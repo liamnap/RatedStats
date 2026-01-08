@@ -166,7 +166,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "Announce Solo Shuffle Achievements to",
                 3
             )
-            Settings.CreateDropdown(subcategory, setting, optsSS, nil)
+            Settings.CreateDropdown(subcategory, setting, function() return optsSS end, nil)
         end
 
         do
@@ -179,7 +179,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "Announce 2v2 Achievements to",
                 2
             )
-            Settings.CreateDropdown(subcategory, setting, opts2v2, nil)
+            Settings.CreateDropdown(subcategory, setting, function() return opts2v2 end, nil)
         end
 
         do
@@ -192,7 +192,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "Announce 3v3 Achievements to",
                 2
             )
-            Settings.CreateDropdown(subcategory, setting, opts3v3, nil)
+            Settings.CreateDropdown(subcategory, setting, function() return opts3v3 end, nil)
         end
 
         do
@@ -205,7 +205,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "Announce RBG Achievements to",
                 1
             )
-            Settings.CreateDropdown(subcategory, setting, optsRBG, nil)
+            Settings.CreateDropdown(subcategory, setting, function() return optsRBG end, nil)
         end
 
         do
@@ -218,7 +218,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "Announce RBGB Achievements to",
                 1
             )
-            Settings.CreateDropdown(subcategory, setting, optsRBGB, nil)
+            Settings.CreateDropdown(subcategory, setting, function() return optsRBGB end, nil)
         end
     end
 
