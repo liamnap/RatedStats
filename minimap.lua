@@ -15,6 +15,12 @@ local LDB = LibStub("LibDataBroker-1.1"):NewDataObject("RatedStats", {
 
         elseif button == "RightButton" then
 
+            -- Shift + Right-click → open settings
+            if IsShiftKeyDown() then
+                RSTATS.Config:Toggle()
+                return
+            end
+
 			-- 1) Use the C_AddOns API for your LOD add-on
 			local module = "RatedStats_Achiev"
 			local state = C_AddOns.GetAddOnEnableState(module, nil)
@@ -50,6 +56,12 @@ local LDB = LibStub("LibDataBroker-1.1"):NewDataObject("RatedStats", {
 			"|cff%sRight-click|r to toggle Achievements Tracking: %s",
 			COLOR_HEX, state
 		))
+        -- Spacer + settings hint
+        tooltip:AddLine(" ")
+        tooltip:AddLine(string.format(
+            "|cff%sShift+Right-click|r for Settings",
+            COLOR_HEX
+        ))
 	end,
 })
 
