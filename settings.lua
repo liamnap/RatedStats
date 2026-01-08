@@ -150,14 +150,25 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             Settings.CreateCheckbox(subcategory, setting, "Will announce party/raid achievements when you all accept the PvP queue.")
         end
 
-        if layout and Settings and Settings.CreateElementInitializer then
-            -- Plain text row (not a big header). Split into multiple lines because the template doesn't word-wrap.
-            layout:AddInitializer(Settings.CreateElementInitializer("SettingsListElementTemplate", {
-                name = "The below options let you choose how you would like to see or share the achievements"
-            }))
-            layout:AddInitializer(Settings.CreateElementInitializer("SettingsListElementTemplate", {
-                name = "of friendly and enemy players detected during the game modes."
-            }))
+        if layout then
+            -- Plain instructional text (HandyNotes style). Different client builds expose this initializer differently.
+            local TextInit =
+                _G.CreateSettingsListTextInitializer
+                or (Settings and Settings.CreateSettingsListTextInitializer)
+
+            local SubHeaderInit =
+                _G.CreateSettingsListSubsectionHeaderInitializer
+                or (Settings and Settings.CreateSettingsListSubsectionHeaderInitializer)
+
+            if TextInit then
+                layout:AddInitializer(TextInit("The below options let you choose how you would like to see or share the achievements of friendly and enemy players detected during the game modes."))
+            elseif SubHeaderInit then
+                -- Fallback: smaller than a full section header.
+                layout:AddInitializer(SubHeaderInit("The below options let you choose how you would like to see or share the achievements of friendly and enemy players detected during the game modes."))
+            elseif _G.CreateSettingsListSectionHeaderInitializer then
+                -- Last resort (big header).
+                layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("The below options let you choose how you would like to see or share the achievements of friendly and enemy players detected during the game modes."))
+            end
         end
 
         do
