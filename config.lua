@@ -3757,6 +3757,8 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                     GameTooltip:Hide()
                 end)
             else
+                local textValue = stat or "-"  -- Provide a default value if stat is nil
+                local text = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
                 text:SetFont(GetUnicodeSafeFont(), entryFontSize)
 
                 if i == 10 or i == 11 then
