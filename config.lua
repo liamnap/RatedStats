@@ -3169,6 +3169,10 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
 	nestedTable:SetFrameLevel(22)
 	nestedTable:Hide()
 	
+    local isSS = (tabID == 1)
+    local is2v2 = (tabID == 2)
+    local is3v3 = (tabID == 3)
+
     -- ------------------------------------------------------------------
     -- column geometry (dynamic based on parent:GetWidth())
     -- ------------------------------------------------------------------
@@ -3182,7 +3186,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
         0.019960,
         0.024950,
         0.019960,
-        0.019960,
+        (is2v2 or is3v3) and 0 or 0.019960,
         0.029940,
         0.029940,
         0.039920,  --  80 / 2004
@@ -3220,10 +3224,6 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
             x2 = x2 + columnWidths[COLS_PER_TEAM + i]
         end
     end
-
-    local isSS = (tabID == 1)
-    local is2v2 = (tabID == 2)
-    local is3v3 = (tabID == 3)
 
     -- Hide Wins/HKs column for 2v2/3v3 (no meaningful data)
     local hideWinHK = (is2v2 or is3v3)
