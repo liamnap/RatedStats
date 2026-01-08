@@ -206,6 +206,35 @@ function LoadData()
         Database.settings.achievementTracking = true
     end
  
+    -- Settings defaults (shared with RatedStats_Achiev)
+    if Database.settings.mainTellUpdates == nil then
+        Database.settings.mainTellUpdates = true
+    end
+    if Database.settings.achievTellUpdates == nil then
+        Database.settings.achievTellUpdates = true
+    end
+    if Database.settings.achievAnnounceOnQueue == nil then
+        Database.settings.achievAnnounceOnQueue = true
+    end
+
+    -- Dropdown values:
+    -- 1=self (print), 2=party, 3=instance, 4=say, 5=yell
+    if Database.settings.achievAnnounceSS == nil then
+        Database.settings.achievAnnounceSS = 3 -- instance
+    end
+    if Database.settings.achievAnnounce2v2 == nil then
+        Database.settings.achievAnnounce2v2 = 2 -- party
+    end
+    if Database.settings.achievAnnounce3v3 == nil then
+        Database.settings.achievAnnounce3v3 = 2 -- party
+    end
+    if Database.settings.achievAnnounceRBG == nil then
+        Database.settings.achievAnnounceRBG = 1 -- self
+    end
+    if Database.settings.achievAnnounceRBGB == nil then
+        Database.settings.achievAnnounceRBGB = 1 -- self
+    end
+
     -- Ensure all necessary tables are initialized for the player
     Database.SoloShuffleHistory = Database.SoloShuffleHistory or {}
     Database.v2History = Database.v2History or {}
@@ -4130,6 +4159,29 @@ function Config:CreateMenu()
         tex:SetDrawLayer("OVERLAY",7)
     end
 	
+    -- Settings button (opens the Retail Settings pane)
+    UIConfig.SettingsButton = CreateFrame("Button", "RatedStatsSettingsButton", UIConfig)
+    UIConfig.SettingsButton:SetSize(24, 24)
+    UIConfig.SettingsButton:SetPoint("RIGHT", UIConfig.ToggleViewButton, "LEFT", 0, 0)
+    UIConfig.SettingsButton:SetFrameStrata("DIALOG")
+    UIConfig.SettingsButton:SetFrameLevel(UIConfig.CloseButton:GetFrameLevel())
+    UIConfig.SettingsButton:SetNormalAtlas("GM-icon-settings")
+    UIConfig.SettingsButton:SetHighlightAtlas("RedButton-Highlight")
+    UIConfig.SettingsButton:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Settings", 1, 1, 1)
+        GameTooltip:AddLine("Open Rated Stats settings.", 0.8, 0.8, 0.8)
+        GameTooltip:Show()
+    end)
+    UIConfig.SettingsButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    UIConfig.SettingsButton:SetScript("OnClick", function()
+        if RSTATS and RSTATS.OpenSettings then
+            RSTATS:OpenSettings()
+        elseif Settings and Settings.OpenToCategory then
+            Settings.OpenToCategory("Rated Stats")
+        end
+    end)
+
     UIConfig.ToggleViewButton:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self,"ANCHOR_RIGHT")
         GameTooltip:SetText("Toggle View",1,1,1)
