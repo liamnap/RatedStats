@@ -3483,6 +3483,91 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
         end
     end
 
+    -- ------------------------------------------------------------------
+    -- Damage/Healing rank indicators (team + overall)
+    -- ------------------------------------------------------------------
+    local function BuildRankMap(players, field)
+        local items = {}
+        for _, p in ipairs(players) do
+            local v = p and p[field]
+            v = tonumber(v)
+            if v then
+                items[#items + 1] = { p = p, v = v }
+            end
+        end
+
+        table.sort(items, function(a, b)
+            return a.v > b.v
+        end)
+
+        local map = {}
+        local lastV, rank = nil, 0
+        for idx, it in ipairs(items) do
+            if lastV == nil or it.v ~= lastV then
+                rank = idx
+                lastV = it.v
+            end
+            map[it.p] = rank
+        end
+        return map
+    end
+
+    local function CreateRankIndicator(parentFrame, xPos, width, rowOffset, rowHeight, teamRank, teamSize, overallRank, totalSize, fontSize)
+        if not (teamRank and overallRank and teamSize and totalSize) then
+            return
+        end
+
+        local rightX  = xPos + width - 6
+        local centerY = rowOffset - (rowHeight / 2)
+
+        local topFS = parentFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        topFS:SetFont(GetUnicodeSafeFont(), fontSize)
+        topFS:SetJustifyH("RIGHT")
+        topFS:SetPoint("RIGHT", parentFrame, "TOPLEFT", rightX, centerY + 4)
+        topFS:SetText(string.format("%d/%d", teamRank, teamSize))
+
+        local botFS = parentFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        botFS:SetFont(GetUnicodeSafeFont(), fontSize)
+        botFS:SetJustifyH("RIGHT")
+        botFS:SetPoint("RIGHT", parentFrame, "TOPLEFT", rightX, centerY - 4)
+        botFS:SetText(string.format("%d/%d", overallRank, totalSize))
+
+        local hit = CreateFrame("Frame", nil, parentFrame)
+        hit:SetPoint("TOPLEFT", parentFrame, "TOPLEFT", xPos + width - 26, rowOffset)
+        hit:SetSize(24, rowHeight)
+        hit:EnableMouse(true)
+        hit:SetScript("OnEnter", function()
+            GameTooltip:SetOwner(hit, "ANCHOR_RIGHT")
+            GameTooltip:ClearLines()
+            GameTooltip:AddLine("Top row is your position in your team", 1, 1, 1)
+            GameTooltip:AddLine("Bottom row is your position overall", 1, 1, 1)
+            GameTooltip:Show()
+        end)
+        hit:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
+    end
+
+    local allPlayers = {}
+    for _, p in ipairs(friendlyPlayers) do
+        allPlayers[#allPlayers + 1] = p
+    end
+    for _, p in ipairs(enemyPlayers) do
+        allPlayers[#allPlayers + 1] = p
+    end
+
+    local friendlyDamageRank  = BuildRankMap(friendlyPlayers, "damage")
+    local enemyDamageRank     = BuildRankMap(enemyPlayers, "damage")
+    local overallDamageRank   = BuildRankMap(allPlayers, "damage")
+
+    local friendlyHealingRank = BuildRankMap(friendlyPlayers, "healing")
+    local enemyHealingRank    = BuildRankMap(enemyPlayers, "healing")
+    local overallHealingRank  = BuildRankMap(allPlayers, "healing")
+
+    local friendlyTeamSize  = #friendlyPlayers
+    local enemyTeamSize     = #enemyPlayers
+    local totalPlayerCount  = #allPlayers
+
     -- Populate friendly player stats
     for index, player in ipairs(friendlyPlayers) do
         local rowOffset = -(headerHeight + 15 * index)  -- Adjust rowOffset to account for headers
@@ -3557,12 +3642,41 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
             else
                 local textValue = stat or "-"  -- Provide a default value if stat is nil
                 local text = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-				local xPos = columnPositions[i]
-				local width = columnWidths[i]
+                local xPos = columnPositions[i]
+                local width = columnWidths[i]
+
                 text:SetFont(GetUnicodeSafeFont(), entryFontSize)
-                text:SetJustifyH("CENTER")
-                text:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
-                text:SetText(tostring(textValue))  -- Ensure the value is converted to a string
+
+                if i == 10 or i == 11 then
+                    local rankFontSize = math.max(7, (entryFontSize or 11) - 6)
+                    local teamRank, overallRank, teamSize = nil, nil, friendlyTeamSize
+
+                    if i == 10 then
+                        teamRank = friendlyDamageRank[player]
+                        overallRank = overallDamageRank[player]
+                    else
+                        teamRank = friendlyHealingRank[player]
+                        overallRank = overallHealingRank[player]
+                    end
+
+                    if teamRank and overallRank and teamSize and teamSize > 0 and totalPlayerCount and totalPlayerCount > 0 then
+                        -- Right-justify the number and reserve space for the 2-line rank indicator
+                        text:SetJustifyH("RIGHT")
+                        text:SetWidth(width - 30)
+                        text:SetPoint("RIGHT", nestedTable, "TOPLEFT", xPos + width - 28, rowOffset - (rowHeight / 2))
+                        text:SetText(tostring(textValue))
+
+                        CreateRankIndicator(nestedTable, xPos, width, rowOffset, rowHeight, teamRank, teamSize, overallRank, totalPlayerCount, rankFontSize)
+                    else
+                        text:SetJustifyH("CENTER")
+                        text:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
+                        text:SetText(tostring(textValue))
+                    end
+                else
+                    text:SetJustifyH("CENTER")
+                    text:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
+                    text:SetText(tostring(textValue))  -- Ensure the value is converted to a string
+                end
             end
         end  -- This 'end' closes the inner 'for' loop
     end  -- This 'end' closes the outer 'for' loop
@@ -3591,7 +3705,6 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
             local ci    = COLS_PER_TEAM + i
             local xPos  = columnPositions[ci]
             local width = columnWidths[ci]
-			
 
             if i == 2 then
                 CreateIconWithTooltip(nestedTable, stat, player.faction, xPos, rowOffset, width, rowHeight)
@@ -3644,12 +3757,38 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                     GameTooltip:Hide()
                 end)
             else
-                local textValue = stat or "-"  -- Provide a default value if stat is nil
-                local text = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
                 text:SetFont(GetUnicodeSafeFont(), entryFontSize)
-                text:SetJustifyH("CENTER")
-				text:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
-                text:SetText(tostring(textValue))  -- Ensure the value is converted to a string
+
+                if i == 10 or i == 11 then
+                    local rankFontSize = math.max(7, (entryFontSize or 11) - 6)
+                    local teamRank, overallRank, teamSize = nil, nil, enemyTeamSize
+
+                    if i == 10 then
+                        teamRank = enemyDamageRank[player]
+                        overallRank = overallDamageRank[player]
+                    else
+                        teamRank = enemyHealingRank[player]
+                        overallRank = overallHealingRank[player]
+                    end
+
+                    if teamRank and overallRank and teamSize and teamSize > 0 and totalPlayerCount and totalPlayerCount > 0 then
+                        -- Right-justify the number and reserve space for the 2-line rank indicator
+                        text:SetJustifyH("RIGHT")
+                        text:SetWidth(width - 30)
+                        text:SetPoint("RIGHT", nestedTable, "TOPLEFT", xPos + width - 28, rowOffset - (rowHeight / 2))
+                        text:SetText(tostring(textValue))
+
+                        CreateRankIndicator(nestedTable, xPos, width, rowOffset, rowHeight, teamRank, teamSize, overallRank, totalPlayerCount, rankFontSize)
+                    else
+                        text:SetJustifyH("CENTER")
+                        text:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
+                        text:SetText(tostring(textValue))
+                    end
+                else
+                    text:SetJustifyH("CENTER")
+                    text:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
+                    text:SetText(tostring(textValue))  -- Ensure the value is converted to a string
+                end
             end
         end  -- This 'end' closes the inner 'for' loop
     end  -- This 'end' closes the outer 'for' loop
