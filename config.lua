@@ -3240,12 +3240,10 @@ local function CreateClickableName(parent, stats, matchEntry, x, y, columnWidth,
       end
   end
 
-  local nameOffsetX = 0
   local iconSize = 8
 
   -- If we have an icon, place it inside the Character column and nudge the name right
   if achievIconPath then
-      nameOffsetX = (iconSize * 0.5) + 2
 
       local iconBtn = CreateFrame("Button", nil, parent)
       iconBtn:SetSize(iconSize, iconSize)
@@ -3269,7 +3267,7 @@ local function CreateClickableName(parent, stats, matchEntry, x, y, columnWidth,
 
   local nameText = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
   nameText:SetFont(GetUnicodeSafeFont(), 8, "OUTLINE")
-  nameText:SetPoint("CENTER", parent, "TOPLEFT", x + columnWidth/2 + nameOffsetX, y - rowHeight/2)
+  nameText:SetPoint("CENTER", parent, "TOPLEFT", x + columnWidth/2, y - rowHeight/2)
   nameText:SetText(playerName)
   nameText:SetFont(GetUnicodeSafeFont(), 8)
 
