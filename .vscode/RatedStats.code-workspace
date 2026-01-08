@@ -61,7 +61,9 @@
 			"ReloadUI",
 			"ToggleDropDownMenu",
 			"NUM_CHAT_WINDOWS",
-			"class"
+			"class",
+			"EventUtil",
+			"Settings"
 		],
 		"Lua.type.weakUnionCheck": true
 	}
