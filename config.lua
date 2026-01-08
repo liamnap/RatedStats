@@ -218,7 +218,7 @@ function LoadData()
     end
 
     -- Dropdown values:
-    -- 1=self (print), 2=party, 3=instance, 4=say, 5=yell
+    -- 0=none, 1=self (print), 2=party, 3=instance, 4=say, 5=yell, 6=raid, 7=party(only5)
     if Database.settings.achievAnnounceSS == nil then
         Database.settings.achievAnnounceSS = 3 -- instance
     end
@@ -233,6 +233,73 @@ function LoadData()
     end
     if Database.settings.achievAnnounceRBGB == nil then
         Database.settings.achievAnnounceRBGB = 1 -- self
+    end
+
+    -- Migrate old/invalid achievement announce settings to numeric dropdown values.
+    local function CoerceAnnounceValue(v, fallback)
+        if type(v) == "number" then
+            if v >= 1 and v <= 7 then return v end
+            return fallback
+        end
+        if type(v) == "string" then
+            local s = v:lower()
+            if s == "none" or s == "off" or s == "disabled" then return 0 end
+            if s == "self" or s == "print" then return 1 end
+            if s == "party" then return 2 end
+            if s == "party(only5)" or s == "party_only5" or s == "partyonly5" then return 7 end
+            if s == "raid" then return 6 end
+            if s == "instance" or s == "instance_chat" or s == "instancechat" then return 3 end
+            if s == "say" then return 4 end
+            if s == "yell" then return 5 end
+            return fallback
+        end
+        return fallback
+    end
+
+    Database.settings.achievAnnounceSS   = CoerceAnnounceValue(Database.settings.achievAnnounceSS,   3)
+    Database.settings.achievAnnounce2v2  = CoerceAnnounceValue(Database.settings.achievAnnounce2v2,  2)
+    Database.settings.achievAnnounce3v3  = CoerceAnnounceValue(Database.settings.achievAnnounce3v3,  2)
+    Database.settings.achievAnnounceRBG  = CoerceAnnounceValue(Database.settings.achievAnnounceRBG,  1)
+    Database.settings.achievAnnounceRBGB = CoerceAnnounceValue(Database.settings.achievAnnounceRBGB, 1)
+
+    -- Enforce bracket-valid sets so the UI never shows "Custom"
+    -- SS: none/self/say/yell/instance
+    do
+        local v = Database.settings.achievAnnounceSS
+        if not (v == 0 or v == 1 or v == 4 or v == 5 or v == 3) then
+            Database.settings.achievAnnounceSS = 3
+        end
+    end
+    -- 2v2: none/self/say/yell/party
+    do
+        local v = Database.settings.achievAnnounce2v2
+        if not (v == 0 or v == 1 or v == 4 or v == 5 or v == 2) then
+            Database.settings.achievAnnounce2v2 = 2
+        end
+    end
+    -- 3v3: none/self/say/yell/party
+    do
+        local v = Database.settings.achievAnnounce3v3
+        if not (v == 0 or v == 1 or v == 4 or v == 5 or v == 2) then
+            Database.settings.achievAnnounce3v3 = 2
+        end
+    end
+    -- RBG: none/self/say/yell/party(only5)/raid/instance
+    do
+        local v = Database.settings.achievAnnounceRBG
+        -- If anyone previously used plain party (2), convert to party(only5) (7)
+        if v == 2 then v = 7 end
+        if not (v == 0 or v == 1 or v == 4 or v == 5 or v == 7 or v == 6 or v == 3) then
+            v = 1
+        end
+        Database.settings.achievAnnounceRBG = v
+    end
+    -- RBGB: none/self/say/yell/instance
+    do
+        local v = Database.settings.achievAnnounceRBGB
+        if not (v == 0 or v == 1 or v == 4 or v == 5 or v == 3) then
+            Database.settings.achievAnnounceRBGB = 1
+        end
     end
 
     -- Ensure all necessary tables are initialized for the player
@@ -4173,17 +4240,16 @@ function Config:CreateMenu()
     UIConfig.SettingsButton.BG:SetAtlas("RedButton-Exit")
 
     -- Cover the baked-in "X" so we can place a gear instead
-    UIConfig.SettingsButton.Cover = UIConfig.SettingsButton:CreateTexture(nil, "ARTWORK")
+    UIConfig.SettingsButton.Cover = UIConfig.SettingsButton:CreateTexture(nil, "OVERLAY")
     UIConfig.SettingsButton.Cover:SetPoint("TOPLEFT", 4, -4)
     UIConfig.SettingsButton.Cover:SetPoint("BOTTOMRIGHT", -4, 4)
-    UIConfig.SettingsButton.Cover:SetColorTexture(0.33, 0.06, 0.06, 0.95)
+    UIConfig.SettingsButton.Cover:SetColorTexture(0.33, 0.06, 0.06, 1)
 
     -- Gear icon
     UIConfig.SettingsButton.Icon = UIConfig.SettingsButton:CreateTexture(nil, "OVERLAY")
-    UIConfig.SettingsButton.Icon:SetSize(20, 20)
     UIConfig.SettingsButton.Icon:SetPoint("CENTER", 0, 0)
-    UIConfig.SettingsButton.Icon:SetAtlas("GM-icon-settings")
-    UIConfig.SettingsButton.Icon:SetVertexColor(1, 0.82, 0.2, 1) -- match the yellow-ish button glyphs
+    UIConfig.SettingsButton.Icon:SetAtlas("GM-icon-settings", false)
+    UIConfig.SettingsButton.Icon:SetSize(20, 20)    UIConfig.SettingsButton.Icon:SetVertexColor(1, 0.82, 0.2, 1) -- match the yellow-ish button glyphs
 
     UIConfig.SettingsButton:SetScript("OnMouseDown", function(self)
         if self.BG then self.BG:SetAtlas("RedButton-exit-pressed") end
