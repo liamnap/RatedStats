@@ -81,13 +81,61 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
     local achievName = "Rated Stats - Achievements"
     local achievAddon = "RatedStats_Achiev"
 
-    local function GetAnnounceOptions()
+    local function GetAnnounceOptionsFor(kind)
         local container = Settings.CreateControlTextContainer()
-        container:Add(1, "Self (print)")
-        container:Add(2, "Party")
-        container:Add(3, "Instance")
-        container:Add(4, "Say")
-        container:Add(5, "Yell")
+
+        if kind == "SS" then
+            -- SS - none/self/say/yell/instance
+            container:Add(0, "None")
+            container:Add(1, "Self (print)")
+            container:Add(4, "Say")
+            container:Add(5, "Yell")
+            container:Add(3, "Instance")
+            return container
+        end
+
+        if kind == "2V2" then
+            -- 2s - none/self/say/yell/party
+            container:Add(0, "None")
+            container:Add(1, "Self (print)")
+            container:Add(4, "Say")
+            container:Add(5, "Yell")
+            container:Add(2, "Party")
+            return container
+        end
+
+        if kind == "3V3" then
+            -- 3s - none/self/say/yell/party
+            container:Add(0, "None")
+            container:Add(1, "Self (print)")
+            container:Add(4, "Say")
+            container:Add(5, "Yell")
+            container:Add(2, "Party")
+            return container
+        end
+
+        if kind == "RBG" then
+            -- RBG - none/self/say/yell/party(only5)/raid/instance
+            container:Add(0, "None")
+            container:Add(1, "Self (print)")
+            container:Add(4, "Say")
+            container:Add(5, "Yell")
+            container:Add(7, "Party (only 5)")
+            container:Add(6, "Raid")
+            container:Add(3, "Instance")
+            return container
+        end
+
+        if kind == "RBGB" then
+            -- RBGB - none/self/say/yell/instance
+            container:Add(0, "None")
+            container:Add(1, "Self (print)")
+            container:Add(4, "Say")
+            container:Add(5, "Yell")
+            container:Add(3, "Instance")
+            return container
+        end
+
         return container
     end
 
@@ -106,7 +154,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "Tell me of new updates",
                 true
             )
-            Settings.CreateCheckbox(subcategory, setting, "Will announce on login if updates are available.")
+            Settings.CreateDropdown(subcategory, setting, function() return GetAnnounceOptionsFor("SS") end, nil)
         end
 
         do
@@ -119,7 +167,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "Announce on PvP queue",
                 true
             )
-            Settings.CreateCheckbox(subcategory, setting, "Will announce party/raid achievements when you all accept the PvP queue.")
+            Settings.CreateDropdown(subcategory, setting, function() return GetAnnounceOptionsFor("2V2") end, nil)
         end
 
         if layout and CreateSettingsListSectionHeaderInitializer then
@@ -138,7 +186,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "Announce Solo Shuffle Achievements to",
                 3
             )
-            Settings.CreateDropdown(subcategory, setting, GetAnnounceOptions, nil)
+            Settings.CreateDropdown(subcategory, setting, function() return GetAnnounceOptionsFor("3V3") end, nil)
         end
 
         do
@@ -151,7 +199,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "Announce 2v2 Achievements to",
                 2
             )
-            Settings.CreateDropdown(subcategory, setting, GetAnnounceOptions, nil)
+            Settings.CreateDropdown(subcategory, setting, function() return GetAnnounceOptionsFor("RBG") end, nil)
         end
 
         do
@@ -164,7 +212,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "Announce 3v3 Achievements to",
                 2
             )
-            Settings.CreateDropdown(subcategory, setting, GetAnnounceOptions, nil)
+            Settings.CreateDropdown(subcategory, setting, function() return GetAnnounceOptionsFor("RBGB") end, nil)
         end
 
         do
