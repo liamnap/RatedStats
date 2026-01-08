@@ -15,5 +15,6 @@ gettalents.lua
 stats.lua
 config.lua
 minimap.lua
+settings.lua
 addfriend.lua
 init.lua
