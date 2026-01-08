@@ -3186,11 +3186,12 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
         0.019960,
         0.024950,
         0.019960,
-        (is2v2 or is3v3) and 0 or 0.019960,
+        (is2v2 or is3v3) and 0 or 0.019960, -- removing the fraction here brings in the indent from the right so we readd the spacing at the end for consistency
         0.029940,
         0.029940,
         0.039920,  --  80 / 2004
         0.019960,
+        (is2v2 or is3v3) and 0.019960 or 0, -- we reinsert the fraction here to keep right side aligned
     }
     local COLS_PER_TEAM = #baseFracs                             -- still =13
     
