@@ -4249,7 +4249,9 @@ function Config:CreateMenu()
     UIConfig.SettingsButton.Icon = UIConfig.SettingsButton:CreateTexture(nil, "OVERLAY")
     UIConfig.SettingsButton.Icon:SetPoint("CENTER", 0, 0)
     UIConfig.SettingsButton.Icon:SetAtlas("GM-icon-settings", false)
-    UIConfig.SettingsButton.Icon:SetSize(20, 20)    UIConfig.SettingsButton.Icon:SetVertexColor(1, 0.82, 0.2, 1) -- match the yellow-ish button glyphs
+    UIConfig.SettingsButton.Icon:SetSize(24, 24)
+    UIConfig.SettingsButton.Icon:SetTexCoord(0.10, 0.90, 0.10, 0.90)
+    UIConfig.SettingsButton.Icon:SetVertexColor(1, 0.82, 0.2, 1) -- match the yellow-ish button glyphs
 
     UIConfig.SettingsButton:SetScript("OnMouseDown", function(self)
         if self.BG then self.BG:SetAtlas("RedButton-exit-pressed") end
