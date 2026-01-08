@@ -1906,8 +1906,11 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                     table.insert(enemyPlayers, playerData)
                 end
             else
-                -- Arena: separate by numeric team index so "my team" is always left.
-                if isArena and myTeamIndex ~= nil then
+                -- Non-SS: prefer numeric teamIndex split (works for Arena + Rated BG/Blitz),
+                -- fallback to faction string if teamIndex isn't reliable.
+                local isRatedBG = (C_PvP.IsRatedBattleground and C_PvP.IsRatedBattleground()) or false
+
+                if myTeamIndex ~= nil and (isArena or isRatedBG) then
                     if playerData.teamIndex == myTeamIndex then
                         friendlyTotalDamage = friendlyTotalDamage + damageDone
                         friendlyTotalHealing = friendlyTotalHealing + healingDone
@@ -1923,13 +1926,23 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                         enemyPlayerCount = enemyPlayerCount + 1
                         table.insert(enemyPlayers, playerData)
                     end
-                elseif playerData.faction == teamFaction then
-                    enemyTotalDamage = enemyTotalDamage + damageDone
-                    enemyTotalHealing = enemyTotalHealing + healingDone
-                    enemyRatingTotal = enemyRatingTotal + playerData.newrating
-                    enemyRatingChangeTotal = enemyRatingChangeTotal + playerData.ratingChange
-                    enemyPlayerCount = enemyPlayerCount + 1
-                    table.insert(enemyPlayers, playerData)
+                else
+                    -- Fallback: split by faction string (old behaviour)
+                    if playerData.faction == teamFaction then
+                        friendlyTotalDamage = friendlyTotalDamage + damageDone
+                        friendlyTotalHealing = friendlyTotalHealing + healingDone
+                        friendlyRatingTotal = friendlyRatingTotal + playerData.newrating
+                        friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
+                        friendlyPlayerCount = friendlyPlayerCount + 1
+                        table.insert(friendlyPlayers, playerData)
+                    else
+                        enemyTotalDamage = enemyTotalDamage + damageDone
+                        enemyTotalHealing = enemyTotalHealing + healingDone
+                        enemyRatingTotal = enemyRatingTotal + playerData.newrating
+                        enemyRatingChangeTotal = enemyRatingChangeTotal + playerData.ratingChange
+                        enemyPlayerCount = enemyPlayerCount + 1
+                        table.insert(enemyPlayers, playerData)
+                    end
                 end
             end
         end
@@ -3281,8 +3294,8 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
 			-- “Your team” columns
 			xPos = columnPositions[i]
 		else
-			-- “Enemy team” columns use pre-computed origin
-			xPos = parent:GetWidth() * 0.5 + columnPositions[i - totalColumnsPerTeam]
+			-- “Enemy team” columns already include the half-width offset in columnPositions
+			xPos = columnPositions[i]
 		end
 		
 		local width = columnWidths[i]
@@ -3511,8 +3524,8 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     -- Add placeholders for missing friendly players if necessary
     if not (isInitial or isMissedGame) and #friendlyPlayers < numberOfRows then
         for index = #friendlyPlayers + 1, numberOfRows do
-            local rowOffset = -15 * index
-            for i = 1, #columnPositions do
+            local rowOffset = -(headerHeight + 15 * index)
+            for i = 1, COLS_PER_TEAM do
                 local text = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 				local xPos = columnPositions[i]
 				local width = columnWidths[i]
@@ -3528,12 +3541,12 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     -- Add placeholders for missing enemy players if necessary
     if not (isInitial or isMissedGame) and #enemyPlayers < numberOfRows then
         for index = #enemyPlayers + 1, numberOfRows do
-            local rowOffset = -15 * index
-            for i = 1, #columnPositions do
+            local rowOffset = -(headerHeight + 15 * index)
+            for i = (COLS_PER_TEAM + 1), (COLS_PER_TEAM * 2) do
                 local text = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 				local xPos = columnPositions[i]
 				local width = columnWidths[i]
-				text:SetPoint("CENTER", parent, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
+				text:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
 				text:SetWidth(width)
 				text:SetFont(GetUnicodeSafeFont(), entryFontSize)
 				text:SetJustifyH("CENTER")
