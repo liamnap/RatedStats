@@ -3496,11 +3496,20 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     end
 
     if not (isInitial or isMissedGame) then
-        local myName = (matchEntry and matchEntry.friendlyRaidLeader) or playerName
+        local myName = playerName
         local myRole = nil
 
+        local function NamesMatch(a, b)
+            if not (a and b) then return false end
+            if a == b then return true end
+            -- allow comparing "Name-Realm" vs "Name"
+            local abase = a:match("^(.-)%-") or a
+            local bbase = b:match("^(.-)%-") or b
+            return abase == bbase
+        end
+
         for _, p in ipairs(friendlyPlayers) do
-            if p and p.name == myName then
+            if p and NamesMatch(p.name, myName) then
                 myRole = p.role
                 break
             end
