@@ -3506,7 +3506,11 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
             end
         end
 
-        local sortField = (myRole == 4) and "healing" or "damage"
+        local isHealer =
+            (myRole == 4) or
+            (myRole == "HEALER")
+
+        local sortField = isHealer and "healing" or "damage"
 
         table.sort(friendlyPlayers, function(a, b)
             return GetNumericStat(a, sortField) > GetNumericStat(b, sortField)
