@@ -1,9 +1,9 @@
 local addonName, RSTATS = ...
 
--- Rated Stats - Achievements: Settings (Retail Settings UI)
+-- Rated Stats: Settings (Retail Settings UI)
+-- Uses Blizzard's Settings API (Dragonflight+).
 
-local PARENT_CATEGORY_NAME = "Rated Stats"
-local CATEGORY_NAME = "Rated Stats - Achievements"
+local CATEGORY_NAME = "Rated Stats"
 
 local function GetPlayerKey()
     return UnitName("player") .. "-" .. GetRealmName()
@@ -23,34 +23,50 @@ local function GetPlayerDB()
     return RSTATS.Database[key]
 end
 
-local function GetAnnounceOptions()
-    local container = Settings.CreateControlTextContainer()
-    container:Add(1, "Self (print)")
-    container:Add(2, "Party")
-    container:Add(3, "Instance")
-    container:Add(4, "Say")
-    container:Add(5, "Yell")
-    return container
+function RSTATS:OpenSettings()
+    local category = Settings.GetCategory(CATEGORY_NAME)
+    if category then
+        Settings.OpenToCategory(category:GetID())
+    end
 end
 
-EventUtil.ContinueOnAddOnLoaded("RatedStats_Achiev", function()
+local function MaybeAnnounceVersion(db, enabledKey, lastSeenKey, addon, label)
+    if not db or not db.settings then return end
+    if not db.settings[enabledKey] then return end
+
+    local current = C_AddOns.GetAddOnMetadata(addon, "Version")
+    if not current or current == "" then
+        return
+    end
+
+    local last = db.settings[lastSeenKey]
+    if last == current then
+        return
+    end
+
+    -- First install: just store the version silently.
+    if last == nil then
+        db.settings[lastSeenKey] = current
+        return
+    end
+
+    print(string.format("|cffb69e86%s|r updated: %s", label, current))
+    db.settings[lastSeenKey] = current
+end
+
+EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
     local db = GetPlayerDB()
     if not db then return end
     db.settings = db.settings or {}
 
-    local parentCategory = Settings.GetCategory(PARENT_CATEGORY_NAME)
-    if not parentCategory then
-        -- Parent category should be created by the main addon.
-        return
-    end
-
-    local category, layout = Settings.RegisterVerticalLayoutSubcategory(parentCategory, CATEGORY_NAME)
+    -- Main addon category
+    local category = Settings.RegisterVerticalLayoutCategory(CATEGORY_NAME)
 
     do
         local setting = Settings.RegisterAddOnSetting(
             category,
-            "RSTATS_ACHIEV_TELL_UPDATES",
-            "achievTellUpdates",
+            "RSTATS_MAIN_TELL_UPDATES",
+            "mainTellUpdates",
             db.settings,
             Settings.VarType.Boolean,
             "Tell me of new updates",
@@ -59,87 +75,21 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats_Achiev", function()
         Settings.CreateCheckbox(category, setting, "Will announce on login if updates are available.")
     end
 
-    do
-        local setting = Settings.RegisterAddOnSetting(
-            category,
-            "RSTATS_ACHIEV_ANNOUNCE_ON_QUEUE",
-            "achievAnnounceOnQueue",
-            db.settings,
-            Settings.VarType.Boolean,
-            "Announce on PvP queue",
-            true
-        )
-        Settings.CreateCheckbox(category, setting, "Will announce party/raid achievements when you all accept the PvP queue.")
-    end
+    Settings.RegisterAddOnCategory(category)
 
-    if layout and CreateSettingsListSectionHeaderInitializer then
-        layout:AddInitializer(CreateSettingsListSectionHeaderInitializer(
-            "The below options let you choose how you would like to see or share the achievements of friendly and enemy players detected during the game modes."
-        ))
-    end
+    -- Login announcements (main + Achievements module)
+    local login = CreateFrame("Frame")
+    login:RegisterEvent("PLAYER_LOGIN")
+    login:SetScript("OnEvent", function()
+        local db2 = GetPlayerDB()
+        if not db2 then return end
+        db2.settings = db2.settings or {}
 
-    do
-        local setting = Settings.RegisterAddOnSetting(
-            category,
-            "RSTATS_ACHIEV_ANNOUNCE_SS",
-            "achievAnnounceSS",
-            db.settings,
-            Settings.VarType.Number,
-            "Announce Solo Shuffle Achievements to",
-            3
-        )
-        Settings.CreateDropdown(category, setting, GetAnnounceOptions, nil)
-    end
+        MaybeAnnounceVersion(db2, "mainTellUpdates", "mainLastSeenVersion", "RatedStats", "Rated Stats")
 
-    do
-        local setting = Settings.RegisterAddOnSetting(
-            category,
-            "RSTATS_ACHIEV_ANNOUNCE_2V2",
-            "achievAnnounce2v2",
-            db.settings,
-            Settings.VarType.Number,
-            "Announce 2v2 Achievements to",
-            2
-        )
-        Settings.CreateDropdown(category, setting, GetAnnounceOptions, nil)
-    end
-
-    do
-        local setting = Settings.RegisterAddOnSetting(
-            category,
-            "RSTATS_ACHIEV_ANNOUNCE_3V3",
-            "achievAnnounce3v3",
-            db.settings,
-            Settings.VarType.Number,
-            "Announce 3v3 Achievements to",
-            2
-        )
-        Settings.CreateDropdown(category, setting, GetAnnounceOptions, nil)
-    end
-
-    do
-        local setting = Settings.RegisterAddOnSetting(
-            category,
-            "RSTATS_ACHIEV_ANNOUNCE_RBG",
-            "achievAnnounceRBG",
-            db.settings,
-            Settings.VarType.Number,
-            "Announce RBG Achievements to",
-            1
-        )
-        Settings.CreateDropdown(category, setting, GetAnnounceOptions, nil)
-    end
-
-    do
-        local setting = Settings.RegisterAddOnSetting(
-            category,
-            "RSTATS_ACHIEV_ANNOUNCE_RBGB",
-            "achievAnnounceRBGB",
-            db.settings,
-            Settings.VarType.Number,
-            "Announce RBGB Achievements to",
-            1
-        )
-        Settings.CreateDropdown(category, setting, GetAnnounceOptions, nil)
-    end
+        -- Only announce Achievements updates if the module is enabled.
+        if C_AddOns.GetAddOnEnableState("RatedStats_Achiev", nil) ~= 0 then
+            MaybeAnnounceVersion(db2, "achievTellUpdates", "achievLastSeenVersion", "RatedStats_Achiev", "Rated Stats - Achievements")
+        end
+    end)
 end)
