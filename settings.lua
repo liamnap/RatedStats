@@ -178,7 +178,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "achievAnnounceSS",
                 db.settings,
                 Settings.VarType.Number,
-                "In SS tell",
+                "In SS announce to",
                 3
             )
             Settings.CreateDropdown(subcategory, setting, function() return optsSS:GetData() end, nil)
@@ -191,7 +191,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "achievAnnounce2v2",
                 db.settings,
                 Settings.VarType.Number,
-                "In 2v2 tell",
+                "In 2v2 announce to",
                 2
             )
             Settings.CreateDropdown(subcategory, setting, function() return opts2v2:GetData() end, nil)
@@ -204,7 +204,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "achievAnnounce3v3",
                 db.settings,
                 Settings.VarType.Number,
-                "In 3v3 tell",
+                "In 3v3 announce to",
                 2
             )
             Settings.CreateDropdown(subcategory, setting, function() return opts3v3:GetData() end, nil)
@@ -217,7 +217,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "achievAnnounceRBG",
                 db.settings,
                 Settings.VarType.Number,
-                "In RBG tell",
+                "In RBG announce to",
                 1
             )
             Settings.CreateDropdown(subcategory, setting, function() return optsRBG:GetData() end, nil)
@@ -230,7 +230,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "achievAnnounceRBGB",
                 db.settings,
                 Settings.VarType.Number,
-                "In RBGB tell",
+                "In RBGB announce to",
                 1
             )
             Settings.CreateDropdown(subcategory, setting, function() return optsRBGB:GetData() end, nil)
