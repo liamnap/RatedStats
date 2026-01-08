@@ -144,6 +144,44 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
 
         local subcategory, layout = Settings.RegisterVerticalLayoutSubcategory(category, achievName)
 
+        -- Dropdown option containers (must not be nil; Blizzard asserts if they are)
+        local optsSS = Settings.CreateControlTextContainer()
+        optsSS:Add(0, "None")
+        optsSS:Add(1, "Self (print)")
+        optsSS:Add(4, "Say")
+        optsSS:Add(5, "Yell")
+        optsSS:Add(3, "Instance")
+
+        local opts2v2 = Settings.CreateControlTextContainer()
+        opts2v2:Add(0, "None")
+        opts2v2:Add(1, "Self (print)")
+        opts2v2:Add(4, "Say")
+        opts2v2:Add(5, "Yell")
+        opts2v2:Add(2, "Party")
+
+        local opts3v3 = Settings.CreateControlTextContainer()
+        opts3v3:Add(0, "None")
+        opts3v3:Add(1, "Self (print)")
+        opts3v3:Add(4, "Say")
+        opts3v3:Add(5, "Yell")
+        opts3v3:Add(2, "Party")
+
+        local optsRBG = Settings.CreateControlTextContainer()
+        optsRBG:Add(0, "None")
+        optsRBG:Add(1, "Self (print)")
+        optsRBG:Add(4, "Say")
+        optsRBG:Add(5, "Yell")
+        optsRBG:Add(7, "Party (only 5)")
+        optsRBG:Add(6, "Raid")
+        optsRBG:Add(3, "Instance")
+
+        local optsRBGB = Settings.CreateControlTextContainer()
+        optsRBGB:Add(0, "None")
+        optsRBGB:Add(1, "Self (print)")
+        optsRBGB:Add(4, "Say")
+        optsRBGB:Add(5, "Yell")
+        optsRBGB:Add(3, "Instance")
+
         do
             local setting = Settings.RegisterAddOnSetting(
                 subcategory,
@@ -154,7 +192,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "Tell me of new updates",
                 true
             )
-            Settings.CreateDropdown(subcategory, setting, function() return GetAnnounceOptionsFor("SS") end, nil)
+            Settings.CreateDropdown(subcategory, setting, optsSS, nil)
         end
 
         do
@@ -167,7 +205,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "Announce on PvP queue",
                 true
             )
-            Settings.CreateDropdown(subcategory, setting, function() return GetAnnounceOptionsFor("2V2") end, nil)
+            Settings.CreateDropdown(subcategory, setting, opts2v2, nil)
         end
 
         if layout and CreateSettingsListSectionHeaderInitializer then
@@ -186,7 +224,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "Announce Solo Shuffle Achievements to",
                 3
             )
-            Settings.CreateDropdown(subcategory, setting, function() return GetAnnounceOptionsFor("3V3") end, nil)
+            Settings.CreateDropdown(subcategory, setting, opts3v3, nil)
         end
 
         do
@@ -199,7 +237,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "Announce 2v2 Achievements to",
                 2
             )
-            Settings.CreateDropdown(subcategory, setting, function() return GetAnnounceOptionsFor("RBG") end, nil)
+            Settings.CreateDropdown(subcategory, setting, optsRBG, nil)
         end
 
         do
@@ -212,7 +250,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "Announce 3v3 Achievements to",
                 2
             )
-            Settings.CreateDropdown(subcategory, setting, function() return GetAnnounceOptionsFor("RBGB") end, nil)
+            Settings.CreateDropdown(subcategory, setting, optsRBGB, nil)
         end
 
         do
