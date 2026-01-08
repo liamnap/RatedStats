@@ -4180,7 +4180,7 @@ function Config:CreateMenu()
 
     -- Gear icon
     UIConfig.SettingsButton.Icon = UIConfig.SettingsButton:CreateTexture(nil, "OVERLAY")
-    UIConfig.SettingsButton.Icon:SetSize(14, 14)
+    UIConfig.SettingsButton.Icon:SetSize(20, 20)
     UIConfig.SettingsButton.Icon:SetPoint("CENTER", 0, 0)
     UIConfig.SettingsButton.Icon:SetAtlas("GM-icon-settings")
     UIConfig.SettingsButton.Icon:SetVertexColor(1, 0.82, 0.2, 1) -- match the yellow-ish button glyphs
