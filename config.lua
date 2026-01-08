@@ -3225,9 +3225,19 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     local is2v2 = (tabID == 2)
     local is3v3 = (tabID == 3)
 
+    -- Hide Wins/HKs column for 2v2/3v3 (no meaningful data)
+    local hideWinHK = (is2v2 or is3v3)
+    local WINHK_COL = 9 -- per-team column index (1..13)
+    local function IsHiddenWinHKCol(colIndex)
+        if not hideWinHK then return false end
+        return (colIndex == WINHK_COL) or (colIndex == (COLS_PER_TEAM + WINHK_COL))
+    end
+
+    local winHKHeader = (isSS and "Wins") or (hideWinHK and "") or "HKs"
+
     local headers = {
-        "Character", "Faction", "Race", "Class", "Spec", "Role", "CR", "KBs", (isSS and "Wins" or "HKs"), "Damage", "Healing", "Rating Chg", ((isSS or is2v2 or is3v3) and "" or "Objective"),
-        "Character", "Faction", "Race", "Class", "Spec", "Role", "CR", "KBs", (isSS and "Wins" or "HKs"), "Damage", "Healing", "Rating Chg", ((isSS or is2v2 or is3v3) and "" or "Objective")
+        "Character", "Faction", "Race", "Class", "Spec", "Role", "CR", "KBs", winHKHeader, "Damage", "Healing", "Rating Chg", ((isSS or is2v2 or is3v3) and "" or "Objective"),
+        "Character", "Faction", "Race", "Class", "Spec", "Role", "CR", "KBs", winHKHeader, "Damage", "Healing", "Rating Chg", ((isSS or is2v2 or is3v3) and "" or "Objective")
     }
 
     local headerHeight = 18  -- Height of the header row
@@ -3278,6 +3288,11 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
 	
 		headerText:SetPoint("TOPLEFT", nestedTable, "TOPLEFT", xPos, -headerHeight)
 		headerText:SetWidth(width)
+
+        -- Fully hide the Wins/HKs header text for 2v2/3v3
+        if IsHiddenWinHKCol(i) then
+            headerText:SetText("")
+        end
 	end
     -- Separate friendly and enemy player stats
     local friendlyPlayers = {}
@@ -3325,6 +3340,8 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     for index, player in ipairs(friendlyPlayers) do
         local rowOffset = -(headerHeight + 15 * index)  -- Adjust rowOffset to account for headers
 		CreateClickableName(nestedTable, player, matchEntry, columnPositions[1], rowOffset, columnWidths[1], rowHeight)
+        local winHKValue = (isSS and player.wins) or (hideWinHK and "") or player.honorableKills
+
         for i, stat in ipairs({
 			"",
             factionIcons[player.faction] or player.faction, 
@@ -3334,7 +3351,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
             roleIcons[player.role] or player.role,  -- Replace numeric role with icon
             player.newrating, 
             player.killingBlows, 
-            (isSS and player.wins or player.honorableKills), 
+            winHKValue, 
             FormatNumber(player.damage), 
             FormatNumber(player.healing), 
             player.ratingChange,
@@ -3407,6 +3424,8 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     for index, player in ipairs(enemyPlayers) do
 		local rowOffset = -(headerHeight + 15 * index)  -- Adjust rowOffset to account for headers
         CreateClickableName(nestedTable, player, matchEntry, columnPositions[COLS_PER_TEAM + 1], rowOffset, columnWidths[COLS_PER_TEAM + 1], rowHeight)
+        local winHKValue = (isSS and player.wins) or (hideWinHK and "") or player.honorableKills
+
         for i, stat in ipairs({
 			"",
             factionIcons[player.faction] or player.faction, 
@@ -3416,7 +3435,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
             roleIcons[player.role] or player.role,  -- Replace numeric role with icon
             player.newrating, 
             player.killingBlows, 
-            (isSS and player.wins or player.honorableKills), 
+            winHKValue, 
             FormatNumber(player.damage), 
             FormatNumber(player.healing), 
             player.ratingChange,
@@ -3500,7 +3519,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
 				text:SetWidth(width)
 				text:SetFont(GetUnicodeSafeFont(), entryFontSize)
 				text:SetJustifyH("CENTER")
-				text:SetText("-")
+				text:SetText(IsHiddenWinHKCol(i) and "" or "-")
             end
         end
     end
@@ -3517,7 +3536,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
 				text:SetWidth(width)
 				text:SetFont(GetUnicodeSafeFont(), entryFontSize)
 				text:SetJustifyH("CENTER")
-				text:SetText("-")
+				text:SetText(IsHiddenWinHKCol(i) and "" or "-")
             end
         end
     end
