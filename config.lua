@@ -3240,7 +3240,7 @@ local function CreateClickableName(parent, stats, matchEntry, x, y, columnWidth,
       end
   end
 
-  local iconSize = 8
+  local iconSize = 10
 
   -- If we have an icon, place it inside the Character column and nudge the name right
   if achievIconPath then
