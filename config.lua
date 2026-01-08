@@ -3204,7 +3204,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
         0.029940,
         0.039920,  --  80 / 2004
         0.019960,
-        (is2v2 or is3v3) and (0.019960 + 0.019960) or 0.019960, -- Objective absorbs the spacing
+        (is2v2 or is3v3) and (0.019960 + 0.019960), -- Objective absorbs the spacing
     }
     local COLS_PER_TEAM = #baseFracs                             -- still =13
     
