@@ -3484,6 +3484,40 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     end
 
     -- ------------------------------------------------------------------
+    -- Sort rows per team:
+    -- If YOU are a healer (role=4) sort by healing, otherwise sort by damage.
+    -- Sorting is per-team only (friendly sorted within friendly, enemy within enemy).
+    -- ------------------------------------------------------------------
+    local function GetNumericStat(p, field)
+        if not p then return 0 end
+        local v = p[field]
+        v = tonumber(v)
+        return v or 0
+    end
+
+    if not (isInitial or isMissedGame) then
+        local myName = (matchEntry and matchEntry.friendlyRaidLeader) or playerName
+        local myRole = nil
+
+        for _, p in ipairs(friendlyPlayers) do
+            if p and p.name == myName then
+                myRole = p.role
+                break
+            end
+        end
+
+        local sortField = (myRole == 4) and "healing" or "damage"
+
+        table.sort(friendlyPlayers, function(a, b)
+            return GetNumericStat(a, sortField) > GetNumericStat(b, sortField)
+        end)
+
+        table.sort(enemyPlayers, function(a, b)
+            return GetNumericStat(a, sortField) > GetNumericStat(b, sortField)
+        end)
+    end
+    
+    -- ------------------------------------------------------------------
     -- Damage/Healing rank indicators (team + overall)
     -- ------------------------------------------------------------------
     local function BuildRankMap(players, field)
