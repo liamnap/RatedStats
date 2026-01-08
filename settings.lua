@@ -163,10 +163,10 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "achievAnnounceSS",
                 db.settings,
                 Settings.VarType.Number,
-                "Announce Solo Shuffle Achievements to",
+                "Announce Achievements in SS to",
                 3
             )
-            Settings.CreateDropdown(subcategory, setting, function() return optsSS end, nil)
+            Settings.CreateDropdown(subcategory, setting, function() return optsSS:GetData() end, nil)
         end
 
         do
@@ -176,10 +176,10 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "achievAnnounce2v2",
                 db.settings,
                 Settings.VarType.Number,
-                "Announce 2v2 Achievements to",
+                "Announce Achievements in 2v2 to",
                 2
             )
-            Settings.CreateDropdown(subcategory, setting, function() return opts2v2 end, nil)
+            Settings.CreateDropdown(subcategory, setting, function() return opts2v2:GetData() end, nil)
         end
 
         do
@@ -189,10 +189,10 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "achievAnnounce3v3",
                 db.settings,
                 Settings.VarType.Number,
-                "Announce 3v3 Achievements to",
+                "Announce Achievements in 3v3 to",
                 2
             )
-            Settings.CreateDropdown(subcategory, setting, function() return opts3v3 end, nil)
+            Settings.CreateDropdown(subcategory, setting, function() return opts3v3:GetData() end, nil)
         end
 
         do
@@ -202,10 +202,10 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "achievAnnounceRBG",
                 db.settings,
                 Settings.VarType.Number,
-                "Announce RBG Achievements to",
+                "Announce Achievements in RBG to",
                 1
             )
-            Settings.CreateDropdown(subcategory, setting, function() return optsRBG end, nil)
+            Settings.CreateDropdown(subcategory, setting, function() return optsRBG:GetData() end, nil)
         end
 
         do
@@ -215,10 +215,10 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "achievAnnounceRBGB",
                 db.settings,
                 Settings.VarType.Number,
-                "Announce RBGB Achievements to",
+                "Announce Achievements in RBGB to",
                 1
             )
-            Settings.CreateDropdown(subcategory, setting, function() return optsRBGB end, nil)
+            Settings.CreateDropdown(subcategory, setting, function() return optsRBGB:GetData() end, nil)
         end
     end
 
