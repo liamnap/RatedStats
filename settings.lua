@@ -81,64 +81,6 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
     local achievName = "Rated Stats - Achievements"
     local achievAddon = "RatedStats_Achiev"
 
-    local function GetAnnounceOptionsFor(kind)
-        local container = Settings.CreateControlTextContainer()
-
-        if kind == "SS" then
-            -- SS - none/self/say/yell/instance
-            container:Add(0, "None")
-            container:Add(1, "Self (print)")
-            container:Add(4, "Say")
-            container:Add(5, "Yell")
-            container:Add(3, "Instance")
-            return container
-        end
-
-        if kind == "2V2" then
-            -- 2s - none/self/say/yell/party
-            container:Add(0, "None")
-            container:Add(1, "Self (print)")
-            container:Add(4, "Say")
-            container:Add(5, "Yell")
-            container:Add(2, "Party")
-            return container
-        end
-
-        if kind == "3V3" then
-            -- 3s - none/self/say/yell/party
-            container:Add(0, "None")
-            container:Add(1, "Self (print)")
-            container:Add(4, "Say")
-            container:Add(5, "Yell")
-            container:Add(2, "Party")
-            return container
-        end
-
-        if kind == "RBG" then
-            -- RBG - none/self/say/yell/party(only5)/raid/instance
-            container:Add(0, "None")
-            container:Add(1, "Self (print)")
-            container:Add(4, "Say")
-            container:Add(5, "Yell")
-            container:Add(7, "Party (only 5)")
-            container:Add(6, "Raid")
-            container:Add(3, "Instance")
-            return container
-        end
-
-        if kind == "RBGB" then
-            -- RBGB - none/self/say/yell/instance
-            container:Add(0, "None")
-            container:Add(1, "Self (print)")
-            container:Add(4, "Say")
-            container:Add(5, "Yell")
-            container:Add(3, "Instance")
-            return container
-        end
-
-        return container
-    end
-
     if C_AddOns and C_AddOns.DoesAddOnExist and C_AddOns.DoesAddOnExist(achievAddon)
         and C_AddOns.GetAddOnEnableState and (C_AddOns.GetAddOnEnableState(achievAddon, nil) ~= 0) then
 
