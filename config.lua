@@ -4159,14 +4159,40 @@ function Config:CreateMenu()
         tex:SetDrawLayer("OVERLAY",7)
     end
 	
-    -- Settings button (opens the Retail Settings pane)
+    -- Settings button (matches the red button style)
     UIConfig.SettingsButton = CreateFrame("Button", "RatedStatsSettingsButton", UIConfig)
     UIConfig.SettingsButton:SetSize(24, 24)
     UIConfig.SettingsButton:SetPoint("RIGHT", UIConfig.ToggleViewButton, "LEFT", 0, 0)
     UIConfig.SettingsButton:SetFrameStrata("DIALOG")
     UIConfig.SettingsButton:SetFrameLevel(UIConfig.CloseButton:GetFrameLevel())
-    UIConfig.SettingsButton:SetNormalAtlas("GM-icon-settings")
-    UIConfig.SettingsButton:SetHighlightAtlas("RedButton-Highlight")
+    UIConfig.SettingsButton:SetHighlightAtlas("RedButton-Highlight", "ADD")
+
+    -- Base red button (uses the same atlas family as Close/Condense)
+    UIConfig.SettingsButton.BG = UIConfig.SettingsButton:CreateTexture(nil, "ARTWORK")
+    UIConfig.SettingsButton.BG:SetAllPoints()
+    UIConfig.SettingsButton.BG:SetAtlas("RedButton-Exit")
+
+    -- Cover the baked-in "X" so we can place a gear instead
+    UIConfig.SettingsButton.Cover = UIConfig.SettingsButton:CreateTexture(nil, "ARTWORK")
+    UIConfig.SettingsButton.Cover:SetPoint("TOPLEFT", 5, -5)
+    UIConfig.SettingsButton.Cover:SetPoint("BOTTOMRIGHT", -5, 5)
+    UIConfig.SettingsButton.Cover:SetColorTexture(0.33, 0.06, 0.06, 0.95)
+
+    -- Gear icon
+    UIConfig.SettingsButton.Icon = UIConfig.SettingsButton:CreateTexture(nil, "OVERLAY")
+    UIConfig.SettingsButton.Icon:SetSize(14, 14)
+    UIConfig.SettingsButton.Icon:SetPoint("CENTER", 0, 0)
+    UIConfig.SettingsButton.Icon:SetAtlas("GM-icon-settings")
+    UIConfig.SettingsButton.Icon:SetVertexColor(1, 0.82, 0.2, 1) -- match the yellow-ish button glyphs
+
+    UIConfig.SettingsButton:SetScript("OnMouseDown", function(self)
+        if self.BG then self.BG:SetAtlas("RedButton-exit-pressed") end
+        if self.Icon then self.Icon:SetPoint("CENTER", 1, -1) end
+    end)
+    UIConfig.SettingsButton:SetScript("OnMouseUp", function(self)
+        if self.BG then self.BG:SetAtlas("RedButton-Exit") end
+        if self.Icon then self.Icon:SetPoint("CENTER", 0, 0) end
+    end)
     UIConfig.SettingsButton:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText("Settings", 1, 1, 1)
@@ -4177,8 +4203,6 @@ function Config:CreateMenu()
     UIConfig.SettingsButton:SetScript("OnClick", function()
         if RSTATS and RSTATS.OpenSettings then
             RSTATS:OpenSettings()
-        elseif Settings and Settings.OpenToCategory then
-            Settings.OpenToCategory("Rated Stats")
         end
     end)
 
