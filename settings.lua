@@ -161,13 +161,13 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 or (Settings and Settings.CreateSettingsListSubsectionHeaderInitializer)
 
             if TextInit then
-                layout:AddInitializer(TextInit("The below options let you choose how you would like to see or share the achievements of friendly and enemy players detected during the game modes."))
+                layout:AddInitializer(TextInit("Options for Achievements Announcements"))
             elseif SubHeaderInit then
                 -- Fallback: smaller than a full section header.
-                layout:AddInitializer(SubHeaderInit("The below options let you choose how you would like to see or share the achievements of friendly and enemy players detected during the game modes."))
+                layout:AddInitializer(SubHeaderInit("Options for Achievements Announcements"))
             elseif _G.CreateSettingsListSectionHeaderInitializer then
                 -- Last resort (big header).
-                layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("The below options let you choose how you would like to see or share the achievements of friendly and enemy players detected during the game modes."))
+                layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("Options for Achievements Announcements"))
             end
         end
 
