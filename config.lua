@@ -3190,22 +3190,21 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     -- column geometry (dynamic based on parent:GetWidth())
     -- ------------------------------------------------------------------
     -- percentages for each of the 13 base-pixel columns (for a 2004px parent)
-    local baseFracs = {
-        0.049900,  -- 100 / 2004
-        0.019960,  --  40 / 2004
-        0.019960,
-        0.024950,  --  50 / 2004
-        0.029940,  --  60 / 2004
-        0.019960,
-        0.024950,
-        0.019960,
-        (is2v2 or is3v3) and 0 or 0.019960, -- removing the fraction here brings in the indent from the right so we readd the spacing at the end for consistency
-        0.029940,
-        0.029940,
-        0.039920,  --  80 / 2004
-        0.019960,
-        (is2v2 or is3v3) and (0.019960 + 0.019960), -- Objective absorbs the spacing
-    }
+	local baseFracs = {
+		0.049900,  -- 1 Character
+		0.019960,  -- 2 Faction
+		0.019960,  -- 3 Race
+		0.024950,  -- 4 Class
+		0.029940,  -- 5 Spec
+		0.019960,  -- 6 Role
+		0.024950,  -- 7 CR
+		0.019960,  -- 8 KBs
+		(is2v2 or is3v3) and 0 or 0.019960,                         -- 9 HK/Wins (collapses)
+		0.029940,  -- 10 Damage
+		0.029940,  -- 11 Healing
+		0.039920,  -- 12 Rating Chg
+		((is2v2 or is3v3) and (0.019960 + 0.019960) or 0.019960),   -- 13 Objective absorbs slack
+	}
     local COLS_PER_TEAM = #baseFracs                             -- still =13
     
     -- build ally+enemy columnWidths at runtime
