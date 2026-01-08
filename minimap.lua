@@ -16,12 +16,7 @@ local LDB = LibStub("LibDataBroker-1.1"):NewDataObject("RatedStats", {
         elseif button == "RightButton" then
 
             -- Shift + Right-click → open Settings (not the addon window)
-            if IsShiftKeyDown() then
-                if not OpenRatedStatsSettings() then
-                    print("RatedStats: Unable to open Settings (no Settings/OpenToCategory API available).")
-                end
-                return
-            end
+            if IsShiftKeyDown() and RSTATS and RSTATS.OpenSettings then RSTATS:OpenSettings() return end
 
 			-- 1) Use the C_AddOns API for your LOD add-on
 			local module = "RatedStats_Achiev"
