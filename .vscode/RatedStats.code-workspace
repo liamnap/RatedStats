@@ -63,7 +63,8 @@
 			"NUM_CHAT_WINDOWS",
 			"class",
 			"EventUtil",
-			"Settings"
+			"Settings",
+			"CreateSettingsListSectionHeaderInitializer"
 		],
 		"Lua.type.weakUnionCheck": true
 	}
