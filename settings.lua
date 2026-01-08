@@ -150,10 +150,16 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             Settings.CreateCheckbox(subcategory, setting, "Will announce party/raid achievements when you all accept the PvP queue.")
         end
 
-        if layout and CreateSettingsListSectionHeaderInitializer then
-            layout:AddInitializer(CreateSettingsListSectionHeaderInitializer(
-                "The below options let you choose how you would like to see or share the achievements of friendly and enemy players detected during the game modes."
-            ))
+        if layout then
+            if CreateSettingsListSubheaderInitializer then
+                layout:AddInitializer(CreateSettingsListSubheaderInitializer(
+                    "The below options let you choose how you would like to see or share the achievements of friendly and enemy players detected during the game modes."
+                ))
+            elseif CreateSettingsListTextInitializer then
+                layout:AddInitializer(CreateSettingsListTextInitializer(
+                    "The below options let you choose how you would like to see or share the achievements of friendly and enemy players detected during the game modes."
+                ))
+            end
         end
 
         do
