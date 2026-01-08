@@ -77,6 +77,123 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
 
     Settings.RegisterAddOnCategory(category)
 
+    -- Achievements subcategory (only if the module is installed + enabled)
+    local achievName = "Rated Stats - Achievements"
+    local achievAddon = "RatedStats_Achiev"
+
+    local function GetAnnounceOptions()
+        local container = Settings.CreateControlTextContainer()
+        container:Add(1, "Self (print)")
+        container:Add(2, "Party")
+        container:Add(3, "Instance")
+        container:Add(4, "Say")
+        container:Add(5, "Yell")
+        return container
+    end
+
+    if C_AddOns and C_AddOns.DoesAddOnExist and C_AddOns.DoesAddOnExist(achievAddon)
+        and C_AddOns.GetAddOnEnableState and (C_AddOns.GetAddOnEnableState(achievAddon, nil) ~= 0) then
+
+        local subcategory, layout = Settings.RegisterVerticalLayoutSubcategory(category, achievName)
+
+        do
+            local setting = Settings.RegisterAddOnSetting(
+                subcategory,
+                "RSTATS_ACHIEV_TELL_UPDATES",
+                "achievTellUpdates",
+                db.settings,
+                Settings.VarType.Boolean,
+                "Tell me of new updates",
+                true
+            )
+            Settings.CreateCheckbox(subcategory, setting, "Will announce on login if updates are available.")
+        end
+
+        do
+            local setting = Settings.RegisterAddOnSetting(
+                subcategory,
+                "RSTATS_ACHIEV_ANNOUNCE_ON_QUEUE",
+                "achievAnnounceOnQueue",
+                db.settings,
+                Settings.VarType.Boolean,
+                "Announce on PvP queue",
+                true
+            )
+            Settings.CreateCheckbox(subcategory, setting, "Will announce party/raid achievements when you all accept the PvP queue.")
+        end
+
+        if layout and CreateSettingsListSectionHeaderInitializer then
+            layout:AddInitializer(CreateSettingsListSectionHeaderInitializer(
+                "The below options let you choose how you would like to see or share the achievements of friendly and enemy players detected during the game modes."
+            ))
+        end
+
+        do
+            local setting = Settings.RegisterAddOnSetting(
+                subcategory,
+                "RSTATS_ACHIEV_ANNOUNCE_SS",
+                "achievAnnounceSS",
+                db.settings,
+                Settings.VarType.Number,
+                "Announce Solo Shuffle Achievements to",
+                3
+            )
+            Settings.CreateDropdown(subcategory, setting, GetAnnounceOptions, nil)
+        end
+
+        do
+            local setting = Settings.RegisterAddOnSetting(
+                subcategory,
+                "RSTATS_ACHIEV_ANNOUNCE_2V2",
+                "achievAnnounce2v2",
+                db.settings,
+                Settings.VarType.Number,
+                "Announce 2v2 Achievements to",
+                2
+            )
+            Settings.CreateDropdown(subcategory, setting, GetAnnounceOptions, nil)
+        end
+
+        do
+            local setting = Settings.RegisterAddOnSetting(
+                subcategory,
+                "RSTATS_ACHIEV_ANNOUNCE_3V3",
+                "achievAnnounce3v3",
+                db.settings,
+                Settings.VarType.Number,
+                "Announce 3v3 Achievements to",
+                2
+            )
+            Settings.CreateDropdown(subcategory, setting, GetAnnounceOptions, nil)
+        end
+
+        do
+            local setting = Settings.RegisterAddOnSetting(
+                subcategory,
+                "RSTATS_ACHIEV_ANNOUNCE_RBG",
+                "achievAnnounceRBG",
+                db.settings,
+                Settings.VarType.Number,
+                "Announce RBG Achievements to",
+                1
+            )
+            Settings.CreateDropdown(subcategory, setting, GetAnnounceOptions, nil)
+        end
+
+        do
+            local setting = Settings.RegisterAddOnSetting(
+                subcategory,
+                "RSTATS_ACHIEV_ANNOUNCE_RBGB",
+                "achievAnnounceRBGB",
+                db.settings,
+                Settings.VarType.Number,
+                "Announce RBGB Achievements to",
+                1
+            )
+            Settings.CreateDropdown(subcategory, setting, GetAnnounceOptions, nil)
+        end
+    end
+
     -- Login announcements (main + Achievements module)
     local login = CreateFrame("Frame")
     login:RegisterEvent("PLAYER_LOGIN")
