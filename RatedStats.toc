@@ -11,10 +11,10 @@
 
 core.lua
 filters.lua
-herotalents.lua
 gettalents.lua
 stats.lua
 config.lua
 minimap.lua
+settings.lua
 addfriend.lua
 init.lua

@@ -1,7 +1,7 @@
 local _, RSTATS = ...
 local playerName = UnitName("player") .. "-" .. GetRealmName()
 local eventFrame = CreateFrame("Frame")
-local COLOR_HEX = "00CCFF"
+local COLOR_HEX = "b69e86"
 
 eventFrame:RegisterEvent("ADDON_LOADED")
 
@@ -14,6 +14,9 @@ local LDB = LibStub("LibDataBroker-1.1"):NewDataObject("RatedStats", {
             RSTATS.Config:Toggle()
 
         elseif button == "RightButton" then
+
+            -- Shift + Right-click → open Settings (not the addon window)
+            if IsShiftKeyDown() and RSTATS and RSTATS.OpenSettings then RSTATS:OpenSettings() return end
 
 			-- 1) Use the C_AddOns API for your LOD add-on
 			local module = "RatedStats_Achiev"
@@ -50,6 +53,12 @@ local LDB = LibStub("LibDataBroker-1.1"):NewDataObject("RatedStats", {
 			"|cff%sRight-click|r to toggle Achievements Tracking: %s",
 			COLOR_HEX, state
 		))
+        -- Spacer + settings hint
+        tooltip:AddLine(" ")
+        tooltip:AddLine(string.format(
+            "|cff%sShift+Right-click|r for Settings",
+            COLOR_HEX
+        ))
 	end,
 })
 

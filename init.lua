@@ -64,7 +64,7 @@ local function HandleSlashCommands(str)
 end
 
 function RSTATS:Print(...)
-    local hex = "00ccff" -- Use the hex color directly
+    local hex = "b69e86" -- Use the hex color directly
     local prefix = string.format("|cff%s%s|r", hex:upper(), "Rated Stats:");    
     DEFAULT_CHAT_FRAME:AddMessage(string.join(" ", prefix, ...));
 end

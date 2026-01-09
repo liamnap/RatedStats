@@ -42,7 +42,7 @@ end
 -- 3) Them­ing & Helpers                --
 ----------------------------------------
 RSTATS.Config = RSTATS.Config or {}
-RSTATS.Config.ThemeColor = "00ccff"
+RSTATS.Config.ThemeColor = "b69e86"
 
 function RSTATS:ColorText(text)
     local hex = self.Config.ThemeColor:upper()
