@@ -3230,13 +3230,14 @@ local function CreateClickableName(parent, stats, matchEntry, x, y, columnWidth,
   local playerName = stats.name
 
   -- RatedStats_Achiev (optional): show highest PvP achievement icon if available
-  local achievIconPath
+  local achievIconPath, achievIconTint
+
   if type(C_AddOns) == "table" and type(C_AddOns.GetAddOnEnableState) == "function" then
       if C_AddOns.GetAddOnEnableState("RatedStats_Achiev", nil) > 0
           and type(_G.RSTATS_Achiev_GetHighestPvpRank) == "function"
           and type(_G.RSTATS_Achiev_AddAchievementInfoToTooltip) == "function"
       then
-          achievIconPath = select(1, _G.RSTATS_Achiev_GetHighestPvpRank(playerName))
+          achievIconPath, _, achievIconTint = _G.RSTATS_Achiev_GetHighestPvpRank(playerName)
       end
   end
 
@@ -3254,6 +3255,12 @@ local function CreateClickableName(parent, stats, matchEntry, x, y, columnWidth,
       local iconTex = iconBtn:CreateTexture(nil, "OVERLAY")
       iconTex:SetAllPoints()
       iconTex:SetTexture(achievIconPath)
+
+      if achievIconTint and type(achievIconTint) == "table" then
+          iconTex:SetVertexColor(achievIconTint[1] or 1, achievIconTint[2] or 1, achievIconTint[3] or 1)
+      else
+          iconTex:SetVertexColor(1, 1, 1)
+      end
 
       iconBtn:SetScript("OnEnter", function(self)
           GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
