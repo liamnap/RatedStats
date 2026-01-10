@@ -2963,7 +2963,8 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 		if content.matchFrameByID[frameKey] then
             table.insert(content.matchFrames, content.matchFrameByID[frameKey])
         else
-			local matchFrame = CreateFrame("Frame", "MatchFrame", nil, "BackdropTemplate")
+            local frameName = "MatchFrame_" .. tostring(matchID) .. "_" .. tostring(i)
+            local matchFrame = CreateFrame("Frame", frameName, nil, "BackdropTemplate")
 			if UIConfig.isCompact then
 				matchFrame:SetSize(parentWidth * 2, parentHeight) -- double the width of the matchFrame in compact mode
 			else
@@ -3310,8 +3311,8 @@ local function CreateClickableName(parent, stats, matchEntry, x, y, columnWidth,
 end
 
 function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMissedGame, content, matchEntry, tabID)
-	local nestedTable = CreateFrame("Frame", "NestedTable_" .. (parent:GetName() or "unknown"), parent, "BackdropTemplate")
-
+    local nestedName = parent:GetName() and ("NestedTable_" .. parent:GetName()) or nil
+    local nestedTable = CreateFrame("Frame", nestedName, parent, "BackdropTemplate")
     -- Determine the match type using the correct function
     local matchType = IdentifyPvPMatchType()
 
