@@ -48,17 +48,17 @@ local function GetRelevantUnits(callback)
 
     if C_PvP.IsRatedSoloShuffle() then
         expectedMax = 6
-        tokenTypes = { "party", "arena" }
+        tokenTypes = { "party" } -- Midnight: do not scan enemies (arena tokens)
     elseif C_PvP.IsRatedArena() then
         local matchBracket = C_PvP.GetActiveMatchBracket()
         expectedMax = (matchBracket == 0) and 4 or 6
-        tokenTypes = { "party", "arena" }
+        tokenTypes = { "party" } -- Midnight: do not scan enemies (arena tokens)
     elseif C_PvP.IsRatedBattleground() then
         expectedMax = 20
-        tokenTypes = { "raid", "nameplate" }
+        tokenTypes = { "raid", "nameplate" } -- nameplates filtered to friendlies below
     elseif C_PvP.IsSoloRBG() then
         expectedMax = 16
-        tokenTypes = { "raid", "nameplate" }
+        tokenTypes = { "raid", "nameplate" } -- nameplates filtered to friendlies below
     end
 
     local seen = {}
@@ -69,13 +69,24 @@ local function GetRelevantUnits(callback)
             for i = 1, 20 do
                 local unit = prefix .. i
                 if UnitExists(unit) and UnitIsPlayer(unit) then
+                    -- Midnight: we only care about friendlies now; enemies can produce "secret" values.
+                    if not UnitIsFriend("player", unit) then
+                        -- Skip enemies (arena units are always enemies; nameplates can be either)
+                        goto continue
+                    end
                     local guid = UnitGUID(unit)
+                    if guid then
+                        -- PTR can return secret-tainted values; force a plain string key.
+                        guid = tostring(guid)
+                    end
+
                     if guid and not seen[guid] then
                         seen[guid] = true
                         foundCount = foundCount + 1
                         callback(unit, guid) -- ⏱️ Send unit to processing immediately
                     end
                 end
+                ::continue::
             end
         end
 
