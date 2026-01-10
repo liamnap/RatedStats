@@ -1849,7 +1849,23 @@ local mapShortName = {
 }
 
 function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, allianceTeamScore, hordeTeamScore, roundsWon, categoryName, categoryID, damp, objectiveByGUID)
-    local appendHistoryMatchID = #historyTable + 1  -- Unique match ID
+    -- Solo Shuffle rounds 1-5 are inserted after a delay, so #historyTable doesn't change immediately.
+    -- Reserve a unique matchID up-front to avoid duplicates.
+    Database._nextMatchID = Database._nextMatchID or {}
+    local key = categoryName or "Unknown"
+    local nextID = Database._nextMatchID[key]
+    if not nextID then
+        local highest = 0
+        for _, e in ipairs(historyTable) do
+            local id = tonumber(e.matchID)
+            if id and id > highest then
+                highest = id
+            end
+        end
+        nextID = highest + 1
+    end
+    local appendHistoryMatchID = nextID
+    Database._nextMatchID[key] = nextID + 1
     local playerFullName = GetPlayerFullName() -- Get the player's full name
     local myTeamIndex
     local ssAlliesGUID = soloShuffleAlliesGUIDAtDeath or nil
@@ -2939,11 +2955,13 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
     for i = #historyTable, 1, -1 do
 		local match = historyTable[i]
 		local matchID = match.matchID or i
+        -- matchID can be duplicated (especially from delayed SS inserts), so don't cache frames by matchID alone.
+        local frameKey = tostring(matchID) .. ":" .. tostring(i)
 		local parentWidth  = UIConfig:GetWidth()
 		local parentHeight = UIConfig:GetHeight()
 		
-		if content.matchFrameByID[matchID] then
-            table.insert(content.matchFrames, content.matchFrameByID[matchID])
+		if content.matchFrameByID[frameKey] then
+            table.insert(content.matchFrames, content.matchFrameByID[frameKey])
         else
 			local matchFrame = CreateFrame("Frame", "MatchFrame", nil, "BackdropTemplate")
 			if UIConfig.isCompact then
@@ -3040,7 +3058,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 				ToggleNestedTable(matchFrame, nestedTable, content)
 			end)
 			
-			content.matchFrameByID[matchID] = matchFrame
+			content.matchFrameByID[frameKey] = matchFrame
 			table.insert(content.matchFrames, matchFrame)
 		end
     end
