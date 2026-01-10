@@ -3313,6 +3313,7 @@ end
 function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMissedGame, content, matchEntry, tabID)
     local nestedName = parent:GetName() and ("NestedTable_" .. parent:GetName()) or nil
     local nestedTable = CreateFrame("Frame", nestedName, parent, "BackdropTemplate")
+
     -- Determine the match type using the correct function
     local matchType = IdentifyPvPMatchType()
 
