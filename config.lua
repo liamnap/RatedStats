@@ -1849,7 +1849,23 @@ local mapShortName = {
 }
 
 function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, allianceTeamScore, hordeTeamScore, roundsWon, categoryName, categoryID, damp, objectiveByGUID)
-    local appendHistoryMatchID = #historyTable + 1  -- Unique match ID
+    -- Solo Shuffle rounds 1-5 are inserted after a delay, so #historyTable doesn't change immediately.
+    -- Reserve a unique matchID up-front to avoid duplicates.
+    Database._nextMatchID = Database._nextMatchID or {}
+    local key = categoryName or "Unknown"
+    local nextID = Database._nextMatchID[key]
+    if not nextID then
+        local highest = 0
+        for _, e in ipairs(historyTable) do
+            local id = tonumber(e.matchID)
+            if id and id > highest then
+                highest = id
+            end
+        end
+        nextID = highest + 1
+    end
+    local appendHistoryMatchID = nextID
+    Database._nextMatchID[key] = nextID + 1
     local playerFullName = GetPlayerFullName() -- Get the player's full name
     local myTeamIndex
     local ssAlliesGUID = soloShuffleAlliesGUIDAtDeath or nil
@@ -2939,13 +2955,16 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
     for i = #historyTable, 1, -1 do
 		local match = historyTable[i]
 		local matchID = match.matchID or i
+        -- matchID can be duplicated (especially from delayed SS inserts), so don't cache frames by matchID alone.
+        local frameKey = tostring(matchID) .. ":" .. tostring(i)
 		local parentWidth  = UIConfig:GetWidth()
 		local parentHeight = UIConfig:GetHeight()
 		
-		if content.matchFrameByID[matchID] then
-            table.insert(content.matchFrames, content.matchFrameByID[matchID])
+		if content.matchFrameByID[frameKey] then
+            table.insert(content.matchFrames, content.matchFrameByID[frameKey])
         else
-			local matchFrame = CreateFrame("Frame", "MatchFrame", nil, "BackdropTemplate")
+            local frameName = "MatchFrame_" .. tostring(matchID) .. "_" .. tostring(i)
+            local matchFrame = CreateFrame("Frame", frameName, nil, "BackdropTemplate")
 			if UIConfig.isCompact then
 				matchFrame:SetSize(parentWidth * 2, parentHeight) -- double the width of the matchFrame in compact mode
 			else
@@ -3040,7 +3059,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 				ToggleNestedTable(matchFrame, nestedTable, content)
 			end)
 			
-			content.matchFrameByID[matchID] = matchFrame
+			content.matchFrameByID[frameKey] = matchFrame
 			table.insert(content.matchFrames, matchFrame)
 		end
     end
@@ -3230,13 +3249,14 @@ local function CreateClickableName(parent, stats, matchEntry, x, y, columnWidth,
   local playerName = stats.name
 
   -- RatedStats_Achiev (optional): show highest PvP achievement icon if available
-  local achievIconPath
+  local achievIconPath, achievIconTint
+
   if type(C_AddOns) == "table" and type(C_AddOns.GetAddOnEnableState) == "function" then
       if C_AddOns.GetAddOnEnableState("RatedStats_Achiev", nil) > 0
           and type(_G.RSTATS_Achiev_GetHighestPvpRank) == "function"
           and type(_G.RSTATS_Achiev_AddAchievementInfoToTooltip) == "function"
       then
-          achievIconPath = select(1, _G.RSTATS_Achiev_GetHighestPvpRank(playerName))
+          achievIconPath, _, achievIconTint = _G.RSTATS_Achiev_GetHighestPvpRank(playerName)
       end
   end
 
@@ -3254,6 +3274,12 @@ local function CreateClickableName(parent, stats, matchEntry, x, y, columnWidth,
       local iconTex = iconBtn:CreateTexture(nil, "OVERLAY")
       iconTex:SetAllPoints()
       iconTex:SetTexture(achievIconPath)
+
+      if achievIconTint and type(achievIconTint) == "table" then
+          iconTex:SetVertexColor(achievIconTint[1] or 1, achievIconTint[2] or 1, achievIconTint[3] or 1)
+      else
+          iconTex:SetVertexColor(1, 1, 1)
+      end
 
       iconBtn:SetScript("OnEnter", function(self)
           GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -3285,7 +3311,8 @@ local function CreateClickableName(parent, stats, matchEntry, x, y, columnWidth,
 end
 
 function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMissedGame, content, matchEntry, tabID)
-	local nestedTable = CreateFrame("Frame", "NestedTable_" .. (parent:GetName() or "unknown"), parent, "BackdropTemplate")
+    local nestedName = parent:GetName() and ("NestedTable_" .. parent:GetName()) or nil
+    local nestedTable = CreateFrame("Frame", nestedName, parent, "BackdropTemplate")
 
     -- Determine the match type using the correct function
     local matchType = IdentifyPvPMatchType()

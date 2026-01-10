@@ -13,6 +13,12 @@ local maxRetries = 30
 local retryCount = 0
 local retryInterval = 10  -- ⏱️ Inspect every 10 seconds
 
+-- PTR/Midnight: ensure we never use secret-tainted GUID values as table keys
+local function NormalizeGUID(guid)
+    if not guid then return nil end
+    return tostring(guid)
+end
+
 function GetPlayerFullName(unit)
     local name, realm = UnitName(unit)
     realm = realm or GetRealmName()
@@ -39,7 +45,8 @@ local function IsRatedPvP()
 end
 
 local function GetUnitTokenByGUID(guid)
-	return GUIDToUnitToken[guid]
+    guid = NormalizeGUID(guid)
+    return guid and GUIDToUnitToken[guid]
 end
 
 local function GetRelevantUnits(callback)
@@ -48,17 +55,17 @@ local function GetRelevantUnits(callback)
 
     if C_PvP.IsRatedSoloShuffle() then
         expectedMax = 6
-        tokenTypes = { "party", "arena" }
+        tokenTypes = { "party" } -- Midnight: do not scan enemies (arena tokens)
     elseif C_PvP.IsRatedArena() then
         local matchBracket = C_PvP.GetActiveMatchBracket()
         expectedMax = (matchBracket == 0) and 4 or 6
-        tokenTypes = { "party", "arena" }
+        tokenTypes = { "party" } -- Midnight: do not scan enemies (arena tokens)
     elseif C_PvP.IsRatedBattleground() then
         expectedMax = 20
-        tokenTypes = { "raid", "nameplate" }
+        tokenTypes = { "raid", "nameplate" } -- nameplates filtered to friendlies below
     elseif C_PvP.IsSoloRBG() then
         expectedMax = 16
-        tokenTypes = { "raid", "nameplate" }
+        tokenTypes = { "raid", "nameplate" } -- nameplates filtered to friendlies below
     end
 
     local seen = {}
@@ -67,13 +74,15 @@ local function GetRelevantUnits(callback)
     local function ScanLoop()
         for _, prefix in ipairs(tokenTypes) do
             for i = 1, 20 do
-                local unit = prefix .. i
                 if UnitExists(unit) and UnitIsPlayer(unit) then
-                    local guid = UnitGUID(unit)
-                    if guid and not seen[guid] then
-                        seen[guid] = true
-                        foundCount = foundCount + 1
-                        callback(unit, guid) -- ⏱️ Send unit to processing immediately
+                    -- Midnight: only process friendlies; enemies can produce "secret" values.
+                    if UnitIsFriend("player", unit) then
+                        local guid = NormalizeGUID(UnitGUID(unit))
+                        if guid and not seen[guid] then
+                            seen[guid] = true
+                            foundCount = foundCount + 1
+                            callback(unit, guid) -- ⏱️ Send unit to processing immediately
+                        end
                     end
                 end
             end
@@ -107,7 +116,7 @@ local function ProcessInspectQueue()
     NotifyInspect(unit)
 
     C_Timer.After(10, function()
-        local guid = UnitGUID(unit)
+        local guid = NormalizeGUID(UnitGUID(unit))
         if not guid then
             InspectInProgress = false
             ProcessInspectQueue()
@@ -128,8 +137,8 @@ local function ProcessInspectQueue()
         if importString and type(importString) == "string" and importString ~= "" and (not issecretvalue or not issecretvalue(importString)) then
             talents.loadout = importString
             talents.nameplate = unit
-			RSTATS.DetectedPlayerTalents[guid] = talents
-			completedUnits[guid] = true
+            RSTATS.DetectedPlayerTalents[guid] = talents
+            completedUnits[guid] = true
         else
             -- ❌ Requeue if missing/secret data, but don't loop forever
             InspectRetryByGUID[guid] = (InspectRetryByGUID[guid] or 0) + 1
@@ -147,7 +156,7 @@ local function ProcessInspectQueue()
 end
 
 local function ScanSelfTalents()
-    local guid = UnitGUID("player")
+    local guid = NormalizeGUID(UnitGUID("player"))
     if not guid then return end
 
     local importString = C_Traits.GenerateInspectImportString("player")
@@ -170,7 +179,8 @@ local function ScanFriendlyUnitTalents(unitToken)
         if not name then return end
         realm = realm and realm ~= "" and realm or GetRealmName()
         local fullName = name .. "-" .. realm
-        local guid = UnitGUID(unitToken)
+        local guid = NormalizeGUID(UnitGUID(unitToken))
+		if not guid then return end
 
         if not C_Traits.HasValidInspectData() then return end
         local talents = {
@@ -203,7 +213,8 @@ local function TryInspectUnit(unitToken)
 	if not name then return false end
 	realm = realm and realm ~= "" and realm or GetRealmName()
 	local fullName = name .. "-" .. realm
-	local guid = UnitGUID(unitToken)
+    local guid = NormalizeGUID(UnitGUID(unitToken))
+    if not guid then return false end
 	
 	if completedUnits[guid] then
 		return false
@@ -216,7 +227,7 @@ local function TryInspectUnit(unitToken)
 			return -- ❌ Don't continue this scan; it will retry on next loop
 		end
 	
-		local guid = UnitGUID(unitToken)
+		local guid = NormalizeGUID(UnitGUID(unitToken))
 		if not guid then
 			return
 		end
@@ -253,6 +264,8 @@ local function TryInspectUnit(unitToken)
 end
 
 function NeedsRescan(guid)
+    guid = NormalizeGUID(guid)
+    if not guid then return true end
     local entry = RSTATS.DetectedPlayerTalents[guid]
     if not entry then return true end
 
