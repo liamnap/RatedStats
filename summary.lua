@@ -332,7 +332,7 @@ local function CreateBracketCard(parent)
     card.spark = CreateFrame("Frame", nil, card, "BackdropTemplate")
     card.spark:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 10, 28)
     card.spark:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -10, 28)
-    card.spark:SetHeight(30)
+    card.spark:SetHeight(120)
     if card.spark.SetBackdrop then
         card.spark:SetBackdrop({ bgFile = "Interface/Tooltips/UI-Tooltip-Background" })
         card.spark:SetBackdropColor(0, 0, 0, 0.25)
