@@ -524,7 +524,8 @@ local function CreateBracketCard(parent)
         local h = self:GetHeight() or 160
 
         local padX = 10
-        local yAxisW = 18  -- inner gutter width (used on BOTH sides for symmetrical padding)
+        -- 4-digit CR/MMR axis labels need real width; 18px truncates to "1..."
+        local yAxisW = 30  -- inner gutter width (used on BOTH sides for symmetrical padding)
         self._xInsetL = yAxisW
         self._xInsetR = yAxisW
 
@@ -550,16 +551,18 @@ local function CreateBracketCard(parent)
         self.spark:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -padX, sparkBottom)
         self.spark:SetHeight(sparkH)
 
-        -- Y labels live INSIDE the left inset of the spark (no shifting the whole chart)
+        -- Y labels live in the LEFT gutter (not the plot area) so they don't get cropped.
         self.axisYMax:ClearAllPoints()
-        self.axisYMax:SetPoint("TOPLEFT", self.spark, "TOPLEFT", 2, 2)
-        self.axisYMax:SetWidth(yAxisW - 4)
+        self.axisYMax:SetPoint("TOPRIGHT", self.spark, "TOPLEFT", yAxisW - 2, 2)
+        self.axisYMax:SetWidth(yAxisW)
         self.axisYMax:SetJustifyH("RIGHT")
+        self.axisYMax:SetWordWrap(false)
 
         self.axisYMin:ClearAllPoints()
-        self.axisYMin:SetPoint("BOTTOMLEFT", self.spark, "BOTTOMLEFT", 2, -2)
-        self.axisYMin:SetWidth(yAxisW - 4)
+        self.axisYMin:SetPoint("BOTTOMLEFT", self.spark, "BOTTOMLEFT", yAxisW - 2, -2)
+        self.axisYMin:SetWidth(yAxisW)
         self.axisYMin:SetJustifyH("RIGHT")
+        self.axisYMin:SetWordWrap(false)
 
         -- Label sits just above the spark
         self.sparkLabel:ClearAllPoints()
@@ -790,6 +793,17 @@ function Summary:Refresh()
                 self.frame.seasonNote3:SetText(ColorText("Season End: ?"))
             end
         end
+
+        -- IMPORTANT: first open can overlap because LayoutCards() ran before these strings
+        -- had final rendered heights. Re-layout on next frame after text updates.
+        if self.frame.LayoutCards then
+            C_Timer.After(0, function()
+                if Summary and Summary.frame and Summary.frame:IsShown() and Summary.frame.LayoutCards then
+                    Summary.frame:LayoutCards()
+                end
+            end)
+        end
+
     end
 
     for i, bracket in ipairs(BRACKETS) do
