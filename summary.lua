@@ -183,6 +183,12 @@ local function Downsample(values, times, maxPoints)
     return outV, outT
 end
 
+local function Clamp(v, lo, hi)
+    if v < lo then return lo end
+    if v > hi then return hi end
+    return v
+end
+
 -- Build per-season-week series.
 -- 1) wins: winrate% per week (0..100)
 -- 2) cr: cumulative CR delta across weeks
@@ -325,14 +331,13 @@ local function CreateBracketCard(parent)
 
     -- Single sparkline strip (matches your mock layout).
     card.sparkLabel = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    card.sparkLabel:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 10, 156)
+    card.sparkLabel:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 10, 52)
     card.sparkLabel:SetFont(GetUnicodeSafeFont(), 9, "OUTLINE")
     card.sparkLabel:SetText("Wins")
 
     card.spark = CreateFrame("Frame", nil, card, "BackdropTemplate")
-    card.spark:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 10, 28)
-    card.spark:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -10, 28)
-    card.spark:SetHeight(120)
+    -- Layout() will position/size this based on card height
+
     if card.spark.SetBackdrop then
         card.spark:SetBackdrop({ bgFile = "Interface/Tooltips/UI-Tooltip-Background" })
         card.spark:SetBackdropColor(0, 0, 0, 0.25)
@@ -351,11 +356,11 @@ local function CreateBracketCard(parent)
     card.axisYMin:SetJustifyH("RIGHT")
 
     card.axisXStart = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    card.axisXStart:SetPoint("TOPLEFT", card.spark, "BOTTOMLEFT", 0, -2)
+    -- anchored by Layout()
     card.axisXStart:SetFont(GetUnicodeSafeFont(), 8, "OUTLINE")
 
     card.axisXEnd = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    card.axisXEnd:SetPoint("TOPRIGHT", card.spark, "BOTTOMRIGHT", 0, -2)
+    -- anchored by Layout()
     card.axisXEnd:SetFont(GetUnicodeSafeFont(), 8, "OUTLINE")
     card.axisXEnd:SetJustifyH("RIGHT")
 
@@ -384,14 +389,58 @@ local function CreateBracketCard(parent)
     end
 
     card.footerLeft = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    card.footerLeft:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 10, 2)
+    -- anchored by Layout()
     card.footerLeft:SetFont(GetUnicodeSafeFont(), 9, "OUTLINE")
     card.footerLeft:SetText("")
 
     card.footerRight = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    card.footerRight:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -10, 2)
+    -- anchored by Layout()
     card.footerRight:SetFont(GetUnicodeSafeFont(), 9, "OUTLINE")
     card.footerRight:SetText("")
+
+    function card:Layout()
+        -- Percent-based sizing so it scales with UI.
+        -- Keep a clean bottom stack: footer (bottom) -> dates -> spark.
+        local h = self:GetHeight() or 160
+
+        local padX = 10
+        local footerY = 2
+        local dateGap = 10      -- vertical space reserved for the date axis line
+        local sparkBottom = footerY + 2 + dateGap
+
+        -- Spark height is ~28% of card height, clamped to keep it sensible.
+        local sparkH = Clamp(math.floor(h * 0.28), 26, 64)
+
+        self.spark:ClearAllPoints()
+        self.spark:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", padX, sparkBottom)
+        self.spark:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -padX, sparkBottom)
+        self.spark:SetHeight(sparkH)
+
+        -- Label sits just above the spark
+        self.sparkLabel:ClearAllPoints()
+        self.sparkLabel:SetPoint("BOTTOMLEFT", self.spark, "TOPLEFT", 0, 4)
+
+        -- Date axis sits between spark and footer
+        self.axisXStart:ClearAllPoints()
+        self.axisXStart:SetPoint("TOPLEFT", self.spark, "BOTTOMLEFT", 0, -1)
+
+        self.axisXEnd:ClearAllPoints()
+        self.axisXEnd:SetPoint("TOPRIGHT", self.spark, "BOTTOMRIGHT", 0, -1)
+
+        -- Footer is pushed BELOW the dates so it can’t overlap.
+        self.footerLeft:ClearAllPoints()
+        self.footerLeft:SetPoint("TOPLEFT", self.axisXStart, "BOTTOMLEFT", 0, -1)
+
+        self.footerRight:ClearAllPoints()
+        self.footerRight:SetPoint("TOPRIGHT", self.axisXEnd, "BOTTOMRIGHT", 0, -1)
+    end
+
+    card:SetScript("OnSizeChanged", function(self)
+        self:Layout()
+        if self._data and Summary and Summary._RenderCardGraph then
+            Summary:_RenderCardGraph(self)
+        end
+    end)
 
     -- Which graph this card is currently showing:
     -- 1 = Wins (season-week wins)
@@ -424,6 +473,7 @@ local function CreateBracketCard(parent)
         end
 
         C_Timer.After(0, function()
+            self:Layout()
             if Summary and Summary._RenderCardGraph then
                 Summary:_RenderCardGraph(self)
             end
@@ -454,8 +504,10 @@ function Summary:Create(parentFrame)
     -- Layout: 5 cards across (same idea as your mock). If the window is narrow, they will still fit but be tighter.
     local padding = 12
     local totalW = parentFrame:GetWidth() > 0 and parentFrame:GetWidth() or 1000
+    local totalH = parentFrame:GetHeight() > 0 and parentFrame:GetHeight() or 700
     local cardW = math.floor((totalW - (padding * 6)) / 5)
-    local cardH = 160
+    -- 28% of the available height works well visually; clamp so it’s stable.
+    local cardH = Clamp(math.floor(totalH * 0.28), 160, 240)
 
     for i = 1, #BRACKETS do
         local card = CreateBracketCard(f)
