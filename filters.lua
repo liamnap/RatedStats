@@ -40,7 +40,7 @@ RatedStatsSeasons = {
     { label = "TWW S1", start = time({ year = 2024, month = 9, day = 10 }), finish = time({ year = 2025, month = 2, day = 25 }) },
     { label = "TWW S2", start = time({ year = 2025, month = 3, day = 4 }), finish = time({ year = 2025, month = 8, day = 5 }) },
     { label = "TWW S3", start = time({ year = 2025, month = 8, day = 12 }), finish = time({ year = 2026, month = 1, day = 20 }) },
-    { label = "Midnight S1", start = time({ year = 2026, month = 3, day = 4 }), finish = time({ year = 2025, month = 8, day = 5 }) },
+    { label = "Midnight S1", start = time({ year = 2026, month = 3, day = 4 }), finish = time({ year = 2026, month = 8, day = 5 }) },
 }
 
 function RSTATS:GetCurrentSeasonStart()
