@@ -310,10 +310,19 @@ local function CreateBracketCard(parent)
         self.mmrText:SetText(string.format("Current MMR: %d", SafeNumber(data.currentMMR)))
         self.winrateText:SetText(string.format("Winrate: %d%% (%d/%d/%d)", data.winrate or 0, data.win or 0, data.loss or 0, data.draw or 0))
 
-        -- wins fixed 0..100 so the line is stable.
-        DrawSpark(self.rowWins.spark, data.seriesWins or {}, 0, 100)
-        DrawSpark(self.rowCR.spark,   data.seriesCR or {})
-        DrawSpark(self.rowMMR.spark,  data.seriesMMR or {})
+        -- Draw after layout, otherwise GetWidth()/GetHeight() can be 0 and we draw nothing.
+        local wins = data.seriesWins or {}
+        local cr   = data.seriesCR   or {}
+        local mmr  = data.seriesMMR  or {}
+
+        C_Timer.After(0, function()
+            if not self:IsShown() then return end
+            if not self.rowWins or not self.rowWins.spark then return end
+            -- wins fixed 0..100 so the line is stable.
+            DrawSpark(self.rowWins.spark, wins, 0, 100)
+            DrawSpark(self.rowCR.spark,   cr)
+            DrawSpark(self.rowMMR.spark,  mmr)
+        end)
     end
 
     return card
