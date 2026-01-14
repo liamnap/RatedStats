@@ -4390,6 +4390,9 @@ function Config:CreateMenu()
 
         if i == 1 then
             tab:SetPoint("TOPLEFT", UIConfig, "BOTTOMLEFT", 10, 2)
+        elseif i == 6 then
+			-- Summary sits far-right, outside the frame (matches your screenshot)
+			tab:SetPoint("TOPRIGHT", UIConfig, "BOTTOMRIGHT", -10, 2)
         else
             tab:SetPoint("LEFT", tabs[i - 1], "RIGHT", -8, 0)
         end
@@ -4746,8 +4749,15 @@ function Config:CreateMenu()
 	if UIConfig.TeamRightButton then UIConfig.TeamRightButton:Hide() end
 
 	C_Timer.After(0.05, function()
-		if RSTATS.Summary and RSTATS.Summary.Refresh then
-			RSTATS.Summary:Refresh()
+		local tabID = PanelTemplates_GetSelectedTab(RSTATS.UIConfig) or 1
+		if tabID > 5 then return end -- Summary tab: do not run row filtering / stats bar updates
+
+		local dropdown = RSTATS.Dropdowns[tabID]
+		local selected = dropdown and UIDropDownMenu_GetText(dropdown) or "Today"
+		local filterKey = selected:lower():gsub(" ", "") or "today"
+
+		FilterAndSearchMatches(RatedStatsSearchBox and RatedStatsSearchBox:GetText() or "")
+		RSTATS:UpdateStatsView(filterKey, tabID)
 		end
 	end)
 
