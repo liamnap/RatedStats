@@ -3982,7 +3982,13 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
     if highestMatchEntry then
         -- Always have a fallback from the match entry itself
         currentCR  = tonumber(highestMatchEntry.cr)  or currentCR
-        currentMMR = tonumber(highestMatchEntry.mmr) or currentMMR
+        -- Prefer the match's stored team MMR (what the table shows) over entry.mmr
+        local teamMMR = tonumber(highestMatchEntry.friendlyMMR)
+        if teamMMR and teamMMR > 0 then
+            currentMMR = teamMMR
+        else
+            currentMMR = tonumber(highestMatchEntry.mmr) or currentMMR
+        end
 
         local isArena = (categoryID == 1 or categoryID == 2)
 
