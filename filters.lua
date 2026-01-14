@@ -38,7 +38,9 @@ local MapListsByTab = {
 RatedStatsSeasons = {
     { label = "DF S4", start = time({ year = 2024, month = 4, day = 23 }), finish = time({ year = 2024, month = 7, day = 22 }) },
     { label = "TWW S1", start = time({ year = 2024, month = 9, day = 10 }), finish = time({ year = 2025, month = 2, day = 25 }) },
-    { label = "TWW S2", start = time({ year = 2025, month = 3, day = 4 }), finish = 9999999999 },
+    { label = "TWW S2", start = time({ year = 2025, month = 3, day = 4 }), finish = time({ year = 2025, month = 8, day = 5 }) },
+    { label = "TWW S3", start = time({ year = 2025, month = 8, day = 12 }), finish = time({ year = 2026, month = 1, day = 20 }) },
+    { label = "Midnight S1", start = time({ year = 2026, month = 3, day = 4 }), finish = time({ year = 2025, month = 8, day = 5 }) },
 }
 
 function RSTATS:GetCurrentSeasonStart()
