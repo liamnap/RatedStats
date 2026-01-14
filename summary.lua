@@ -142,7 +142,9 @@ local function DrawSpark(frame, values, yMinFixed, yMaxFixed)
         local t = (v - yMin) / (yMax - yMin)
         if t < 0 then t = 0 end
         if t > 1 then t = 1 end
-        return t * h
+        local y = t * h
+        if y < 1 then y = 1 end
+        return y
     end
 
     for i = 1, n - 1 do
@@ -353,6 +355,30 @@ local function CreateBracketCard(parent)
         card.spark:SetBackdropColor(0, 0, 0, 0.25)
     end
     card.spark._lines = {}
+
+        -- Graphs often draw "too early" (spark has 0 width/height) on first open.
+    -- Redraw once the frame is actually sized and shown.
+    if not card._sparkHooks then
+        card._sparkHooks = true
+
+        card.spark:SetScript("OnShow", function()
+            if card._data and Summary and Summary._RenderCardGraph then
+                C_Timer.After(0, function()
+                    if card.spark and card.spark:GetWidth() > 2 and card.spark:GetHeight() > 2 then
+                        Summary:_RenderCardGraph(card)
+                    end
+                end)
+            end
+        end)
+
+        card.spark:SetScript("OnSizeChanged", function()
+            if card._data and Summary and Summary._RenderCardGraph then
+                if card.spark:GetWidth() > 2 and card.spark:GetHeight() > 2 then
+                    Summary:_RenderCardGraph(card)
+                end
+            end
+        end)
+    end
 
     card.footerLeft = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     card.footerLeft:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 10, 6)
