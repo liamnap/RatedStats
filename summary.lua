@@ -162,9 +162,27 @@ local function DrawSpark(frame, values, yMinFixed, yMaxFixed)
             table.insert(frame._lines, line)
         end
     end
+
+    return yMin, yMax
 end
 
---
+local function Downsample(values, times, maxPoints)
+    local n = values and #values or 0
+    if n <= maxPoints then return values, times end
+    if maxPoints < 2 then maxPoints = 2 end
+
+    local outV, outT = {}, {}
+    local step = (n - 1) / (maxPoints - 1)
+    for i = 1, maxPoints do
+        local idx = math.floor((i - 1) * step + 1.5)
+        if idx < 1 then idx = 1 end
+        if idx > n then idx = n end
+        outV[i] = values[idx]
+        outT[i] = times and times[idx] or nil
+    end
+    return outV, outT
+end
+
 -- Build per-season-week series.
 -- 1) wins: winrate% per week (0..100)
 -- 2) cr: cumulative CR delta across weeks
@@ -172,94 +190,49 @@ end
 --
 local function BuildSeasonWeeklySeries(history)
     if not history or #history == 0 then
-        return {}, {}, {}, 0
+        return {}, {}, {}, {}
     end
 
     local seasonStart = RSTATS:GetCurrentSeasonStart()
     local seasonFinish = RSTATS:GetCurrentSeasonFinish()
     if not seasonStart or not seasonFinish then
-        return {}, {}, {}, 0
+        return {}, {}, {}, {}
     end
-
-    local now = time()
-    local endClamp = math.min(now, seasonFinish)
-    local weeks = math.max(1, math.floor((endClamp - seasonStart) / 604800) + 1)
 
     local playerName = GetPlayerFullName()
-    local buckets = {}
-    for i = 1, weeks do
-        buckets[i] = {
-            w = 0,
-            l = 0,
-            d = 0,
-            cr = 0,
-            mmrFirst = nil,
-            mmrLast = nil,
-        }
-    end
 
     table.sort(history, SortByEndTime)
+
+    local winsSeries, crSeries, mmrSeries, times = {}, {}, {}, {}
+    local winsCum = 0
 
     for _, match in ipairs(history) do
         local t = match.endTime or match.timestamp
         if t and t >= seasonStart and t < seasonFinish then
-            local week = math.floor((t - seasonStart) / 604800) + 1
-            if week >= 1 and week <= weeks then
-                local b = buckets[week]
+            local wl = match.friendlyWinLoss or ""
+            if wl:find("W") then winsCum = winsCum + 1 end
 
-                local wl = match.friendlyWinLoss or ""
-                if wl:find("W") then
-                    b.w = b.w + 1
-                elseif wl:find("L") then
-                    b.l = b.l + 1
-                elseif wl:find("D") then
-                    b.d = b.d + 1
-                end
+            local cr = tonumber(match.cr)
+            local mmr = tonumber(match.mmr)
 
-                -- Pull personal CR/MMR deltas from playerStats (same approach as stats.lua)
-                if match.playerStats then
-                    for _, ps in ipairs(match.playerStats) do
-                        if ps.name == playerName then
-                            b.cr = b.cr + SafeNumber(ps.ratingChange)
-
-                            local mmr = tonumber(ps.postmatchMMR)
-                            if mmr then
-                                if not b.mmrFirst then b.mmrFirst = mmr end
-                                b.mmrLast = mmr
-                            end
-                            break
-                        end
+            if match.playerStats then
+                for _, ps in ipairs(match.playerStats) do
+                    if ps.name == playerName then
+                        cr  = tonumber(ps.newrating) or cr
+                        mmr = tonumber(ps.postmatchMMR) or mmr
+                        break
                     end
                 end
             end
+
+            table.insert(times, t)
+            table.insert(winsSeries, winsCum)
+            table.insert(crSeries, cr or 0)
+            table.insert(mmrSeries, mmr or 0)
         end
     end
 
-    local winsSeries = {}
-    local crSeries = {}
-    local mmrSeries = {}
-
-    local crCum = 0
-    local mmrCum = 0
-
-    for i = 1, weeks do
-        local b = buckets[i]
-        local total = b.w + b.l + b.d
-        winsSeries[i] = b.w -- wins per season-week
-
-        crCum = crCum + b.cr
-        crSeries[i] = crCum
-
-        local mmrDeltaWeek = 0
-        if b.mmrFirst and b.mmrLast then
-            mmrDeltaWeek = b.mmrLast - b.mmrFirst
-        end
-        mmrCum = mmrCum + mmrDeltaWeek
-        mmrSeries[i] = mmrCum
-    end
-
-    return winsSeries, crSeries, mmrSeries, weeks
-end
+    return winsSeries, crSeries, mmrSeries, times
 
 local function CreateBackdrop(frame)
     frame:SetBackdrop({
@@ -277,17 +250,36 @@ function Summary:_RenderCardGraph(card)
 
     local data = card._data
     local mode = card._graphMode or 1
+    local w = card.spark:GetWidth() or 0
+    local maxPoints = math.floor(w / 6)
+    if maxPoints < 2 then maxPoints = 2 end
+
+    local series, times
 
     if mode == 1 then
         card.sparkLabel:SetText("Wins")
-        DrawSpark(card.spark, data.seriesWins or {}) -- wins per season-week
+        series, times = Downsample(data.seriesWins or {}, data.seriesTimes or {}, maxPoints)
     elseif mode == 2 then
         card.sparkLabel:SetText("CR +/-")
-        DrawSpark(card.spark, data.seriesCR or {})   -- cumulative CR delta
+        series, times = Downsample(data.seriesCR or {}, data.seriesTimes or {}, maxPoints)
     else
         card.sparkLabel:SetText("MMR +/-")
-        DrawSpark(card.spark, data.seriesMMR or {})  -- cumulative MMR delta (per bracket)
+        series, times = Downsample(data.seriesMMR or {}, data.seriesTimes or {}, maxPoints)
     end
+
+    local yMin, yMax = DrawSpark(card.spark, series or {})
+    if card.axisYMin then card.axisYMin:SetText(yMin and tostring(math.floor(yMin)) or "") end
+    if card.axisYMax then card.axisYMax:SetText(yMax and tostring(math.floor(yMax)) or "") end
+
+    if times and #times >= 1 then
+        local t1, t2 = times[1], times[#times]
+        if card.axisXStart then card.axisXStart:SetText(t1 and date("%d %b", t1) or "") end
+        if card.axisXEnd then card.axisXEnd:SetText(t2 and date("%d %b", t2) or "") end
+    else
+        if card.axisXStart then card.axisXStart:SetText("") end
+        if card.axisXEnd then card.axisXEnd:SetText("") end
+    end
+
 end
 
 function Summary:_StartAutoCycle()
@@ -355,6 +347,26 @@ local function CreateBracketCard(parent)
         card.spark:SetBackdropColor(0, 0, 0, 0.25)
     end
     card.spark._lines = {}
+
+    -- Simple axes (compact): Y min/max on left, X start/end dates under spark
+    card.axisYMax = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    card.axisYMax:SetPoint("TOPLEFT", card.spark, "TOPLEFT", -6, 6)
+    card.axisYMax:SetFont(GetUnicodeSafeFont(), 8, "OUTLINE")
+    card.axisYMax:SetJustifyH("RIGHT")
+
+    card.axisYMin = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    card.axisYMin:SetPoint("BOTTOMLEFT", card.spark, "BOTTOMLEFT", -6, -6)
+    card.axisYMin:SetFont(GetUnicodeSafeFont(), 8, "OUTLINE")
+    card.axisYMin:SetJustifyH("RIGHT")
+
+    card.axisXStart = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    card.axisXStart:SetPoint("TOPLEFT", card.spark, "BOTTOMLEFT", 0, -2)
+    card.axisXStart:SetFont(GetUnicodeSafeFont(), 8, "OUTLINE")
+
+    card.axisXEnd = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    card.axisXEnd:SetPoint("TOPRIGHT", card.spark, "BOTTOMRIGHT", 0, -2)
+    card.axisXEnd:SetFont(GetUnicodeSafeFont(), 8, "OUTLINE")
+    card.axisXEnd:SetJustifyH("RIGHT")
 
         -- Graphs often draw "too early" (spark has 0 width/height) on first open.
     -- Redraw once the frame is actually sized and shown.
@@ -546,7 +558,7 @@ function Summary:Refresh()
         }
 
         -- Build the 3 graph series (this was missing, so graphs never draw)
-        local winsSeries, crSeries, mmrSeries = BuildSeasonWeeklySeries(history)
+        local winsSeries, crSeries, mmrSeries, times = BuildSeasonMatchSeries(history)
 
         local last25Delta, last25Count = GetLast25CRDelta(history)
 
@@ -567,6 +579,7 @@ function Summary:Refresh()
             seriesWins = winsSeries,
             seriesCR = crSeries,
             seriesMMR = mmrSeries,
+            seriesTimes = times,
 
             seasonWeekText = seasonWeekText,
             last25Text = last25Text,
@@ -636,7 +649,6 @@ function Summary:Refresh()
         self.frame.highLines[3]:SetText(string.format("Total Matches  %d", totalMatches))
         self.frame.highLines[4]:SetText(string.format("Longest Win Streak  %d", longestStreak))
         self.frame.highLines[5]:SetText(string.format("Total Killing Blows  %d", totalKBs))
-        self.frame.highLines[6]:SetText(string.format("Season Week  %s", (seasonWeekText:gsub("Season Week ", ""))))
     elseif self.frame.highLines then
         for i = 1, 6 do
             self.frame.highLines[i]:SetText("")
