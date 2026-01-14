@@ -233,6 +233,7 @@ local function BuildSeasonMatchSeries(history)
     end
 
     return winsSeries, crSeries, mmrSeries, times
+end
 
 local function CreateBackdrop(frame)
     frame:SetBackdrop({
