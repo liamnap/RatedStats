@@ -293,7 +293,7 @@ function Summary:_StartAutoCycle()
     if self._autoCycleStarted then return end
     self._autoCycleStarted = true
 
-    C_Timer.NewTicker(2.0, function()
+    C_Timer.NewTicker(5.0, function()
         if not self.frame or not self.frame:IsShown() then return end
         if not self.frame.cards then return end
         for _, card in ipairs(self.frame.cards) do
@@ -411,8 +411,9 @@ local function CreateBracketCard(parent)
         local axisY     = footerY + 10 + footerGap            -- axis sits above footer
         local sparkBottom = axisY + axisGap                   -- spark sits above axis
 
-        -- Spark height is ~28% of card height, clamped to keep it sensible.
-        local sparkH = Clamp(math.floor(h * 0.28), 26, 64)
+        -- Spark height drives the perceived "gap" between Winrate and the graph header.
+        -- Make it taller so the sparkLabel/spark sit higher (cuts the dead space roughly in half).
+        local sparkH = Clamp(math.floor(h * 0.42), 44, 96)
 
         self.spark:ClearAllPoints()
         self.spark:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", padX, sparkBottom)
@@ -421,7 +422,7 @@ local function CreateBracketCard(parent)
 
         -- Label sits just above the spark
         self.sparkLabel:ClearAllPoints()
-        self.sparkLabel:SetPoint("BOTTOMLEFT", self.spark, "TOPLEFT", 0, 10)
+        self.sparkLabel:SetPoint("BOTTOMLEFT", self.spark, "TOPLEFT", 0, 14)
 
         -- Date axis sits between spark and footer
         self.axisXStart:ClearAllPoints()
@@ -501,6 +502,22 @@ function Summary:Create(parentFrame)
     header:SetFont(GetUnicodeSafeFont(), 16, "OUTLINE")
     header:SetText("PvP Summary")
     f.header = header
+
+    -- Season note under the header (RatedStats colour)
+    f.seasonNote1 = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    f.seasonNote1:SetPoint("TOP", header, "BOTTOM", 0, -4)
+    f.seasonNote1:SetFont(GetUnicodeSafeFont(), 12, "OUTLINE")
+    f.seasonNote1:SetText(string.format("|cff%sTWW S3|r", RS_COLOR_HEX))
+
+    f.seasonNote2 = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    f.seasonNote2:SetPoint("TOP", f.seasonNote1, "BOTTOM", 0, -2)
+    f.seasonNote2:SetFont(GetUnicodeSafeFont(), 10, "OUTLINE")
+    f.seasonNote2:SetText("")
+
+    f.seasonNote3 = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    f.seasonNote3:SetPoint("TOP", f.seasonNote2, "BOTTOM", 0, -2)
+    f.seasonNote3:SetFont(GetUnicodeSafeFont(), 10, "OUTLINE")
+    f.seasonNote3:SetText("")
 
     f.cards = {}
 
@@ -582,6 +599,15 @@ function Summary:Refresh()
     local seasonStart = RSTATS:GetCurrentSeasonStart()
     local seasonFinish = RSTATS:GetCurrentSeasonFinish()
     local me = GetPlayerFullName()
+
+    -- Header season info
+    if self.frame.seasonNote2 and self.frame.seasonNote3 and seasonStart and seasonFinish then
+        self.frame.seasonNote2:SetText(string.format("|cff%sSeason Start: %s|r", RS_COLOR_HEX, date("%d %b %Y", seasonStart)))
+        self.frame.seasonNote3:SetText(string.format("|cff%sSeason End: %s|r", RS_COLOR_HEX, date("%d %b %Y", seasonFinish)))
+    elseif self.frame.seasonNote2 and self.frame.seasonNote3 then
+        self.frame.seasonNote2:SetText(string.format("|cff%sSeason Start: ?|r", RS_COLOR_HEX))
+        self.frame.seasonNote3:SetText(string.format("|cff%sSeason End: ?|r", RS_COLOR_HEX))
+    end
 
     for i, bracket in ipairs(BRACKETS) do
         local history = perChar[bracket.historyKey] or {}
