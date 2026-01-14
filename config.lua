@@ -4097,7 +4097,7 @@ function Config:CreateMenu()
 		{ text = "This Season", value = "thisSeason" }
 	}
 
-    -- Create 5 frames + scrollFrames for each tab
+    -- Create 5 frames + scrollFrames for the match-history tabs
     for i = 1, 5 do
         local frame = CreateFrame("Frame", "TabFrame", UIConfig)
         frame:SetPoint("TOPLEFT", UIConfig, "TOPLEFT", 20, -100)
@@ -4197,13 +4197,27 @@ function Config:CreateMenu()
         scrollFrames[i]   = scrollFrame
         scrollContents[i] = content
     end
-	
+
+	-- Summary tab (Option B) content frame: no scroll rows, dashboard only.
+	-- Keep it as a normal contentFrame so the tab switching stays simple.
+	local summaryFrame = CreateFrame("Frame", "RatedStatsSummaryTab", UIConfig)
+	summaryFrame:SetPoint("TOPLEFT", UIConfig, "TOPLEFT", 20, -100)
+	summaryFrame:SetPoint("BOTTOMRIGHT", UIConfig, "BOTTOMRIGHT", -20, 40)
+	summaryFrame:SetClipsChildren(true)
+	summaryFrame:Hide()
+	contentFrames[6] = summaryFrame
+
      -- expose frames before any history is built
     RSTATS.UIConfig       = UIConfig
     RSTATS.ContentFrames  = contentFrames
     RSTATS.ScrollFrames   = scrollFrames
     RSTATS.ScrollContents = scrollContents
 	
+	-- Build the Summary dashboard UI (in a new file) once UIConfig exists.
+	if RSTATS.Summary and RSTATS.Summary.Create then
+		RSTATS.Summary:Create(summaryFrame)
+	end
+
 	local selectedTimeFilter = "today"
 	
 	local Filters = RatedStatsFilters  -- Already exposed globally
@@ -4366,7 +4380,7 @@ function Config:CreateMenu()
 	end
 
     -- Tab buttons
-    local tabNames = { "Solo Shuffle", "2v2", "3v3", "RBG", "Solo RBG" }
+    local tabNames = { "Solo Shuffle", "2v2", "3v3", "RBG", "Solo RBG", "Summary" }
     local tabs = {}
     for i, name in ipairs(tabNames) do
         local tab = CreateFrame("Button","RatedStatsTab"..i,UIConfig,"PanelTabButtonTemplate")
@@ -4389,12 +4403,34 @@ function Config:CreateMenu()
 			f:SetShown(j == tabID)
 			end
 			
+			-- Summary tab hides search/filters + bottom stats bar.
+			local isSummary = (tabID == 6)
+			if UIConfig.searchBox then UIConfig.searchBox:SetShown(not isSummary) end
+			if UIConfig.filterButton then UIConfig.filterButton:SetShown(not isSummary) end
+			if UIConfig.clearFilterButton then UIConfig.clearFilterButton:SetShown(not isSummary) end
+			if statsBar then statsBar:SetShown(not isSummary) end
+
+			-- Summary has no friendly/enemy paging.
+			if UIConfig.TeamLeftButton then UIConfig.TeamLeftButton:SetShown(UIConfig.isCompact and not isSummary) end
+			if UIConfig.TeamRightButton then UIConfig.TeamRightButton:SetShown(UIConfig.isCompact and not isSummary) end
+
 			-- always go back to page 1 on a brand-new tab
 			UIConfig.ActiveTeamView = 1
 			UpdateArrowState()
 		
 			ACTIVE_TAB_ID = tabID
 			
+			-- Summary refresh is separate (no rows, no filtering pass).
+			if isSummary then
+				if RSTATS.Summary and RSTATS.Summary.frame then
+					RSTATS.Summary.frame:Show()
+				end
+				if RSTATS.Summary and RSTATS.Summary.Refresh then
+					RSTATS.Summary:Refresh()
+				end
+				return
+			end
+
 			-- ✅ Adjust horizontal scroll to match current team view
 			local scrollFrame = RSTATS.ScrollFrames[tabID]
 			if UIConfig.isCompact then
@@ -4435,8 +4471,8 @@ function Config:CreateMenu()
         tabs[i] = tab
     end
     PanelTemplates_SetNumTabs(UIConfig, #tabs)
-    PanelTemplates_SetTab(UIConfig, 1)
-    contentFrames[1]:Show()
+    PanelTemplates_SetTab(UIConfig, 6)
+    contentFrames[6]:Show()
 
     -- A local function that calls your revised DisplayHistory (shown below)
     local function RefreshDisplay()
@@ -4680,34 +4716,39 @@ function Config:CreateMenu()
 	
 	-- In Config:CreateMenu, after all frames and tabs are set up:
 
-	local DEFAULT_TAB_ID = 1
-	for i, name in ipairs(tabNames) do
+	local DEFAULT_TAB_ID = 6
+	for i = 1, 5 do
 		local frame = contentFrames[i]
 		local content = scrollContents[i]
 	
-		frame:SetScript("OnShow", function()
-			if not content._initialized then
-				content._initialized = true
-				C_Timer.After(0.05, function()
-					FilterAndSearchMatches(RatedStatsSearchBox and RatedStatsSearchBox:GetText() or "")
-				end)
-			end
-		end)
+		if frame and content then
+			frame:SetScript("OnShow", function()
+				if not content._initialized then
+					content._initialized = true
+					C_Timer.After(0.05, function()
+						FilterAndSearchMatches(RatedStatsSearchBox and RatedStatsSearchBox:GetText() or "")
+					end)
+				end
+			end)
+		end
 	end
 	
 	PanelTemplates_SetTab(UIConfig, DEFAULT_TAB_ID)
 	contentFrames[DEFAULT_TAB_ID]:Show()
 	ACTIVE_TAB_ID = DEFAULT_TAB_ID
 	
-	-- Run filter on first visible tab
-	scrollContents[DEFAULT_TAB_ID]._initialized = true
+	-- Default view is Summary: hide match controls and refresh the dashboard.
+	if UIConfig.searchBox then UIConfig.searchBox:Hide() end
+	if UIConfig.filterButton then UIConfig.filterButton:Hide() end
+	if UIConfig.clearFilterButton then UIConfig.clearFilterButton:Hide() end
+	if statsBar then statsBar:Hide() end
+	if UIConfig.TeamLeftButton then UIConfig.TeamLeftButton:Hide() end
+	if UIConfig.TeamRightButton then UIConfig.TeamRightButton:Hide() end
+
 	C_Timer.After(0.05, function()
-		local dropdown = RSTATS.Dropdowns[DEFAULT_TAB_ID]
-		local selected = dropdown and UIDropDownMenu_GetText(dropdown) or "Today"
-		local filterKey = selected:lower():gsub(" ", "") or "today"
-	
-		FilterAndSearchMatches("")
-		RSTATS:UpdateStatsView(filterKey, DEFAULT_TAB_ID)
+		if RSTATS.Summary and RSTATS.Summary.Refresh then
+			RSTATS.Summary:Refresh()
+		end
 	end)
 
     -- ↪ When the main window closes, also tear down the copy‐name popup if open
