@@ -3963,17 +3963,22 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
     end
 
     -- 2) If we found an entry with the highest matchID, get the stats from that match
-    if highestMatchEntry and highestMatchEntry.playerStats then
-        -- Fallback: use the CR/MMR stored on the match entry itself.
-        -- This is more reliable than postmatchMMR (which is often 0/nil depending on bracket/API).
+    if highestMatchEntry then
+        -- Always have a fallback from the match entry itself
         currentCR  = tonumber(highestMatchEntry.cr)  or currentCR
         currentMMR = tonumber(highestMatchEntry.mmr) or currentMMR
 
-        for _, stats in ipairs(highestMatchEntry.playerStats) do
-            if stats.name == playerName and tonumber(stats.postmatchMMR) and tonumber(stats.postmatchMMR) > 0 then
-                currentCR  = tonumber(stats.newrating)     or currentCR
-                currentMMR = tonumber(stats.postmatchMMR)  or currentMMR
-                break
+        -- For 2v2/3v3 specifically, MMR should be from the *last match we played*.
+        -- Do NOT gate on > 0, because that causes '-' or stale values.
+        if highestMatchEntry.playerStats then
+            for _, stats in ipairs(highestMatchEntry.playerStats) do
+                if stats.name == playerName then
+                    local mmr = tonumber(stats.postmatchMMR)
+                    local cr  = tonumber(stats.newrating)
+                    if cr then currentCR = cr end
+                    if mmr then currentMMR = mmr end
+                    break
+                end
             end
         end
     end
