@@ -65,7 +65,7 @@ local function SafeNumber(v)
 end
 
 local function SortByEndTime(a, b)
-    return (a.endTime or 0) < (b.endTime or 0)
+    return (a.endTime or a.timestamp or 0) < (b.endTime or b.timestamp or 0)
 end
 
 local function GetLast25CRDelta(history)
@@ -157,8 +157,8 @@ local function DrawSpark(frame, values, yMinFixed, yMaxFixed)
             local line = frame:CreateLine(nil, "ARTWORK")
             line:SetThickness(1.5)
             line:SetColorTexture(1, 0.82, 0.2, 0.95) -- gold
-            line:SetStartPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", x1, y1)
-            line:SetEndPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", x2, y2)
+            line:SetStartPoint("BOTTOMLEFT", frame, x1, y1)
+            line:SetEndPoint("BOTTOMLEFT", frame, x2, y2)
             table.insert(frame._lines, line)
         end
     end
@@ -201,7 +201,7 @@ local function BuildSeasonWeeklySeries(history)
     table.sort(history, SortByEndTime)
 
     for _, match in ipairs(history) do
-        local t = match.endTime
+        local t = match.endTime or match.timestamp
         if t and t >= seasonStart and t < seasonFinish then
             local week = math.floor((t - seasonStart) / 604800) + 1
             if week >= 1 and week <= weeks then
