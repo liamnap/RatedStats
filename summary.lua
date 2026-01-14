@@ -325,7 +325,7 @@ local function CreateBracketCard(parent)
 
     -- Single sparkline strip (matches your mock layout).
     card.sparkLabel = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    card.sparkLabel:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 10, 52)
+    card.sparkLabel:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 10, 156)
     card.sparkLabel:SetFont(GetUnicodeSafeFont(), 9, "OUTLINE")
     card.sparkLabel:SetText("Wins")
 
