@@ -198,7 +198,7 @@ local function DrawSpark(frame, values, times, xMinFixed, xMaxFixed, yMinFixed, 
 
     local n = #values
     local useTimeX = (type(times) == "table" and #times == n and xMinFixed and xMaxFixed and xMaxFixed > xMinFixed)
-    local xStep = draw / (n - 1)
+    local xStep = drawW / (n - 1)
 
     local function mapX(i)
         if useTimeX then
