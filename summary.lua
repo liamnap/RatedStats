@@ -454,7 +454,7 @@ function Summary:_StartAutoCycle()
         if not self.frame or not self.frame:IsShown() then return end
         if not self.frame.cards then return end
         for _, card in ipairs(self.frame.cards) do
-            if card and card:IsShown() and card._data then
+            if card and card:IsShown() and card._data and not card._pauseGraphCycle then
                 card._graphMode = (card._graphMode % 3) + 1
                 self:_RenderCardGraph(card)
             end
@@ -641,6 +641,8 @@ local function CreateBracketCard(parent)
 
         card.spark:EnableMouse(true)
         card.spark:SetScript("OnEnter", function(self)
+            -- Pause ONLY this card's auto-rotation while hovering the graph
+            card._pauseGraphCycle = true
             self._hoverElapsed = 0
             self:SetScript("OnUpdate", function(s, elapsed)
                 s._hoverElapsed = (s._hoverElapsed or 0) + elapsed
@@ -651,6 +653,8 @@ local function CreateBracketCard(parent)
         end)
 
         card.spark:SetScript("OnLeave", function(self)
+            -- Resume rotation when mouse leaves graph
+            card._pauseGraphCycle = false
             self:SetScript("OnUpdate", nil)
             SparkHideHover(self)
         end)
