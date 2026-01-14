@@ -400,13 +400,15 @@ local function CreateBracketCard(parent)
 
     function card:Layout()
         -- Percent-based sizing so it scales with UI.
-        -- Keep a clean bottom stack: footer (bottom) -> dates -> spark.
+        -- Keep a clean bottom stack INSIDE the card: spark -> dates -> footer.
         local h = self:GetHeight() or 160
 
-        local padX = 10
-        local footerY = 2
-        local dateGap = 10      -- vertical space reserved for the date axis line
-        local sparkBottom = footerY + 2 + dateGap
+        -- scale spacing slightly with card height, but clamp so it doesn't get silly
+        local footerGap = Clamp(math.floor(h * 0.02), 2, 6)   -- spacing between date axis and footer
+        local axisGap   = Clamp(math.floor(h * 0.03), 6, 12)  -- spacing between spark and date axis
+        local footerY   = 4                                   -- keep footer safely inside the card
+        local axisY     = footerY + 10 + footerGap            -- axis sits above footer
+        local sparkBottom = axisY + axisGap                   -- spark sits above axis
 
         -- Spark height is ~28% of card height, clamped to keep it sensible.
         local sparkH = Clamp(math.floor(h * 0.28), 26, 64)
@@ -418,21 +420,21 @@ local function CreateBracketCard(parent)
 
         -- Label sits just above the spark
         self.sparkLabel:ClearAllPoints()
-        self.sparkLabel:SetPoint("BOTTOMLEFT", self.spark, "TOPLEFT", 0, 4)
+        self.sparkLabel:SetPoint("BOTTOMLEFT", self.spark, "TOPLEFT", 0, 10)
 
         -- Date axis sits between spark and footer
         self.axisXStart:ClearAllPoints()
-        self.axisXStart:SetPoint("TOPLEFT", self.spark, "BOTTOMLEFT", 0, -1)
+        self.axisXStart:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", padX, axisY)
 
         self.axisXEnd:ClearAllPoints()
-        self.axisXEnd:SetPoint("TOPRIGHT", self.spark, "BOTTOMRIGHT", 0, -1)
+        self.axisXEnd:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -padX, axisY)
 
-        -- Footer is pushed BELOW the dates so it can’t overlap.
+        -- Footer is BELOW the dates (still inside the card)
         self.footerLeft:ClearAllPoints()
-        self.footerLeft:SetPoint("TOPLEFT", self.axisXStart, "BOTTOMLEFT", 0, -1)
+        self.footerLeft:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", padX, footerY)
 
         self.footerRight:ClearAllPoints()
-        self.footerRight:SetPoint("TOPRIGHT", self.axisXEnd, "BOTTOMRIGHT", 0, -1)
+        self.footerRight:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -padX, footerY)
     end
 
     card:SetScript("OnSizeChanged", function(self)
