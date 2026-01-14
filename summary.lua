@@ -611,16 +611,18 @@ local function CreateBracketCard(parent)
         spark.hoverDot:Show()
 
         local t = hv.times and hv.times[idx] or nil
-        local dateText = t and date("%d %b %Y", t) or ""
+        local dateText = t and date("%d %b %Y %H:%M", t) or ""
         local valText = tostring(math.floor(tonumber(v) or 0))
 
         if GameTooltip then
             GameTooltip:SetOwner(spark, "ANCHOR_CURSOR")
             GameTooltip:ClearLines()
             if dateText ~= "" then
-                GameTooltip:AddLine(dateText .. ": " .. valText, 1, 1, 1)
+                -- Date/time + ": " in addon colour, value in white
+                local prefix = ColorText(dateText .. ": ")
+                GameTooltip:AddLine(prefix .. "|cffffffff" .. valText .. "|r")
             else
-                GameTooltip:AddLine(valText, 1, 1, 1)
+                GameTooltip:AddLine("|cffffffff" .. valText .. "|r")
             end
             GameTooltip:Show()
         end
