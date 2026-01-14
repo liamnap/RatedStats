@@ -325,14 +325,14 @@ local function CreateBracketCard(parent)
 
     -- Single sparkline strip (matches your mock layout).
     card.sparkLabel = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    card.sparkLabel:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 10, 40)
+    card.sparkLabel:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 10, 52)
     card.sparkLabel:SetFont(GetUnicodeSafeFont(), 9, "OUTLINE")
     card.sparkLabel:SetText("Wins")
 
     card.spark = CreateFrame("Frame", nil, card, "BackdropTemplate")
-    card.spark:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 10, 22)
-    card.spark:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -10, 22)
-    card.spark:SetHeight(16)
+    card.spark:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 10, 28)
+    card.spark:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -10, 28)
+    card.spark:SetHeight(30)
     if card.spark.SetBackdrop then
         card.spark:SetBackdrop({ bgFile = "Interface/Tooltips/UI-Tooltip-Background" })
         card.spark:SetBackdropColor(0, 0, 0, 0.25)
@@ -384,12 +384,12 @@ local function CreateBracketCard(parent)
     end
 
     card.footerLeft = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    card.footerLeft:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 10, 6)
+    card.footerLeft:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 10, 2)
     card.footerLeft:SetFont(GetUnicodeSafeFont(), 9, "OUTLINE")
     card.footerLeft:SetText("")
 
     card.footerRight = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    card.footerRight:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -10, 6)
+    card.footerRight:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -10, 2)
     card.footerRight:SetFont(GetUnicodeSafeFont(), 9, "OUTLINE")
     card.footerRight:SetText("")
 
