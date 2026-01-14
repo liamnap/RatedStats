@@ -299,16 +299,6 @@ function Summary:_StartAutoCycle()
     end)
 end
 
-local function GetSeasonWeekText()
-    local seasonStart = RSTATS:GetCurrentSeasonStart()
-    local seasonFinish = RSTATS:GetCurrentSeasonFinish()
-    if not seasonStart or not seasonFinish then return "" end
-    local now = time()
-    local endClamp = math.min(now, seasonFinish)
-    local week = math.max(1, math.floor((endClamp - seasonStart) / 604800) + 1)
-    return "Season Week " .. week
-end
-
 local function CreateBracketCard(parent)
     local card = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     CreateBackdrop(card)
