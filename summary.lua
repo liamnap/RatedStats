@@ -534,6 +534,7 @@ function Summary:Refresh()
         if seasonStart and seasonFinish then
             for _, m in ipairs(history) do
                 if m.endTime and m.endTime >= seasonStart and m.endTime < seasonFinish then
+                    table.insert(seasonMatches, m)
                     table.insert(overallSeasonMatches, m)
                 end
             end
@@ -543,6 +544,9 @@ function Summary:Refresh()
         local summary = Stats and Stats.CalculateSummary(seasonMatches, history, bracket.bracketID) or {
             win = 0, loss = 0, draw = 0, winrate = 0,
         }
+
+        -- Build the 3 graph series (this was missing, so graphs never draw)
+        local winsSeries, crSeries, mmrSeries = BuildSeasonWeeklySeries(history)
 
         local last25Delta, last25Count = GetLast25CRDelta(history)
 
@@ -559,7 +563,6 @@ function Summary:Refresh()
             draw = summary.draw or 0,
             winrate = summary.winrate or 0,
             matches = (summary.win or 0) + (summary.loss or 0) + (summary.draw or 0),
-
 
             seriesWins = winsSeries,
             seriesCR = crSeries,
