@@ -285,12 +285,16 @@ local function CreateBracketCard(parent)
         row.label:SetFont(GetUnicodeSafeFont(), 9, "OUTLINE")
         row.label:SetText(label)
 
-        row.spark = CreateFrame("Frame", nil, row)
+        -- Needs BackdropTemplate or SetBackdrop() won't exist.
+        row.spark = CreateFrame("Frame", nil, row, "BackdropTemplate")
         row.spark:SetPoint("LEFT", row.label, "RIGHT", 6, 0)
         row.spark:SetPoint("RIGHT", row, "RIGHT", 0, 0)
         row.spark:SetHeight(16)
-        row.spark:SetBackdrop({ bgFile = "Interface/Tooltips/UI-Tooltip-Background" })
-        row.spark:SetBackdropColor(0, 0, 0, 0.25)
+        -- Some builds can still strip backdrop methods; this keeps us safe.
+        if row.spark.SetBackdrop then
+            row.spark:SetBackdrop({ bgFile = "Interface/Tooltips/UI-Tooltip-Background" })
+            row.spark:SetBackdropColor(0, 0, 0, 0.25)
+        end
 
         row.spark._lines = {}
         return row
