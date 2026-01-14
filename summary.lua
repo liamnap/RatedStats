@@ -1036,7 +1036,7 @@ function Summary:Refresh()
         local last25Delta, last25Count = GetLast25CRDelta(history)
 
         local last25Text = ""
-        if last25Count > 0 then last25Text = string.format("%d games played  %+d CR", last25Count, last25Delta) end
+        if last25Count > 0 then last25Text = string.format("%d games played  %+d CR", last25Count - 1, last25Delta) end
 
         local cardData = {
             name = bracket.name,
