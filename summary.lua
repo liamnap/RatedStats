@@ -68,6 +68,58 @@ local function SortByEndTime(a, b)
     return (a.endTime or a.timestamp or 0) < (b.endTime or b.timestamp or 0)
 end
 
+local function ColorText(text)
+    if RSTATS and RSTATS.ColorText then
+        return RSTATS:ColorText(text)
+    end
+    -- fallback (shouldn't happen if core.lua loaded properly)
+    local hex = (RSTATS and RSTATS.Config and RSTATS.Config.ThemeColor) or "b69e86"
+    return string.format("|cff%s%s|r", tostring(hex):upper(), text)
+end
+
+local function GetCurrentSeasonLabel()
+    -- If you later add RSTATS:GetCurrentSeasonLabel() in filters.lua, this will use it.
+    if RSTATS and RSTATS.GetCurrentSeasonLabel then
+        return RSTATS:GetCurrentSeasonLabel()
+    end
+
+    -- Otherwise, derive from the season table you already keep in filters.lua
+    local seasons = _G.RatedStatsSeasons
+    if type(seasons) ~= "table" then return "" end
+
+    local now = time()
+    for _, s in ipairs(seasons) do
+        local st = tonumber(s.start)
+        local en = tonumber(s.finish)
+        if st and en and now >= st and now < en then
+            return tostring(s.label or "")
+        end
+    end
+    return ""
+end
+
+local function GetLatestPostMMRFromHistory(history)
+    if not history or #history == 0 then return nil end
+    local me = GetPlayerFullName()
+    local bestT, bestMMR
+
+    for _, match in ipairs(history) do
+        local t = match.endTime or match.timestamp
+        if t and match.playerStats then
+            for _, ps in ipairs(match.playerStats) do
+                if ps.name == me then
+                    local mmr = tonumber(ps.postmatchMMR)
+                    if mmr and (not bestT or t > bestT) then
+                        bestT, bestMMR = t, mmr
+                    end
+                    break
+                end
+            end
+        end
+    end
+    return bestMMR
+end
+
 local function GetLast25CRDelta(history)
     if not history or #history == 0 then return 0, 0 end
     table.sort(history, SortByEndTime)
@@ -278,7 +330,13 @@ function Summary:_RenderCardGraph(card)
     if card.axisYMin then card.axisYMin:SetText(yMin and tostring(math.floor(yMin)) or "") end
     if card.axisYMax then card.axisYMax:SetText(yMax and tostring(math.floor(yMax)) or "") end
 
-    if times and #times >= 1 then
+    local seasonStart = RSTATS and RSTATS.GetCurrentSeasonStart and RSTATS:GetCurrentSeasonStart() or nil
+    local seasonFinish = RSTATS and RSTATS.GetCurrentSeasonFinish and RSTATS:GetCurrentSeasonFinish() or nil
+
+    if seasonStart and seasonFinish then
+        if card.axisXStart then card.axisXStart:SetText(date("%d %b", seasonStart)) end
+        if card.axisXEnd then card.axisXEnd:SetText(date("%d %b", seasonFinish)) end
+    elseif times and #times >= 1 then
         local t1, t2 = times[1], times[#times]
         if card.axisXStart then card.axisXStart:SetText(t1 and date("%d %b", t1) or "") end
         if card.axisXEnd then card.axisXEnd:SetText(t2 and date("%d %b", t2) or "") end
@@ -286,7 +344,6 @@ function Summary:_RenderCardGraph(card)
         if card.axisXStart then card.axisXStart:SetText("") end
         if card.axisXEnd then card.axisXEnd:SetText("") end
     end
-
 end
 
 function Summary:_StartAutoCycle()
@@ -346,12 +403,12 @@ local function CreateBracketCard(parent)
 
     -- Simple axes (compact): Y min/max on left, X start/end dates under spark
     card.axisYMax = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    card.axisYMax:SetPoint("TOPLEFT", card.spark, "TOPLEFT", -6, 6)
+    card.axisYMax:SetPoint("TOPLEFT", card.spark, "TOPLEFT", -12, 2)
     card.axisYMax:SetFont(GetUnicodeSafeFont(), 8, "OUTLINE")
     card.axisYMax:SetJustifyH("RIGHT")
 
     card.axisYMin = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    card.axisYMin:SetPoint("BOTTOMLEFT", card.spark, "BOTTOMLEFT", -6, -6)
+    card.axisYMin:SetPoint("BOTTOMLEFT", card.spark, "BOTTOMLEFT", -12, -2)
     card.axisYMin:SetFont(GetUnicodeSafeFont(), 8, "OUTLINE")
     card.axisYMin:SetJustifyH("RIGHT")
 
@@ -405,15 +462,15 @@ local function CreateBracketCard(parent)
 
         local padX = 10
         -- scale spacing slightly with card height, but clamp so it doesn't get silly
-        local footerGap = Clamp(math.floor(h * 0.02), 2, 6)   -- spacing between date axis and footer
-        local axisGap   = Clamp(math.floor(h * 0.03), 6, 12)  -- spacing between spark and date axis
+        local footerGap = Clamp(math.floor(h * 0.02), 3, 8)   -- spacing between date axis and footer
+        local axisGap   = Clamp(math.floor(h * 0.03), 8, 14)  -- spacing between spark and date axis
         local footerY   = 4                                   -- keep footer safely inside the card
-        local axisY     = footerY + 10 + footerGap            -- axis sits above footer
+        local axisY     = footerY + 14 + footerGap            -- axis sits above footer
         local sparkBottom = axisY + axisGap                   -- spark sits above axis
 
         -- Spark height drives the perceived "gap" between Winrate and the graph header.
-        -- Make it taller so the sparkLabel/spark sit higher (cuts the dead space roughly in half).
-        local sparkH = Clamp(math.floor(h * 0.42), 44, 96)
+        -- Taller graph so it fills the card and reduces the empty gap from winrate -> header.
+        local sparkH = Clamp(math.floor(h * 0.42), 46, 110)
 
         self.spark:ClearAllPoints()
         self.spark:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", padX, sparkBottom)
@@ -422,7 +479,7 @@ local function CreateBracketCard(parent)
 
         -- Label sits just above the spark
         self.sparkLabel:ClearAllPoints()
-        self.sparkLabel:SetPoint("BOTTOMLEFT", self.spark, "TOPLEFT", 0, 14)
+        self.sparkLabel:SetPoint("BOTTOMLEFT", self.spark, "TOPLEFT", 0, 10)
 
         -- Date axis sits between spark and footer
         self.axisXStart:ClearAllPoints()
@@ -507,17 +564,14 @@ function Summary:Create(parentFrame)
     f.seasonNote1 = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     f.seasonNote1:SetPoint("TOP", header, "BOTTOM", 0, -4)
     f.seasonNote1:SetFont(GetUnicodeSafeFont(), 12, "OUTLINE")
-    f.seasonNote1:SetText(string.format("|cff%sTWW S3|r", RS_COLOR_HEX))
 
-    f.seasonNote2 = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    f.seasonNote2 = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.seasonNote2:SetPoint("TOP", f.seasonNote1, "BOTTOM", 0, -2)
     f.seasonNote2:SetFont(GetUnicodeSafeFont(), 10, "OUTLINE")
-    f.seasonNote2:SetText("")
 
-    f.seasonNote3 = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    f.seasonNote3 = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.seasonNote3:SetPoint("TOP", f.seasonNote2, "BOTTOM", 0, -2)
     f.seasonNote3:SetFont(GetUnicodeSafeFont(), 10, "OUTLINE")
-    f.seasonNote3:SetText("")
 
     f.cards = {}
 
@@ -601,12 +655,25 @@ function Summary:Refresh()
     local me = GetPlayerFullName()
 
     -- Header season info
-    if self.frame.seasonNote2 and self.frame.seasonNote3 and seasonStart and seasonFinish then
-        self.frame.seasonNote2:SetText(string.format("|cff%sSeason Start: %s|r", RS_COLOR_HEX, date("%d %b %Y", seasonStart)))
-        self.frame.seasonNote3:SetText(string.format("|cff%sSeason End: %s|r", RS_COLOR_HEX, date("%d %b %Y", seasonFinish)))
-    elseif self.frame.seasonNote2 and self.frame.seasonNote3 then
-        self.frame.seasonNote2:SetText(string.format("|cff%sSeason Start: ?|r", RS_COLOR_HEX))
-        self.frame.seasonNote3:SetText(string.format("|cff%sSeason End: ?|r", RS_COLOR_HEX))
+    if self.frame and self.frame.seasonNote1 then
+        local label = GetCurrentSeasonLabel()
+        if label ~= "" then
+            self.frame.seasonNote1:SetText(ColorText(label))
+        else
+            self.frame.seasonNote1:SetText(ColorText("Season"))
+        end
+
+        if seasonStart then
+            self.frame.seasonNote2:SetText(ColorText("Season Start: " .. date("%d %b %Y", seasonStart)))
+        else
+            self.frame.seasonNote2:SetText(ColorText("Season Start: ?"))
+        end
+
+        if seasonFinish then
+            self.frame.seasonNote3:SetText(ColorText("Season End: " .. date("%d %b %Y", seasonFinish)))
+        else
+            self.frame.seasonNote3:SetText(ColorText("Season End: ?"))
+        end
     end
 
     for i, bracket in ipairs(BRACKETS) do
@@ -638,7 +705,14 @@ function Summary:Refresh()
         local cardData = {
             name = bracket.name,
             currentCR = perChar[bracket.crKey] or 0,
-            currentMMR = perChar[bracket.mmrKey] or 0,
+            currentMMR = (function()
+                local mmr = perChar[bracket.mmrKey] or 0
+                if bracket.tabID == 2 or bracket.tabID == 3 then
+                    local last = GetLatestPostMMRFromHistory(history)
+                    if last then mmr = last end
+                end
+                return mmr
+            end)(),
 
             win = summary.win or 0,
             loss = summary.loss or 0,
