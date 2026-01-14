@@ -323,7 +323,6 @@ function Summary:Create(parentFrame)
 
     local f = CreateFrame("Frame", "RatedStatsSummaryFrame", parentFrame)
     f:SetAllPoints(parentFrame)
-    f:Hide()
     self.frame = f
 
     local header = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
