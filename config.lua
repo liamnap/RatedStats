@@ -3926,8 +3926,8 @@ end
 -- Define the DisplayCurrentCRMMR function
 function DisplayCurrentCRMMR(contentFrame, categoryID)
     -- Retrieve CR and MMR using GetPersonalRatedInfo for the specified categoryID
-    local currentCR = "-"
-	local currentMMR = "-"
+    local currentCR = "0"
+	local currentMMR = "0"
 	
     local categoryMappings = {
         [1] = "v2History",
@@ -3953,10 +3953,15 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
 
     -- 2) If we found an entry with the highest matchID, get the stats from that match
     if highestMatchEntry and highestMatchEntry.playerStats then
+        -- Fallback: use the CR/MMR stored on the match entry itself.
+        -- This is more reliable than postmatchMMR (which is often 0/nil depending on bracket/API).
+        currentCR  = tonumber(highestMatchEntry.cr)  or currentCR
+        currentMMR = tonumber(highestMatchEntry.mmr) or currentMMR
+
         for _, stats in ipairs(highestMatchEntry.playerStats) do
-            if stats.name == playerName and stats.postmatchMMR and stats.postmatchMMR > 0 then
-                currentCR = stats.newrating or "0"
-                currentMMR = stats.postmatchMMR or "0"
+            if stats.name == playerName and tonumber(stats.postmatchMMR) and tonumber(stats.postmatchMMR) > 0 then
+                currentCR  = tonumber(stats.newrating)     or currentCR
+                currentMMR = tonumber(stats.postmatchMMR)  or currentMMR
                 break
             end
         end
@@ -3988,14 +3993,14 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
 		contentFrame.crLabel:SetFont(GetUnicodeSafeFont(), 14)
 		contentFrame.crLabel:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 10, -10)
 	end
-	contentFrame.crLabel:SetText(RSTATS:ColorText("Current CR: ") .. currentCR)
+	contentFrame.crLabel:SetText(RSTATS:ColorText("Current CR: ") .. tostring(currentCR))
 	
 	if not contentFrame.mmrLabel then
 		contentFrame.mmrLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 		contentFrame.mmrLabel:SetFont(GetUnicodeSafeFont(), 14)
 		contentFrame.mmrLabel:SetPoint("TOPLEFT", contentFrame.crLabel, "BOTTOMLEFT", 0, -5)
 	end
-	contentFrame.mmrLabel:SetText(RSTATS:ColorText("Current MMR: ") .. currentMMR)
+	contentFrame.mmrLabel:SetText(RSTATS:ColorText("Current MMR: ") .. tostring(currentMMR))
 	
 	if not contentFrame.instructionLabel then
 		contentFrame.instructionLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
