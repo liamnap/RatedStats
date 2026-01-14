@@ -105,14 +105,23 @@ local function GetLatestPostMMRFromHistory(history)
 
     for _, match in ipairs(history) do
         local t = match.endTime or match.timestamp
-        if t and match.playerStats then
-            for _, ps in ipairs(match.playerStats) do
-                if ps.name == me then
-                    local mmr = tonumber(ps.postmatchMMR)
-                    if mmr and (not bestT or t > bestT) then
-                        bestT, bestMMR = t, mmr
+        if t then
+            -- Arena-safe: match-level team MMR (you store friendlyMMR on the match entry)
+            local matchMMR = tonumber(match.friendlyMMR) or tonumber(match.mmr)
+            if matchMMR and matchMMR > 0 and (not bestT or t > bestT) then
+                bestT, bestMMR = t, matchMMR
+            end
+
+            -- Fallback: playerStats postmatchMMR (works fine in SS/RBG where it exists)
+            if match.playerStats then
+                for _, ps in ipairs(match.playerStats) do
+                    if ps.name == me then
+                        local mmr = tonumber(ps.postmatchMMR)
+                        if mmr and mmr > 0 and (not bestT or t > bestT) then
+                            bestT, bestMMR = t, mmr
+                        end
+                        break
                     end
-                    break
                 end
             end
         end
