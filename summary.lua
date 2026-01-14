@@ -153,7 +153,7 @@ local function ClearSpark(frame)
     frame._lines = {}
 end
 
-local function DrawSpark(frame, values, yMinFixed, yMaxFixed)
+local function DrawSpark(frame, values, times, xMinFixed, xMaxFixed, yMinFixed, yMaxFixed)
     ClearSpark(frame)
 
     if not values or #values < 2 then
@@ -188,7 +188,20 @@ local function DrawSpark(frame, values, yMinFixed, yMaxFixed)
     end
 
     local n = #values
+    local useTimeX = (type(times) == "table" and #times == n and xMinFixed and xMaxFixed and xMaxFixed > xMinFixed)
     local xStep = w / (n - 1)
+
+    local function mapX(i)
+        if useTimeX then
+            local t = times[i]
+            if not t then return (i - 1) * xStep end
+            local u = (t - xMinFixed) / (xMaxFixed - xMinFixed)
+            if u < 0 then u = 0 end
+            if u > 1 then u = 1 end
+            return u * w
+        end
+        return (i - 1) * xStep
+    end
 
     local function mapY(v)
         local t = (v - yMin) / (yMax - yMin)
@@ -203,7 +216,7 @@ local function DrawSpark(frame, values, yMinFixed, yMaxFixed)
         local v1 = values[i]
         local v2 = values[i + 1]
         if v1 ~= nil and v2 ~= nil then
-            local x1, x2 = (i - 1) * xStep, i * xStep
+            local x1, x2 = mapX(i), mapX(i + 1)
             local y1, y2 = mapY(v1), mapY(v2)
 
             local line = frame:CreateLine(nil, "ARTWORK")
@@ -290,6 +303,28 @@ local function BuildSeasonMatchSeries(history)
         end
     end
 
+    -- Make the chart span the whole season on X (time-based),
+    -- and remain flat/zero until our first stored match.
+    if #times > 0 then
+        local firstWins = winsSeries[1] or 0
+        local firstCR   = crSeries[1] or 0
+        local firstMMR  = mmrSeries[1] or 0
+
+        local lastWins  = winsSeries[#winsSeries] or firstWins
+        local lastCR    = crSeries[#crSeries] or firstCR
+        local lastMMR   = mmrSeries[#mmrSeries] or firstMMR
+
+        table.insert(times, 1, seasonStart)
+        table.insert(winsSeries, 1, 0)           -- wins are genuinely 0 at season start
+        table.insert(crSeries, 1, firstCR)       -- CR/MMR: hold first observed value (not 0)
+        table.insert(mmrSeries, 1, firstMMR)
+
+        table.insert(times, seasonFinish)
+        table.insert(winsSeries, lastWins)
+        table.insert(crSeries, lastCR)
+        table.insert(mmrSeries, lastMMR)
+    end
+    
     return winsSeries, crSeries, mmrSeries, times
 end
 
@@ -326,12 +361,11 @@ function Summary:_RenderCardGraph(card)
         series, times = Downsample(data.seriesMMR or {}, data.seriesTimes or {}, maxPoints)
     end
 
-    local yMin, yMax = DrawSpark(card.spark, series or {})
-    if card.axisYMin then card.axisYMin:SetText(yMin and tostring(math.floor(yMin)) or "") end
-    if card.axisYMax then card.axisYMax:SetText(yMax and tostring(math.floor(yMax)) or "") end
-
     local seasonStart = RSTATS and RSTATS.GetCurrentSeasonStart and RSTATS:GetCurrentSeasonStart() or nil
     local seasonFinish = RSTATS and RSTATS.GetCurrentSeasonFinish and RSTATS:GetCurrentSeasonFinish() or nil
+
+    local yMin, yMax = DrawSpark(card.spark, series or {}, times, seasonStart, seasonFinish)    if card.axisYMin then card.axisYMin:SetText(yMin and tostring(math.floor(yMin)) or "") end
+    if card.axisYMax then card.axisYMax:SetText(yMax and tostring(math.floor(yMax)) or "") end
 
     if seasonStart and seasonFinish then
         if card.axisXStart then card.axisXStart:SetText(date("%d %b", seasonStart)) end
@@ -403,12 +437,12 @@ local function CreateBracketCard(parent)
 
     -- Simple axes (compact): Y min/max on left, X start/end dates under spark
     card.axisYMax = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    card.axisYMax:SetPoint("TOPLEFT", card.spark, "TOPLEFT", -12, 2)
+    card.axisYMax:SetPoint("TOPLEFT", card.spark, "TOPLEFT", -4, 2)
     card.axisYMax:SetFont(GetUnicodeSafeFont(), 8, "OUTLINE")
     card.axisYMax:SetJustifyH("RIGHT")
 
     card.axisYMin = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    card.axisYMin:SetPoint("BOTTOMLEFT", card.spark, "BOTTOMLEFT", -12, -2)
+    card.axisYMin:SetPoint("BOTTOMLEFT", card.spark, "BOTTOMLEFT", -4, -2)
     card.axisYMin:SetFont(GetUnicodeSafeFont(), 8, "OUTLINE")
     card.axisYMin:SetJustifyH("RIGHT")
 
@@ -461,11 +495,13 @@ local function CreateBracketCard(parent)
         local h = self:GetHeight() or 160
 
         local padX = 10
+        local yAxisW = 30  -- left gutter for 4-digit labels (increase if you want more)
+
         -- scale spacing slightly with card height, but clamp so it doesn't get silly
         local footerGap = Clamp(math.floor(h * 0.02), 3, 8)   -- spacing between date axis and footer
         local axisGap   = Clamp(math.floor(h * 0.03), 8, 14)  -- spacing between spark and date axis
         local footerY   = 4                                   -- keep footer safely inside the card
-        local axisY     = footerY + 14 + footerGap            -- axis sits above footer
+        local axisY     = footerY + 12 + footerGap            -- axis sits above footer
         local sparkBottom = axisY + axisGap                   -- spark sits above axis
 
         -- Spark height drives the perceived "gap" between Winrate and the graph header.
@@ -473,7 +509,7 @@ local function CreateBracketCard(parent)
         local sparkH = Clamp(math.floor(h * 0.42), 46, 110)
 
         self.spark:ClearAllPoints()
-        self.spark:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", padX, sparkBottom)
+        self.spark:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", padX + yAxisW, sparkBottom)
         self.spark:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -padX, sparkBottom)
         self.spark:SetHeight(sparkH)
 
@@ -483,14 +519,14 @@ local function CreateBracketCard(parent)
 
         -- Date axis sits between spark and footer
         self.axisXStart:ClearAllPoints()
-        self.axisXStart:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", padX, axisY)
+        self.axisXStart:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", padX + yAxisW, axisY)
 
         self.axisXEnd:ClearAllPoints()
         self.axisXEnd:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -padX, axisY)
 
         -- Footer is BELOW the dates (still inside the card)
         self.footerLeft:ClearAllPoints()
-        self.footerLeft:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", padX, footerY)
+        self.footerLeft:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", padX + yAxisW, footerY)
 
         self.footerRight:ClearAllPoints()
         self.footerRight:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -padX, footerY)
@@ -575,24 +611,56 @@ function Summary:Create(parentFrame)
 
     f.cards = {}
 
-    -- Layout: 5 cards across (same idea as your mock). If the window is narrow, they will still fit but be tighter.
-    local padding = 12
-    local totalW = parentFrame:GetWidth() > 0 and parentFrame:GetWidth() or 1000
-    local totalH = parentFrame:GetHeight() > 0 and parentFrame:GetHeight() or 700
-    local cardW = math.floor((totalW - (padding * 6)) / 5)
-    -- 28% of the available height works well visually; clamp so it’s stable.
-    local cardH = Clamp(math.floor(totalH * 0.28), 160, 240)
-
+    -- Create cards once; Layout() will size/position using %.
     for i = 1, #BRACKETS do
-        local card = CreateBracketCard(f)
-        card:SetSize(cardW, cardH)
-        if i == 1 then
-            card:SetPoint("TOPLEFT", f, "TOPLEFT", padding, -44)
-        else
-            card:SetPoint("LEFT", f.cards[i - 1], "RIGHT", padding, 0)
-        end
-        f.cards[i] = card
+        f.cards[i] = CreateBracketCard(f)
     end
+
+    function f:LayoutCards()
+        local totalW = self:GetWidth()
+        local totalH = self:GetHeight()
+        if not totalW or totalW <= 1 or not totalH or totalH <= 1 then return end
+
+        -- % based spacing
+        local sidePad = Clamp(math.floor(totalW * 0.02), 10, 26)   -- ~2% width
+        local gap     = Clamp(math.floor(totalW * 0.01),  8, 20)   -- ~1% width
+
+        -- Card height: user request ~15% of parent height (clamped for sanity)
+        local cardH = Clamp(math.floor(totalH * 0.15), 150, 240)
+
+        -- Card width: derived so 5 cards ALWAYS fit with side padding + gaps
+        local availW = totalW - (sidePad * 2) - (gap * 4)
+        local cardW = math.floor(availW / 5)
+        if cardW < 140 then cardW = 140 end
+
+        -- Compute header/notes block height dynamically so cards never overlap it
+        local headerH = (self.header and self.header:GetStringHeight()) or 18
+        local n1H = (self.seasonNote1 and self.seasonNote1:GetStringHeight()) or 12
+        local n2H = (self.seasonNote2 and self.seasonNote2:GetStringHeight()) or 10
+        local n3H = (self.seasonNote3 and self.seasonNote3:GetStringHeight()) or 10
+
+        -- Matches your existing TOP offsets: header at -10, then notes -4 / -2 / -2
+        local topBlockH = 10 + headerH + 4 + n1H + 2 + n2H + 2 + n3H
+        local topGap = Clamp(math.floor(totalH * 0.02), 10, 20)  -- space under season notes
+
+        local topY = -(topBlockH + topGap)
+
+        for i = 1, #self.cards do
+            local card = self.cards[i]
+            card:ClearAllPoints()
+            card:SetSize(cardW, cardH)
+
+            if i == 1 then
+                card:SetPoint("TOPLEFT", self, "TOPLEFT", sidePad, topY)
+            else
+                card:SetPoint("LEFT", self.cards[i - 1], "RIGHT", gap, 0)
+            end
+        end
+    end
+
+    f:SetScript("OnShow", function(self) self:LayoutCards() end)
+    f:SetScript("OnSizeChanged", function(self) self:LayoutCards() end)
+    C_Timer.After(0, function() if f and f.LayoutCards then f:LayoutCards() end end)
 
     -- Overall Highlights panel (bottom half)
     f.highlights = CreateFrame("Frame", nil, f, "BackdropTemplate")
