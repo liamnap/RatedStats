@@ -1,6 +1,7 @@
 -- summary.lua
 
 local _, RSTATS = ...
+local abs = math.abs
 
 RSTATS.Summary = RSTATS.Summary or {}
 local Summary = RSTATS.Summary
@@ -249,6 +250,21 @@ local function DrawSpark(frame, values, times, xMinFixed, xMaxFixed, yMinFixed, 
     return yMin, yMax
 end
 
+local function NearestIndexByTime(times, targetT)
+    local bestI, bestD
+    for i = 1, #times do
+        local t = times[i]
+        if t then
+            local d = abs(t - targetT)
+            if not bestD or d < bestD then
+                bestD = d
+                bestI = i
+            end
+        end
+    end
+    return bestI or 1
+end
+
 local function Downsample(values, times, maxPoints)
     local n = values and #values or 0
     if n <= maxPoints then return values, times end
@@ -393,6 +409,27 @@ function Summary:_RenderCardGraph(card)
         card._xInsetL or 0,
         card._xInsetR or 0
     )
+
+    -- Store hover data for tooltip/highlight
+    card.spark._hover = card.spark._hover or {}
+    local hv = card.spark._hover
+    hv.series = series or {}
+    hv.times  = times or {}
+    hv.yMin   = yMin
+    hv.yMax   = yMax
+    hv.mode   = mode
+    hv.xInsetL = card._xInsetL or 0
+    hv.xInsetR = card._xInsetR or 0
+    if seasonStart and seasonFinish then
+        hv.xMin = seasonStart
+        hv.xMax = seasonFinish
+        hv.useTimeX = true
+    else
+        hv.xMin = nil
+        hv.xMax = nil
+        hv.useTimeX = false
+    end
+
     if card.axisYMin then card.axisYMin:SetText(yMin and tostring(math.floor(yMin)) or "") end
     if card.axisYMax then card.axisYMax:SetText(yMax and tostring(math.floor(yMax)) or "") end
 
@@ -458,11 +495,164 @@ local function CreateBracketCard(parent)
     card.spark = CreateFrame("Frame", nil, card, "BackdropTemplate")
     -- Layout() will position/size this based on card height
 
+    -- Hover dot (highlight point)
+    card.spark.hoverDot = card.spark:CreateTexture(nil, "OVERLAY")
+    card.spark.hoverDot:SetSize(5, 5)
+    card.spark.hoverDot:SetColorTexture(1, 0.82, 0.2, 1) -- match line gold
+    card.spark.hoverDot:Hide()
+
+    local function SparkHideHover(spark)
+        if spark.hoverDot then spark.hoverDot:Hide() end
+        if GameTooltip and GameTooltip:IsOwned(spark) then
+            GameTooltip:Hide()
+        end
+    end
+
+    local function SparkUpdateHover(spark)
+        local hv = spark._hover
+        if not hv or not hv.series or #hv.series < 2 then
+            SparkHideHover(spark)
+            return
+        end
+
+        local w = spark:GetWidth() or 0
+        local h = spark:GetHeight() or 0
+        if w <= 2 or h <= 2 then
+            SparkHideHover(spark)
+            return
+        end
+
+        local xInsetL = tonumber(hv.xInsetL) or 0
+        local xInsetR = tonumber(hv.xInsetR) or 0
+        local drawW = w - xInsetL - xInsetR
+        if drawW <= 2 then
+            SparkHideHover(spark)
+            return
+        end
+
+        local x, y = GetCursorPosition()
+        local scale = spark:GetEffectiveScale() or 1
+        x = x / scale
+        y = y / scale
+
+        local left = spark:GetLeft()
+        local bottom = spark:GetBottom()
+        if not left or not bottom then
+            SparkHideHover(spark)
+            return
+        end
+
+        local lx = x - left
+        local ly = y - bottom
+
+        -- Only react when cursor is within spark bounds
+        if lx < 0 or lx > w or ly < 0 or ly > h then
+            SparkHideHover(spark)
+            return
+        end
+
+        -- Only within plot area (exclude insets)
+        if lx < xInsetL or lx > (w - xInsetR) then
+            SparkHideHover(spark)
+            return
+        end
+
+        local n = #hv.series
+        local idx
+
+        local u = (lx - xInsetL) / drawW
+        if u < 0 then u = 0 end
+        if u > 1 then u = 1 end
+
+        if hv.useTimeX and hv.xMin and hv.xMax and hv.xMax > hv.xMin and type(hv.times) == "table" and #hv.times == n then
+            local targetT = hv.xMin + u * (hv.xMax - hv.xMin)
+            idx = NearestIndexByTime(hv.times, targetT)
+        else
+            idx = math.floor(u * (n - 1) + 1.5)
+            if idx < 1 then idx = 1 end
+            if idx > n then idx = n end
+        end
+
+        local v = hv.series[idx]
+        if v == nil then
+            SparkHideHover(spark)
+            return
+        end
+
+        local yMin = hv.yMin or 0
+        local yMax = hv.yMax or (yMin + 1)
+        if yMax == yMin then yMax = yMin + 1 end
+
+        local function mapY(val)
+            local t = (val - yMin) / (yMax - yMin)
+            if t < 0 then t = 0 end
+            if t > 1 then t = 1 end
+            local yy = t * h
+            if yy < 1 then yy = 1 end
+            return yy
+        end
+
+        local function mapX(i)
+            if hv.useTimeX and hv.xMin and hv.xMax and hv.xMax > hv.xMin and hv.times and hv.times[i] then
+                local tt = hv.times[i]
+                local uu = (tt - hv.xMin) / (hv.xMax - hv.xMin)
+                if uu < 0 then uu = 0 end
+                if uu > 1 then uu = 1 end
+                return xInsetL + (uu * drawW)
+            end
+            return xInsetL + ((i - 1) * (drawW / (n - 1)))
+        end
+
+        local px = mapX(idx)
+        local py = mapY(v)
+
+        spark.hoverDot:ClearAllPoints()
+        spark.hoverDot:SetPoint("CENTER", spark, "BOTTOMLEFT", px, py)
+        spark.hoverDot:Show()
+
+        local t = hv.times and hv.times[idx] or nil
+        local dateText = t and date("%d %b %Y", t) or ""
+        local valText = tostring(math.floor(tonumber(v) or 0))
+
+        if GameTooltip then
+            GameTooltip:SetOwner(spark, "ANCHOR_CURSOR")
+            GameTooltip:ClearLines()
+            if dateText ~= "" then
+                GameTooltip:AddLine(dateText .. ": " .. valText, 1, 1, 1)
+            else
+                GameTooltip:AddLine(valText, 1, 1, 1)
+            end
+            GameTooltip:Show()
+        end
+    end
+
     if card.spark.SetBackdrop then
         card.spark:SetBackdrop({ bgFile = "Interface/Tooltips/UI-Tooltip-Background" })
         card.spark:SetBackdropColor(0, 0, 0, 0.25)
     end
     card.spark._lines = {}
+
+    -- Hover tooltip/highlight (throttled)
+    if not card.spark._hoverHooks then
+        card.spark._hoverHooks = true
+        card.spark._hoverElapsed = 0
+
+        card.spark:EnableMouse(true)
+        card.spark:SetScript("OnEnter", function(self)
+            self._hoverElapsed = 0
+            self:SetScript("OnUpdate", function(s, elapsed)
+                s._hoverElapsed = (s._hoverElapsed or 0) + elapsed
+                if s._hoverElapsed < 0.03 then return end
+                s._hoverElapsed = 0
+                SparkUpdateHover(s)
+            end)
+        end)
+
+        card.spark:SetScript("OnLeave", function(self)
+            self:SetScript("OnUpdate", nil)
+            SparkHideHover(self)
+        end)
+    end
 
     -- Simple axes (compact): Y min/max on left, X start/end dates under spark
     card.axisYMax = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
