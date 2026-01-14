@@ -518,8 +518,6 @@ function Summary:Refresh()
     local playerKey = GetPlayerFullName()
     local perChar = Database[playerKey] or {}
 
-    local seasonWeekText = GetSeasonWeekText()
-
     -- overall aggregates (across all brackets, this season)
     local overallSeasonMatches = {}
     local overallWinsByDay = {}
