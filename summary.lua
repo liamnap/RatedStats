@@ -660,8 +660,8 @@ function Summary:Create(parentFrame)
         local sidePad = Clamp(math.floor(totalW * 0.02), 10, 26)   -- ~2% width
         local gap     = Clamp(math.floor(totalW * 0.01),  8, 20)   -- ~1% width
 
-        -- Card height: user request ~15% of parent height (clamped for sanity)
-        local cardH = Clamp(math.floor(totalH * 0.15), 150, 240)
+        -- Raise max so the 30% can actually take effect on larger frames
+        local cardH = Clamp(math.floor(totalH * 0.30), 150, 420)
 
         -- Card width: derived so 5 cards ALWAYS fit with side padding + gaps
         local availW = totalW - (sidePad * 2) - (gap * 4)
