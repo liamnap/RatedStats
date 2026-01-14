@@ -362,6 +362,17 @@ function Summary:Create(parentFrame)
         end
         f.cards[i] = card
     end
+
+	-- First open: DB/current CR/MMR values may not be ready yet.
+	-- Run a delayed refresh so text/sparklines populate without needing a tab switch.
+	if not self._initialRefreshQueued then
+		self._initialRefreshQueued = true
+		C_Timer.After(0.10, function()
+			if Summary and Summary.Refresh then
+				Summary:Refresh()
+			end
+		end)
+	end
 end
 
 function Summary:Refresh()
