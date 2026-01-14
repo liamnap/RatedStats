@@ -403,6 +403,7 @@ local function CreateBracketCard(parent)
         -- Keep a clean bottom stack INSIDE the card: spark -> dates -> footer.
         local h = self:GetHeight() or 160
 
+        local padX = 10
         -- scale spacing slightly with card height, but clamp so it doesn't get silly
         local footerGap = Clamp(math.floor(h * 0.02), 2, 6)   -- spacing between date axis and footer
         local axisGap   = Clamp(math.floor(h * 0.03), 6, 12)  -- spacing between spark and date axis
