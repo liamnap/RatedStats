@@ -495,7 +495,7 @@ local function CreateBracketCard(parent)
         local h = self:GetHeight() or 160
 
         local padX = 10
-        local yAxisW = 30  -- left gutter for 4-digit labels (increase if you want more)
+        local yAxisW = 18  -- left gutter for 4-digit labels (increase if you want more)
 
         -- scale spacing slightly with card height, but clamp so it doesn't get silly
         local footerGap = Clamp(math.floor(h * 0.02), 3, 8)   -- spacing between date axis and footer
@@ -506,16 +506,27 @@ local function CreateBracketCard(parent)
 
         -- Spark height drives the perceived "gap" between Winrate and the graph header.
         -- Taller graph so it fills the card and reduces the empty gap from winrate -> header.
-        local sparkH = Clamp(math.floor(h * 0.42), 46, 110)
+        local sparkH = Clamp(math.floor(h * 0.34), 36, 86)
 
         self.spark:ClearAllPoints()
         self.spark:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", padX + yAxisW, sparkBottom)
         self.spark:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -padX, sparkBottom)
         self.spark:SetHeight(sparkH)
 
+        -- Keep Y labels inside the gutter and aligned (prevents them wandering into the CR/MMR block)
+        self.axisYMax:ClearAllPoints()
+        self.axisYMax:SetPoint("TOPLEFT", self.spark, "TOPLEFT", -(yAxisW - 2), 2)
+        self.axisYMax:SetWidth(yAxisW)
+        self.axisYMax:SetJustifyH("RIGHT")
+
+        self.axisYMin:ClearAllPoints()
+        self.axisYMin:SetPoint("BOTTOMLEFT", self.spark, "BOTTOMLEFT", -(yAxisW - 2), -2)
+        self.axisYMin:SetWidth(yAxisW)
+        self.axisYMin:SetJustifyH("RIGHT")
+
         -- Label sits just above the spark
         self.sparkLabel:ClearAllPoints()
-        self.sparkLabel:SetPoint("BOTTOMLEFT", self.spark, "TOPLEFT", 0, 10)
+        self.sparkLabel:SetPoint("BOTTOMLEFT", self.spark, "TOPLEFT", 0, 6)
 
         -- Date axis sits between spark and footer
         self.axisXStart:ClearAllPoints()
@@ -596,13 +607,8 @@ function Summary:Create(parentFrame)
     header:SetText("PvP Summary")
     f.header = header
 
-    -- Season note under the header (RatedStats colour)
-    f.seasonNote1 = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    f.seasonNote1:SetPoint("TOP", header, "BOTTOM", 0, -4)
-    f.seasonNote1:SetFont(GetUnicodeSafeFont(), 12, "OUTLINE")
-
     f.seasonNote2 = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    f.seasonNote2:SetPoint("TOP", f.seasonNote1, "BOTTOM", 0, -2)
+    f.seasonNote2:SetPoint("TOP", header, "BOTTOM", 0, -4)
     f.seasonNote2:SetFont(GetUnicodeSafeFont(), 10, "OUTLINE")
 
     f.seasonNote3 = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -635,12 +641,12 @@ function Summary:Create(parentFrame)
 
         -- Compute header/notes block height dynamically so cards never overlap it
         local headerH = (self.header and self.header:GetStringHeight()) or 18
-        local n1H = (self.seasonNote1 and self.seasonNote1:GetStringHeight()) or 12
+        local headerH = (self.header and self.header:GetStringHeight()) or 18
         local n2H = (self.seasonNote2 and self.seasonNote2:GetStringHeight()) or 10
         local n3H = (self.seasonNote3 and self.seasonNote3:GetStringHeight()) or 10
 
         -- Matches your existing TOP offsets: header at -10, then notes -4 / -2 / -2
-        local topBlockH = 10 + headerH + 4 + n1H + 2 + n2H + 2 + n3H
+        local topBlockH = 10 + headerH + 4 + n2H + 2 + n3H
         local topGap = Clamp(math.floor(totalH * 0.02), 10, 20)  -- space under season notes
 
         local topY = -(topBlockH + topGap)
@@ -723,24 +729,28 @@ function Summary:Refresh()
     local me = GetPlayerFullName()
 
     -- Header season info
-    if self.frame and self.frame.seasonNote1 then
+    if self.frame and self.frame.header then
         local label = GetCurrentSeasonLabel()
         if label ~= "" then
-            self.frame.seasonNote1:SetText(ColorText(label))
+            self.frame.header:SetText("PvP Summary - " .. label)
         else
-            self.frame.seasonNote1:SetText(ColorText("Season"))
+            self.frame.header:SetText("PvP Summary")
         end
 
-        if seasonStart then
-            self.frame.seasonNote2:SetText(ColorText("Season Start: " .. date("%d %b %Y", seasonStart)))
-        else
-            self.frame.seasonNote2:SetText(ColorText("Season Start: ?"))
+        if self.frame.seasonNote2 then
+            if seasonStart then
+                self.frame.seasonNote2:SetText(ColorText("Season Start: " .. date("%d %b %Y", seasonStart)))
+            else
+                self.frame.seasonNote2:SetText(ColorText("Season Start: ?"))
+            end
         end
 
-        if seasonFinish then
-            self.frame.seasonNote3:SetText(ColorText("Season End: " .. date("%d %b %Y", seasonFinish)))
-        else
-            self.frame.seasonNote3:SetText(ColorText("Season End: ?"))
+        if self.frame.seasonNote3 then
+            if seasonFinish then
+                self.frame.seasonNote3:SetText(ColorText("Season End: " .. date("%d %b %Y", seasonFinish)))
+            else
+                self.frame.seasonNote3:SetText(ColorText("Season End: ?"))
+            end
         end
     end
 
