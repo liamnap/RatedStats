@@ -618,11 +618,10 @@ local function CreateBracketCard(parent)
             GameTooltip:SetOwner(spark, "ANCHOR_CURSOR")
             GameTooltip:ClearLines()
             if dateText ~= "" then
-                -- Date/time + ": " in addon colour, value in white
-                local prefix = ColorText(dateText .. ": ")
-                GameTooltip:AddLine(prefix .. "|cffffffff" .. valText .. "|r")
+                -- Label in addon colour, value left as default (tooltip text is white)
+                GameTooltip:AddLine(ColorText(dateText .. ": ") .. valText)
             else
-                GameTooltip:AddLine("|cffffffff" .. valText .. "|r")
+                GameTooltip:AddLine(valText)
             end
             GameTooltip:Show()
         end
@@ -795,15 +794,26 @@ local function CreateBracketCard(parent)
 
     function card:SetData(data)
         self.title:SetText(data.name)
-        self.matchesText:SetText(string.format("Matches: %d", SafeNumber(data.matches)))
-        self.crText:SetText(string.format("Current CR: %d", SafeNumber(data.currentCR)))
-        self.mmrText:SetText(string.format("Current MMR: %d", SafeNumber(data.currentMMR)))
-        self.winrateText:SetText(string.format("Winrate: %d%% (%d/%d/%d)", data.winrate or 0, data.win or 0, data.loss or 0, data.draw or 0))
+        self.matchesText:SetText(ColorText("Matches: ") .. tostring(SafeNumber(data.matches)))
+        self.crText:SetText(ColorText("Current CR: ") .. tostring(SafeNumber(data.currentCR)))
+        self.mmrText:SetText(ColorText("Current MMR: ") .. tostring(SafeNumber(data.currentMMR)))
+        self.winrateText:SetText(ColorText("Winrate: ") .. string.format(
+            "%d%% (%d/%d/%d)", data.winrate or 0, data.win or 0, data.loss or 0, data.draw or 0
+        ))
 
         self._data = data
 
-        self.footerLeft:SetText(data.seasonWeekText or "")
-        self.footerRight:SetText(data.last25Text or "")
+        if data.seasonWeekText and data.seasonWeekText ~= "" then
+            self.footerLeft:SetText(ColorText("Season Week: ") .. tostring(data.seasonWeekText))
+        else
+            self.footerLeft:SetText("")
+        end
+
+        if data.last25Text and data.last25Text ~= "" then
+            self.footerRight:SetText(ColorText("Last 25: ") .. tostring(data.last25Text))
+        else
+            self.footerRight:SetText("")
+        end
 
         -- Click on a card to cycle the graph (Wins -> CR -> MMR).
         if not self._graphOnClickHooked then
@@ -976,17 +986,17 @@ function Summary:Refresh()
 
         if self.frame.seasonNote2 then
             if seasonStart then
-                self.frame.seasonNote2:SetText(ColorText("Season Start: " .. date("%d %b %Y", seasonStart)))
+                self.frame.seasonNote2:SetText(ColorText("Season Start: ") .. date("%d %b %Y", seasonStart))
             else
-                self.frame.seasonNote2:SetText(ColorText("Season Start: ?"))
+                self.frame.seasonNote2:SetText(ColorText("Season Start: ") .. "?")
             end
         end
 
         if self.frame.seasonNote3 then
             if seasonFinish then
-                self.frame.seasonNote3:SetText(ColorText("Season End: " .. date("%d %b %Y", seasonFinish)))
+                self.frame.seasonNote3:SetText(ColorText("Season End: ") .. date("%d %b %Y", seasonFinish))
             else
-                self.frame.seasonNote3:SetText(ColorText("Season End: ?"))
+                self.frame.seasonNote3:SetText(ColorText("Season End: ") .. "?")
             end
         end
 
@@ -1114,11 +1124,11 @@ function Summary:Refresh()
 
         local totalMatches = #overallSeasonMatches
 
-        self.frame.highLines[1]:SetText(string.format("Most Wins in Day  %d", mostWinsDay))
-        self.frame.highLines[2]:SetText(string.format("Net CR This Week  %+d", netCRThisWeek))
-        self.frame.highLines[3]:SetText(string.format("Total Matches  %d", totalMatches))
-        self.frame.highLines[4]:SetText(string.format("Longest Win Streak  %d", longestStreak))
-        self.frame.highLines[5]:SetText(string.format("Total Killing Blows  %d", totalKBs))
+        self.frame.highLines[1]:SetText(ColorText("Most Wins in Day: ") .. tostring(mostWinsDay))
+        self.frame.highLines[2]:SetText(ColorText("Net CR This Week: ") .. string.format("%+d", netCRThisWeek))
+        self.frame.highLines[3]:SetText(ColorText("Total Matches: ") .. tostring(totalMatches))
+        self.frame.highLines[4]:SetText(ColorText("Longest Win Streak: ") .. tostring(longestStreak))
+        self.frame.highLines[5]:SetText(ColorText("Total Killing Blows: ") .. tostring(totalKBs))
     elseif self.frame.highLines then
         for i = 1, 6 do
             self.frame.highLines[i]:SetText("")
