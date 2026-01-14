@@ -153,7 +153,7 @@ local function ClearSpark(frame)
     frame._lines = {}
 end
 
-local function DrawSpark(frame, values, times, xMinFixed, xMaxFixed, yMinFixed, yMaxFixed)
+local function DrawSpark(frame, values, times, xMinFixed, xMaxFixed, yMinFixed, yMaxFixed, xInsetL, xInsetR)
     ClearSpark(frame)
 
     if not values or #values < 2 then
@@ -165,6 +165,15 @@ local function DrawSpark(frame, values, times, xMinFixed, xMaxFixed, yMinFixed, 
     if w <= 1 or h <= 1 then
         return
     end
+
+    xInsetL = tonumber(xInsetL) or 0
+    xInsetR = tonumber(xInsetR) or 0
+    if xInsetL < 0 then xInsetL = 0 end
+    if xInsetR < 0 then xInsetR = 0 end
+    if (xInsetL + xInsetR) > (w - 2) then
+        xInsetL, xInsetR = 0, 0
+    end
+    local drawW = w - xInsetL - xInsetR
 
     local yMin, yMax
     if yMinFixed ~= nil and yMaxFixed ~= nil then
@@ -189,7 +198,7 @@ local function DrawSpark(frame, values, times, xMinFixed, xMaxFixed, yMinFixed, 
 
     local n = #values
     local useTimeX = (type(times) == "table" and #times == n and xMinFixed and xMaxFixed and xMaxFixed > xMinFixed)
-    local xStep = w / (n - 1)
+    local xStep = draw / (n - 1)
 
     local function mapX(i)
         if useTimeX then
@@ -198,9 +207,9 @@ local function DrawSpark(frame, values, times, xMinFixed, xMaxFixed, yMinFixed, 
             local u = (t - xMinFixed) / (xMaxFixed - xMinFixed)
             if u < 0 then u = 0 end
             if u > 1 then u = 1 end
-            return u * w
+            return xInsetL + (u * drawW)
         end
-        return (i - 1) * xStep
+        return xInsetL + ((i - 1) * xStep)
     end
 
     local function mapY(v)
@@ -364,7 +373,18 @@ function Summary:_RenderCardGraph(card)
     local seasonStart = RSTATS and RSTATS.GetCurrentSeasonStart and RSTATS:GetCurrentSeasonStart() or nil
     local seasonFinish = RSTATS and RSTATS.GetCurrentSeasonFinish and RSTATS:GetCurrentSeasonFinish() or nil
 
-    local yMin, yMax = DrawSpark(card.spark, series or {}, times, seasonStart, seasonFinish)    if card.axisYMin then card.axisYMin:SetText(yMin and tostring(math.floor(yMin)) or "") end
+    local yMin, yMax = DrawSpark(
+        card.spark,
+        series or {},
+        times,
+        seasonStart,
+        seasonFinish,
+        nil,
+        nil,
+        card._xInsetL or 0,
+        card._xInsetR or 0
+    )
+    if card.axisYMin then card.axisYMin:SetText(yMin and tostring(math.floor(yMin)) or "") end
     if card.axisYMax then card.axisYMax:SetText(yMax and tostring(math.floor(yMax)) or "") end
 
     if seasonStart and seasonFinish then
@@ -495,7 +515,9 @@ local function CreateBracketCard(parent)
         local h = self:GetHeight() or 160
 
         local padX = 10
-        local yAxisW = 18  -- left gutter for 4-digit labels (increase if you want more)
+        local yAxisW = 18  -- inner gutter width (used on BOTH sides for symmetrical padding)
+        self._xInsetL = yAxisW
+        self._xInsetR = yAxisW
 
         -- scale spacing slightly with card height, but clamp so it doesn't get silly
         local footerGap = Clamp(math.floor(h * 0.02), 3, 8)   -- spacing between date axis and footer
@@ -506,22 +528,28 @@ local function CreateBracketCard(parent)
 
         -- Spark height drives the perceived "gap" between Winrate and the graph header.
         -- Taller graph so it fills the card and reduces the empty gap from winrate -> header.
-        local sparkH = Clamp(math.floor(h * 0.34), 36, 86)
+        -- Force graph block into bottom 50% of the card
+        local graphTop = Clamp(math.floor(h * 0.50), 60, 140)  -- y (from bottom) where graph block should NOT exceed
+        local labelPad = 14                                    -- reserve for "Wins/CR/MMR" label above spark
+        local sparkH = graphTop - sparkBottom - labelPad
+        sparkH = Clamp(sparkH, 28, 110)
+        if sparkH < 10 then sparkH = 10 end
 
         self.spark:ClearAllPoints()
-        self.spark:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", padX + yAxisW, sparkBottom)
+        -- Even padding left/right (spark is centred within the card)
+        self.spark:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", padX, sparkBottom)
         self.spark:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -padX, sparkBottom)
         self.spark:SetHeight(sparkH)
 
-        -- Keep Y labels inside the gutter and aligned (prevents them wandering into the CR/MMR block)
+        -- Y labels live INSIDE the left inset of the spark (no shifting the whole chart)
         self.axisYMax:ClearAllPoints()
-        self.axisYMax:SetPoint("TOPLEFT", self.spark, "TOPLEFT", -(yAxisW - 2), 2)
-        self.axisYMax:SetWidth(yAxisW)
+        self.axisYMax:SetPoint("TOPLEFT", self.spark, "TOPLEFT", 2, 2)
+        self.axisYMax:SetWidth(yAxisW - 4)
         self.axisYMax:SetJustifyH("RIGHT")
 
         self.axisYMin:ClearAllPoints()
-        self.axisYMin:SetPoint("BOTTOMLEFT", self.spark, "BOTTOMLEFT", -(yAxisW - 2), -2)
-        self.axisYMin:SetWidth(yAxisW)
+        self.axisYMin:SetPoint("BOTTOMLEFT", self.spark, "BOTTOMLEFT", 2, -2)
+        self.axisYMin:SetWidth(yAxisW - 4)
         self.axisYMin:SetJustifyH("RIGHT")
 
         -- Label sits just above the spark
@@ -530,17 +558,18 @@ local function CreateBracketCard(parent)
 
         -- Date axis sits between spark and footer
         self.axisXStart:ClearAllPoints()
-        self.axisXStart:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", padX + yAxisW, axisY)
-
+        -- align dates to actual plot area start/end (inside the insets)
+        self.axisXStart:SetPoint("BOTTOMLEFT", self.spark, "BOTTOMLEFT", yAxisW, axisY - sparkBottom)
+ 
         self.axisXEnd:ClearAllPoints()
-        self.axisXEnd:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -padX, axisY)
+        self.axisXEnd:SetPoint("BOTTOMRIGHT", self.spark, "BOTTOMRIGHT", -yAxisW, axisY - sparkBottom)
 
         -- Footer is BELOW the dates (still inside the card)
         self.footerLeft:ClearAllPoints()
-        self.footerLeft:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", padX + yAxisW, footerY)
+        self.footerLeft:SetPoint("BOTTOMLEFT", self.spark, "BOTTOMLEFT", yAxisW, footerY - sparkBottom)
 
         self.footerRight:ClearAllPoints()
-        self.footerRight:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -padX, footerY)
+        self.footerRight:SetPoint("BOTTOMRIGHT", self.spark, "BOTTOMRIGHT", -yAxisW, footerY - sparkBottom)
     end
 
     card:SetScript("OnSizeChanged", function(self)
