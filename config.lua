@@ -96,6 +96,17 @@ function Config:Toggle()
     -- ✅ If we're showing the menu now, check for historyTable growth
     if wasHidden then
         local tabID = PanelTemplates_GetSelectedTab(RSTATS.UIConfig)
+
+        -- ✅ Summary: refresh after the frame is actually shown + laid out.
+        -- Without this, Summary can open "blank" until you tab away/back.
+        if tabID == 6 and RSTATS.Summary and RSTATS.Summary.Refresh then
+            C_Timer.After(0, function()
+                if menu:IsShown() and PanelTemplates_GetSelectedTab(RSTATS.UIConfig) == 6 then
+                    RSTATS.Summary:Refresh()
+                end
+            end)
+        end
+
         local data = ({
             [1] = Database.SoloShuffleHistory,
             [2] = Database.v2History,
