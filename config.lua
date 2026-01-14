@@ -353,7 +353,23 @@ end
 -- Function to get CR and MMR based on categoryID
 function GetCRandMMR(categoryID)
     local cr = select(1, GetPersonalRatedInfo(categoryID))
-    local mmr = select(10, GetPersonalRatedInfo(categoryID))
+    local mmr
+
+    -- Arena MMR: GetPersonalRatedInfo no longer provides this (select(10) is nil -> 0).
+    -- While the post-game scoreboard is up, team info has ratingMMR.
+    if (categoryID == 1 or categoryID == 2)
+        and C_PvP and C_PvP.GetTeamInfo
+        and C_PvP.IsRatedArena and C_PvP.IsRatedArena()
+    then
+        local teamInfo = C_PvP.GetTeamInfo(0)
+        mmr = teamInfo and teamInfo.ratingMMR
+    end
+
+    -- Legacy fallback (harmless if nil)
+    if mmr == nil then
+        mmr = select(10, GetPersonalRatedInfo(categoryID))
+    end
+
     return cr, mmr
 end
 
@@ -3968,6 +3984,8 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
         currentCR  = tonumber(highestMatchEntry.cr)  or currentCR
         currentMMR = tonumber(highestMatchEntry.mmr) or currentMMR
 
+        local isArena = (categoryID == 1 or categoryID == 2)
+
         -- For 2v2/3v3 specifically, MMR should be from the *last match we played*.
         -- Do NOT gate on > 0, because that causes '-' or stale values.
         if highestMatchEntry.playerStats then
@@ -3976,9 +3994,18 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
                     local mmr = tonumber(stats.postmatchMMR)
                     local cr  = tonumber(stats.newrating)
                     if cr then currentCR = cr end
-                    if mmr then currentMMR = mmr end
+                    -- postmatchMMR is often 0 in arena now; ignore zeros.
+                    if mmr and mmr > 0 then currentMMR = mmr end
                     break
                 end
+            end
+        end
+        -- Arena fallback: use stored match team MMR if player postmatchMMR was 0/missing
+        if isArena then
+            local teamMMR = tonumber(highestMatchEntry.friendlyMMR)
+            local curMMR  = tonumber(currentMMR)
+            if teamMMR and teamMMR > 0 and (not curMMR or curMMR <= 0) then
+                currentMMR = teamMMR
             end
         end
     end
