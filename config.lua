@@ -4635,7 +4635,11 @@ function Config:CreateMenu()
 			UIConfig.TeamLeftButton:Hide()
 			UIConfig.TeamRightButton:Hide()
 			UIConfig.ActiveTeamView = 1
-			RSTATS.ScrollFrames[ACTIVE_TAB_ID]:SetHorizontalScroll(0)
+            local tabID = ACTIVE_TAB_ID or UIConfig.selectedTab
+            local sf = RSTATS.ScrollFrames and tabID and RSTATS.ScrollFrames[tabID]
+            if sf and sf.SetHorizontalScroll then
+                sf:SetHorizontalScroll(0)
+            end
 			UpdateArrowState()  -- This ensures arrow buttons visually reflect current team view
         end
         for _, f in ipairs(contentFrames) do
