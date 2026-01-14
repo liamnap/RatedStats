@@ -4758,7 +4758,6 @@ function Config:CreateMenu()
 
 		FilterAndSearchMatches(RatedStatsSearchBox and RatedStatsSearchBox:GetText() or "")
 		RSTATS:UpdateStatsView(filterKey, tabID)
-		end
 	end)
 
     -- ↪ When the main window closes, also tear down the copy‐name popup if open
