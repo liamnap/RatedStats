@@ -653,7 +653,8 @@ local function UpdateRecordCard(card, records)
             row._rsPS = rec.ps
             row._rsMatch = rec.match
 
-            row.nameText:SetText(rec.ps.name or "?")
+            local displayName = (rec.ps and rec.ps.name) or "?"
+            row.nameText:SetText(string.format("%d. %s", i, displayName))
 
             -- RatedStats_Achiev icon (optional)
             local achievIconPath, _, achievIconTint
@@ -1408,7 +1409,7 @@ function Summary:Create(parentFrame)
     f.playerModel:SetPoint("BOTTOMRIGHT", f.modelPanel, "BOTTOMRIGHT", -6, 6)
     f.playerModel:SetUnit("player")
     if f.playerModel.SetCamDistanceScale then
-        f.playerModel:SetCamDistanceScale(0.9)
+        f.playerModel:SetCamDistanceScale(1.15)
     end
 
     f.playerModel._rsRot = 0
@@ -1572,28 +1573,28 @@ function Summary:Create(parentFrame)
         card.title:SetPoint("TOPLEFT", card, "TOPLEFT", 10, -8)
         card.title:SetText("Best Win Streak (All Brackets)")
 
+        -- Single star backdrop (NOT one per row)
+        card.bigStar = card:CreateTexture(nil, "ARTWORK")
+        card.bigStar:SetAtlas("auctionhouse-icon-favorite", true)
+        card.bigStar:SetSize(110, 110)
+        card.bigStar:SetPoint("CENTER", card, "CENTER", 0, -6)
+        card.bigStar:SetAlpha(0.28)
+
         card.rows = {}
         local rowH = 18
 
         for i = 1, #BRACKETS do
             local row = CreateFrame("Frame", nil, card)
             row:SetHeight(rowH)
-            row:SetPoint("TOPLEFT", card, "TOPLEFT", 8, -30 - ((i - 1) * rowH))
-            row:SetPoint("TOPRIGHT", card, "TOPRIGHT", -8, -30 - ((i - 1) * rowH))
-
-            row.star = row:CreateTexture(nil, "OVERLAY")
-            row.star:SetSize(12, 12)
-            row.star:SetPoint("LEFT", row, "LEFT", 2, 0)
-            row.star:SetAtlas("auctionhouse-icon-favorite", true)
 
             row.modeText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             row.modeText:SetFont(GetUnicodeSafeFont(), 11, "OUTLINE")
-            row.modeText:SetPoint("LEFT", row, "LEFT", 18, 0)
+            row.modeText:SetPoint("LEFT", row, "LEFT", 0, 0)
             row.modeText:SetJustifyH("LEFT")
 
             row.valueText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             row.valueText:SetFont(GetUnicodeSafeFont(), 11, "OUTLINE")
-            row.valueText:SetPoint("RIGHT", row, "RIGHT", -2, 0)
+            row.valueText:SetPoint("RIGHT", row, "RIGHT", 0, 0)
             row.valueText:SetJustifyH("RIGHT")
 
             row:EnableMouse(true)
@@ -1610,6 +1611,30 @@ function Summary:Create(parentFrame)
             row:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
             card.rows[i] = row
+        end
+
+        -- Arrange the 5 rows like points on a star (SS/2v2/3v3/RBG/SRBG)
+        -- 1 SS        = top
+        -- 2 2v2       = left
+        -- 3 3v3       = right
+        -- 4 RBG       = bottom-left
+        -- 5 Solo RBG  = bottom-right
+        do
+            local pts = {
+                [1] = { "TOP",         card, "TOP",         0,  -34 },
+                [2] = { "LEFT",        card, "LEFT",       14,  -10 },
+                [3] = { "RIGHT",       card, "RIGHT",     -14,  -10 },
+                [4] = { "BOTTOMLEFT",  card, "BOTTOMLEFT", 14,   36 },
+                [5] = { "BOTTOMRIGHT", card, "BOTTOMRIGHT",-14,  36 },
+            }
+            for i = 1, #BRACKETS do
+                local r = card.rows[i]
+                local p = pts[i]
+                if r and p then
+                    r:ClearAllPoints()
+                    r:SetPoint(p[1], p[2], p[3], p[4], p[5])
+                end
+            end
         end
 
         function card:SetData(streakByMode)
