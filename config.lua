@@ -3226,7 +3226,7 @@ local function CreateFriendAndTalentButtons(stats, matchEntry, parent)
 end
 
 -- Pop-out frame + name box tweaks
-local function CreateCopyNameFrame(stats, matchEntry)
+function RSTATS.OpenPlayerDetails(stats, matchEntry)
     local frame = CreateFrame("Frame", "CreateCopyNameFrame", UIParent, "BackdropTemplate")
 	UIPanelWindows["CreateCopyNameFrame"] = { area = "center", pushable = 0, whileDead = true }
 	tinsert(UISpecialFrames, "CreateCopyNameFrame")
@@ -3272,7 +3272,7 @@ local function CreateCopyNameFrame(stats, matchEntry)
     frame:Show()
 end
 
-local function CreateClickableName(parent, stats, matchEntry, x, y, columnWidth, rowHeight)
+function RSTATS.CreateClickableName(parent, stats, matchEntry, x, y, columnWidth, rowHeight)
   local playerName = stats.name
 
   -- RatedStats_Achiev (optional): show highest PvP achievement icon if available
@@ -3331,7 +3331,7 @@ local function CreateClickableName(parent, stats, matchEntry, x, y, columnWidth,
   clickableFrame:SetPoint("CENTER", nameText, "CENTER")
 
   clickableFrame:SetScript("OnClick", function()
-    CreateCopyNameFrame(stats, matchEntry)
+    RSTATS.OpenPlayerDetails(stats, matchEntry)
   end)
 
   return nameText
@@ -3672,7 +3672,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     -- Populate friendly player stats
     for index, player in ipairs(friendlyPlayers) do
         local rowOffset = -(headerHeight + 15 * index)  -- Adjust rowOffset to account for headers
-		CreateClickableName(nestedTable, player, matchEntry, columnPositions[1], rowOffset, columnWidths[1], rowHeight)
+        RSTATS.CreateClickableName(nestedTable, player, matchEntry, columnPositions[1], rowOffset, columnWidths[1], rowHeight)
         local winHKValue = (isSS and player.wins) or (hideWinHK and "") or player.honorableKills
 
         for i, stat in ipairs({
@@ -3785,7 +3785,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     -- Populate enemy player stats
     for index, player in ipairs(enemyPlayers) do
 		local rowOffset = -(headerHeight + 15 * index)  -- Adjust rowOffset to account for headers
-        CreateClickableName(nestedTable, player, matchEntry, columnPositions[COLS_PER_TEAM + 1], rowOffset, columnWidths[COLS_PER_TEAM + 1], rowHeight)
+        RSTATS.CreateClickableName(nestedTable, player, matchEntry, columnPositions[COLS_PER_TEAM + 1], rowOffset, columnWidths[COLS_PER_TEAM + 1], rowHeight)
         local winHKValue = (isSS and player.wins) or (hideWinHK and "") or player.honorableKills
 
         for i, stat in ipairs({
