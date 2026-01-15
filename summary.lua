@@ -1342,6 +1342,23 @@ function Summary:Create(parentFrame)
                 card:SetPoint("LEFT", self.cards[i - 1], "RIGHT", gap, 0)
             end
         end
+
+		-- Anchor bottom deterministically from the computed card geometry.
+		-- If bottom is anchored to cards directly, it can collapse to 0 height on first show / scaling.
+		if self.bottom then
+			local bottomGapBetween = 14
+			local bottomTopY = topY - cardH - bottomGapBetween
+	
+			self.bottom:ClearAllPoints()
+			self.bottom:SetPoint("TOPLEFT", self, "TOPLEFT", sidePad, bottomTopY)
+			self.bottom:SetPoint("TOPRIGHT", self, "TOPRIGHT", -sidePad, bottomTopY)
+			self.bottom:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", sidePad, 14)
+			self.bottom:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -sidePad, 14)
+		end
+	
+		-- Now that bottom has real size, lay out the right-side panels/cards.
+		if self.LayoutRightPanels then self:LayoutRightPanels() end
+		if self.LayoutRecordCards then self:LayoutRecordCards() end
     end
 
     f:SetScript("OnShow", function(self) self:LayoutCards() end)
@@ -1360,10 +1377,6 @@ function Summary:Create(parentFrame)
     -- Bottom content: Player model (left) + record cards (right)
     f.bottom = CreateFrame("Frame", nil, f, "BackdropTemplate")
     CreateBackdrop(f.bottom)
-    f.bottom:SetPoint("TOPLEFT", f.cards[1], "BOTTOMLEFT", 0, -14)
-    f.bottom:SetPoint("TOPRIGHT", f.cards[#f.cards], "BOTTOMRIGHT", 0, -14)
-    f.bottom:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 14, 14)
-    f.bottom:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -14, 14)
 
     -- Make sure the bottom panel is not hidden behind any parent artwork textures.
     -- (Cards are visible; bottom isn't -> classic framelevel ordering.)
