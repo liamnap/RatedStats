@@ -376,6 +376,104 @@ local function NormalizeOutcome(winLoss)
     return nil
 end
 
+local function FindDominantTeammate(matches, me)
+    local counts = {}
+    local total = 0
+
+    for _, match in ipairs(matches or {}) do
+        local myTeamIndex
+        for _, ps in ipairs(match.playerStats or {}) do
+            if ps and ps.name == me then
+                myTeamIndex = ps.teamIndex
+                break
+            end
+        end
+
+        total = total + 1
+        for _, ps in ipairs(match.playerStats or {}) do
+            if ps and ps.name and ps.name ~= me and IsFriendlyForMatch(ps, myTeamIndex) then
+                counts[ps.name] = (counts[ps.name] or 0) + 1
+            end
+        end
+    end
+
+    local bestName, bestCount
+    for name, c in pairs(counts) do
+        if not bestCount or c > bestCount then
+            bestCount = c
+            bestName = name
+        end
+    end
+
+    if bestName and bestCount and total > 0 and bestCount > (total / 2) then
+        return bestName
+    end
+    return "Multiple"
+end
+
+local function BuildBestWinStreakByBracket(perChar, seasonStart, seasonFinish)
+    if type(perChar) ~= "table" then return {} end
+    if not seasonStart or not seasonFinish then return {} end
+
+    local me = GetPlayerFullName()
+    local out = {}
+
+    for _, bracket in ipairs(BRACKETS) do
+        local history = perChar[bracket.historyKey] or {}
+        table.sort(history, SortByEndTime)
+
+        local bestLen = 0
+        local bestStart, bestEnd
+        local bestMatches = nil
+
+        local curLen = 0
+        local curStart = nil
+        local curMatches = {}
+
+        for _, match in ipairs(history) do
+            local t = match.endTime or match.timestamp
+            if t and t >= seasonStart and t < seasonFinish then
+                local o = NormalizeOutcome(match.friendlyWinLoss)
+                if o == "W" then
+                    if curLen == 0 then
+                        curStart = t
+                        curMatches = {}
+                    end
+                    curLen = curLen + 1
+                    table.insert(curMatches, match)
+
+                    if curLen > bestLen then
+                        bestLen = curLen
+                        bestStart = curStart
+                        bestEnd = t
+                        bestMatches = curMatches
+                    end
+                else
+                    curLen = 0
+                    curStart = nil
+                    curMatches = {}
+                end
+            end
+        end
+
+        local mate = "Multiple"
+        if bestMatches and bestLen > 0 then
+            mate = FindDominantTeammate(bestMatches, me)
+        end
+
+        out[bracket.name] = {
+            mode = bracket.name,
+            modeShort = ModeShort(bracket.name),
+            streak = bestLen,
+            startT = bestStart,
+            endT = bestEnd,
+            mate = mate,
+        }
+    end
+
+    return out
+end
+
 -- Most Wins (friendly players) across all brackets in current season range
 local function BuildMostWinsFriendly(perChar, seasonStart, seasonFinish)
     if type(perChar) ~= "table" then return {} end
@@ -557,17 +655,6 @@ local function UpdateRecordCard(card, records)
 
             row.nameText:SetText(rec.ps.name or "?")
 
-            local showStar = card._showStar and true or false
-            if row.starBtn then
-                if showStar then
-                    row.starBtn:Show()
-                    -- Star icon (exists in retail; we only need a small “favourite” marker)
-                    row.starTex:SetAtlas("auctionhouse-icon-favorite", true)
-                else
-                    row.starBtn:Hide()
-                end
-            end
-
             -- RatedStats_Achiev icon (optional)
             local achievIconPath, _, achievIconTint
             if type(C_AddOns) == "table" and type(C_AddOns.GetAddOnEnableState) == "function" then
@@ -592,10 +679,11 @@ local function UpdateRecordCard(card, records)
                 row.iconBtn:SetPoint("LEFT", row, "LEFT", showStar and 14 or 2, 0)
 
                 row.nameBtn:ClearAllPoints()
-                row.nameBtn:SetPoint("LEFT", row, "LEFT", showStar and 26 or 14, 0)
+                row.nameBtn:SetPoint("LEFT", row, "LEFT", 14, 0)
             else
+                row.iconBtn:Hide()
                 row.nameBtn:ClearAllPoints()
-                row.nameBtn:SetPoint("LEFT", row, "LEFT", showStar and 14 or 2, 0)
+                row.nameBtn:SetPoint("LEFT", row, "LEFT", 2, 0)
             end
 
             if rec.displayValue then
@@ -1314,8 +1402,14 @@ function Summary:Create(parentFrame)
     end)
 
     -- Right: record cards (scrollable lists)
+    f.streakPanel = CreateFrame("Frame", nil, f.bottom, "BackdropTemplate")
+    CreateBackdrop(f.streakPanel)
+    f.streakPanel:SetPoint("TOPLEFT", f.modelPanel, "TOPRIGHT", 10, 0)
+    f.streakPanel:SetPoint("BOTTOMLEFT", f.modelPanel, "BOTTOMRIGHT", 10, 0)
+
     f.recordsPanel = CreateFrame("Frame", nil, f.bottom)
-    f.recordsPanel:SetPoint("TOPLEFT", f.modelPanel, "TOPRIGHT", 10, 0)
+    f.recordsPanel:SetPoint("TOPLEFT", f.streakPanel, "TOPRIGHT", 10, 0)
+    f.recordsPanel:SetPoint("TOPRIGHT", f.bottom, "TOPRIGHT", -10, -10)
     f.recordsPanel:SetPoint("BOTTOMRIGHT", f.bottom, "BOTTOMRIGHT", -10, 10)
 
     local function CreateRecordCard(parent, titleText)
@@ -1338,14 +1432,6 @@ function Summary:Create(parentFrame)
             row:SetHeight(rowH)
             row:SetPoint("TOPLEFT", card, "TOPLEFT", 8, -26 - ((i - 1) * rowH))
             row:SetPoint("TOPRIGHT", card, "TOPRIGHT", -8, -26 - ((i - 1) * rowH))
-
-            row.starBtn = CreateFrame("Button", nil, row)
-            row.starBtn:SetSize(10, 10)
-            row.starBtn:SetPoint("LEFT", row, "LEFT", 2, 0)
-            row.starBtn:Hide()
-
-            row.starTex = row.starBtn:CreateTexture(nil, "OVERLAY")
-            row.starTex:SetAllPoints()
 
             row.iconBtn = CreateFrame("Button", nil, row)
             row.iconBtn:SetSize(10, 10)
@@ -1377,13 +1463,6 @@ function Summary:Create(parentFrame)
             end)
 
             row.iconBtn:SetScript("OnClick", function(self)
-                local parentRow = self:GetParent()
-                if parentRow and parentRow._rsPS and parentRow._rsMatch and type(RSTATS) == "table" and type(RSTATS.OpenPlayerDetails) == "function" then
-                    RSTATS.OpenPlayerDetails(parentRow._rsPS, parentRow._rsMatch)
-                end
-            end)
-
-            row.starBtn:SetScript("OnClick", function(self)
                 local parentRow = self:GetParent()
                 if parentRow and parentRow._rsPS and parentRow._rsMatch and type(RSTATS) == "table" and type(RSTATS.OpenPlayerDetails) == "function" then
                     RSTATS.OpenPlayerDetails(parentRow._rsPS, parentRow._rsMatch)
@@ -1427,11 +1506,84 @@ function Summary:Create(parentFrame)
         return card
     end
 
+    local function CreateStreakCard(parent)
+        local card = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+        CreateBackdrop(card)
+
+        card.title = card:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        card.title:SetFont(GetUnicodeSafeFont(), 13, "OUTLINE")
+        card.title:SetPoint("TOPLEFT", card, "TOPLEFT", 10, -8)
+        card.title:SetText("Best Win Streak (All Brackets)")
+
+        card.rows = {}
+        local rowH = 18
+
+        for i = 1, #BRACKETS do
+            local row = CreateFrame("Frame", nil, card)
+            row:SetHeight(rowH)
+            row:SetPoint("TOPLEFT", card, "TOPLEFT", 8, -30 - ((i - 1) * rowH))
+            row:SetPoint("TOPRIGHT", card, "TOPRIGHT", -8, -30 - ((i - 1) * rowH))
+
+            row.star = row:CreateTexture(nil, "OVERLAY")
+            row.star:SetSize(12, 12)
+            row.star:SetPoint("LEFT", row, "LEFT", 2, 0)
+            row.star:SetAtlas("auctionhouse-icon-favorite", true)
+
+            row.modeText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.modeText:SetFont(GetUnicodeSafeFont(), 11, "OUTLINE")
+            row.modeText:SetPoint("LEFT", row, "LEFT", 18, 0)
+            row.modeText:SetJustifyH("LEFT")
+
+            row.valueText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.valueText:SetFont(GetUnicodeSafeFont(), 11, "OUTLINE")
+            row.valueText:SetPoint("RIGHT", row, "RIGHT", -2, 0)
+            row.valueText:SetJustifyH("RIGHT")
+
+            row:EnableMouse(true)
+            row:SetScript("OnEnter", function(self)
+                if not self._streakStart or not self._streakEnd then return end
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                GameTooltip:ClearLines()
+                local s = date("%d %b %Y %H:%M", self._streakStart)
+                local e = date("%d %b %Y %H:%M", self._streakEnd)
+                local mate = self._streakMate or "Multiple"
+                GameTooltip:AddLine(ColorText("Win streak between ") .. s .. ColorText(" and ") .. e .. ColorText(" with ") .. tostring(mate))
+                GameTooltip:Show()
+            end)
+            row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+            card.rows[i] = row
+        end
+
+        function card:SetData(streakByMode)
+            for i, b in ipairs(BRACKETS) do
+                local r = self.rows[i]
+                local d = streakByMode and streakByMode[b.name] or nil
+                if r and d then
+                    r.modeText:SetText(d.modeShort or ModeShort(b.name))
+                    r.valueText:SetText(tostring(d.streak or 0))
+                    r._streakStart = d.startT
+                    r._streakEnd   = d.endT
+                    r._streakMate  = d.mate
+                elseif r then
+                    r.modeText:SetText(ModeShort(b.name))
+                    r.valueText:SetText("0")
+                    r._streakStart = nil
+                    r._streakEnd = nil
+                    r._streakMate = nil
+                end
+            end
+        end
+
+        return card
+    end
+
+    f.streakCard = CreateStreakCard(f.streakPanel)
+    f.streakCard:SetAllPoints(f.streakPanel)
     f.damageCard = CreateRecordCard(f.recordsPanel, "Best 10 Players - Most Damage Done (All Brackets)")
     f.healCard   = CreateRecordCard(f.recordsPanel, "Best 10 Players - Most Healing Done (All Brackets)")
     f.winsCard   = CreateRecordCard(f.recordsPanel, "Most Wins - Friendly Players (All Brackets)")
     f.specCard   = CreateRecordCard(f.recordsPanel, "Best Same Spec - With You / Beat You (All Brackets)")
-    f.winsCard._showStar = true
 
     function f:LayoutRecordCards()
         local panel = self.recordsPanel
@@ -1458,19 +1610,41 @@ function Summary:Create(parentFrame)
         self.healCard:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 0, 0)
         self.healCard:SetSize(cardW, cardH)
 
-        -- Bottom row
-        self.winsCard:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 0, 0)
+        -- Bottom row (anchored to top row with explicit gap)
+        self.winsCard:SetPoint("TOPLEFT", self.damageCard, "BOTTOMLEFT", 0, -gap)
         self.winsCard:SetSize(cardW, cardH)
 
-        self.specCard:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 0)
+        self.specCard:SetPoint("TOPRIGHT", self.healCard, "BOTTOMRIGHT", 0, -gap)
         self.specCard:SetSize(cardW, cardH)
     end
 
+    function f:LayoutRightPanels()
+        if not self.bottom or not self.modelPanel or not self.streakPanel or not self.recordsPanel then return end
+
+        local totalW = self.bottom:GetWidth() or 0
+        if totalW <= 1 then return end
+
+        local modelW = self.modelPanel:GetWidth() or 290
+        -- bottom has 10px padding left/right (your existing anchors)
+        local remW = totalW - modelW - 20
+        if remW <= 200 then return end
+
+        -- We want: streakW == one record-card column width.
+        -- records needs: (2 * streakW + gap) and we also need gap between streak and records.
+        local gap = 10
+        local between = 10
+        local streakW = math.floor((remW - (gap + between)) / 3)
+        streakW = Clamp(streakW, 180, 340)
+
+        self.streakPanel:SetWidth(streakW)
+    end
+
     f:SetScript("OnSizeChanged", function(self)
-        if self.LayoutCards then self:LayoutCards() end
+        if self.LayoutRightPanels then self:LayoutRightPanels() end
         if self.LayoutRecordCards then self:LayoutRecordCards() end
     end)
 
+    if f.LayoutRightPanels then f:LayoutRightPanels() end
     f:LayoutRecordCards()
 
     -- Start auto-cycling the per-card graphs (optional but looks good)
@@ -1679,5 +1853,10 @@ function Summary:Refresh()
         UpdateRecordCard(self.frame.healCard, topHeal)
         UpdateRecordCard(self.frame.winsCard, topWins)
         UpdateRecordCard(self.frame.specCard, topSpec)
+    end
+
+    if self.frame and self.frame.streakCard and seasonStart and seasonFinish then
+        local streakByMode = BuildBestWinStreakByBracket(perChar, seasonStart, seasonFinish)
+        self.frame.streakCard:SetData(streakByMode)
     end
 end
