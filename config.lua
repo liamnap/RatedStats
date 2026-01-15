@@ -4151,6 +4151,11 @@ function Config:CreateMenu()
 		{ text = "This Season", value = "thisSeason" }
 	}
 
+	-- Also allow explicit season lookups (DF S4 / TWW S1 / etc.)
+	for _, season in ipairs(RatedStatsSeasons or {}) do
+		table.insert(timeFilterOptions, { text = season.label, value = season.label })
+	end
+
     -- Create 5 frames + scrollFrames for the match-history tabs
     for i = 1, 5 do
         local frame = CreateFrame("Frame", "TabFrame", UIConfig)
