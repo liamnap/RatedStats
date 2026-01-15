@@ -64,7 +64,9 @@
 			"class",
 			"EventUtil",
 			"Settings",
-			"CreateSettingsListSectionHeaderInitializer"
+			"CreateSettingsListSectionHeaderInitializer",
+			"GameTooltip",
+			"UIParent"
 		],
 		"Lua.type.weakUnionCheck": true
 	}
