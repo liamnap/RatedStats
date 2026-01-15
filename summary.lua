@@ -1621,6 +1621,6 @@ function Summary:Refresh()
         UpdateRecordCard(self.frame.damageCard, topDmg)
         UpdateRecordCard(self.frame.healCard, topHeal)
         UpdateRecordCard(self.frame.winsCard, topWins)
-        UpdateRecordCar
+        UpdateRecordCard(self.frame.specCard, topSpec)
     end
 end
