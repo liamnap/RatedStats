@@ -676,7 +676,6 @@ local function UpdateRecordCard(card, records)
                 end
 
                 row.iconBtn:ClearAllPoints()
-                row.iconBtn:SetPoint("LEFT", row, "LEFT", showStar and 14 or 2, 0)
 
                 row.nameBtn:ClearAllPoints()
                 row.nameBtn:SetPoint("LEFT", row, "LEFT", 14, 0)
@@ -1253,8 +1252,16 @@ end
 
 function Summary:Create(parentFrame)
     if self.frame then
-        self.frame:Show()
-        return
+        -- If the Summary UI layout changed since this frame was first created,
+        -- rebuild it so new panels appear (bottom/model/streak/records).
+        if not self.frame.bottom or not self.frame.modelPanel or not self.frame.streakPanel or not self.frame.recordsPanel then
+            self.frame:Hide()
+            self.frame:SetParent(nil)
+            self.frame = nil
+        else
+            self.frame:Show()
+            return
+        end
     end
 
     local f = CreateFrame("Frame", "RatedStatsSummaryFrame", parentFrame)
@@ -1765,7 +1772,6 @@ function Summary:Refresh()
             seriesMMR = mmrSeries,
             seriesTimes = times,
 
-            seasonWeekText = seasonWeekText,
             last25Text = last25Text,
         }
 
