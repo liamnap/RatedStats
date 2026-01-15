@@ -1588,7 +1588,7 @@ function Summary:Create(parentFrame)
         card.title:SetText("Best Win Streak (All Brackets)")
 
         card.rows = {}
-        local rowH = 18
+        local rowH = 28
 
         for i = 1, #BRACKETS do
             local row = CreateFrame("Frame", nil, card)
@@ -1596,13 +1596,17 @@ function Summary:Create(parentFrame)
 
             row.modeText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             row.modeText:SetFont(GetUnicodeSafeFont(), 11, "OUTLINE")
-            row.modeText:SetPoint("LEFT", row, "LEFT", 0, 0)
-            row.modeText:SetJustifyH("LEFT")
+            row.modeText:ClearAllPoints()
+            row.modeText:SetPoint("CENTER", row, "CENTER", 0, 6)
+            row.modeText:SetJustifyH("CENTER")
+            row.modeText:SetWordWrap(false)
 
             row.valueText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             row.valueText:SetFont(GetUnicodeSafeFont(), 11, "OUTLINE")
-            row.valueText:SetPoint("RIGHT", row, "RIGHT", 0, 0)
-            row.valueText:SetJustifyH("RIGHT")
+            row.valueText:ClearAllPoints()
+            row.valueText:SetPoint("CENTER", row, "CENTER", 0, -6)
+            row.valueText:SetJustifyH("CENTER")
+            row.valueText:SetWordWrap(false)
 
             row:EnableMouse(true)
             row:SetScript("OnEnter", function(self)
@@ -1648,6 +1652,8 @@ function Summary:Create(parentFrame)
                 local p = pts[i]
                 if r and p then
                     r:SetWidth(rowW)
+                    if r.modeText then r.modeText:SetWidth(rowW) end
+                    if r.valueText then r.valueText:SetWidth(rowW) end
                     r:ClearAllPoints()
                     r:SetPoint(p[1], p[2], p[3], p[4], p[5])
                 end
