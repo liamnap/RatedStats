@@ -1511,7 +1511,7 @@ function Summary:Create(parentFrame)
     f.modelTitle = f.modelPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     f.modelTitle:SetFont(GetUnicodeSafeFont(), 14, "OUTLINE")
     f.modelTitle:SetPoint("TOP", f.modelPanel, "TOP", 0, -6)
-    f.modelTitle:SetText("Your Legend")
+    f.modelTitle:SetText("Your Character")
 
     f.playerModel = CreateFrame("PlayerModel", nil, f.modelPanel)
     f.playerModel:SetFrameLevel(f.modelPanel:GetFrameLevel() + 1)
