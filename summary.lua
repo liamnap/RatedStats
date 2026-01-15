@@ -376,6 +376,35 @@ local function NormalizeOutcome(winLoss)
     return nil
 end
 
+local function GetMatchDurationSeconds(match)
+    if type(match) ~= "table" then return nil end
+
+    -- Be tolerant: different parts of the addon have used slightly different keys over time.
+    local d =
+        tonumber(match.durationSeconds) or
+        tonumber(match.durationSec) or
+        tonumber(match.duration) or
+        tonumber(match.matchDuration) or
+        tonumber(match.durationRaw)
+
+    if not d or d <= 0 then return nil end
+
+    -- Some APIs return ms; matches will never be > 60,000 seconds, so treat big numbers as ms.
+    if d > 60000 then
+        d = d / 1000
+    end
+
+    return math.floor(d + 0.5)
+end
+
+local function FormatDurationMinSec(seconds)
+    seconds = tonumber(seconds)
+    if not seconds or seconds <= 0 then return "0" end
+    local m = math.floor(seconds / 60)
+    local s = seconds - (m * 60)
+    return string.format("%d Min %d Sec", m, s)
+end
+
 local function FindDominantTeammate(matches, me)
     local counts = {}
     local total = 0
@@ -468,6 +497,40 @@ local function BuildBestWinStreakByBracket(perChar, seasonStart, seasonFinish)
             startT = bestStart,
             endT = bestEnd,
             mate = mate,
+        }
+    end
+
+    return out
+end
+
+local function BuildFastestWinByBracket(perChar, seasonStart, seasonFinish)
+    if type(perChar) ~= "table" then return {} end
+    if not seasonStart or not seasonFinish then return {} end
+
+    local out = {}
+
+    for _, bracket in ipairs(BRACKETS) do
+        local history = perChar[bracket.historyKey] or {}
+        local bestDur, bestT
+
+        for _, match in ipairs(history) do
+            local t = match.endTime or match.timestamp
+            if t and t >= seasonStart and t < seasonFinish then
+                if NormalizeOutcome(match.friendlyWinLoss) == "W" then
+                    local dur = GetMatchDurationSeconds(match)
+                    if dur and dur > 0 and (not bestDur or dur < bestDur) then
+                        bestDur = dur
+                        bestT = t
+                    end
+                end
+            end
+        end
+
+        out[bracket.name] = {
+            mode = bracket.name,
+            modeShort = ModeShort(bracket.name),
+            duration = bestDur,
+            t = bestT,
         }
     end
 
@@ -1708,17 +1771,130 @@ function Summary:Create(parentFrame)
     f.streakCard = CreateStreakCard(f.streakPanel)
     f.streakCard:SetAllPoints(f.streakPanel)
 
-    -- Placeholder card (fills the "other half" of the streak column for now)
-    f.placeholderCard = CreateFrame("Frame", nil, f.streakPanel, "BackdropTemplate")
-    CreateBackdrop(f.placeholderCard)
+    local function CreateFastestWinCard(parent)
+        local card = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+        CreateBackdrop(card)
 
-    f.placeholderCard.title = f.placeholderCard:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    f.placeholderCard.title:SetFont(GetUnicodeSafeFont(), 13, "OUTLINE")
-    f.placeholderCard.title:SetPoint("TOPLEFT", f.placeholderCard, "TOPLEFT", 10, -8)
-    f.placeholderCard.title:SetText("Coming Soon")
+        card.title = card:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        card.title:SetFont(GetUnicodeSafeFont(), 13, "OUTLINE")
+        card.title:SetPoint("TOPLEFT", card, "TOPLEFT", 10, -8)
+        card.title:SetText("Fastest Win (All Brackets)")
+
+        card.rows = {}
+        local rowH = 28
+
+        for i = 1, #BRACKETS do
+            local row = CreateFrame("Frame", nil, card)
+            row:SetHeight(rowH)
+
+            row.modeText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.modeText:SetFont(GetUnicodeSafeFont(), 11, "OUTLINE")
+            row.modeText:ClearAllPoints()
+            row.modeText:SetPoint("CENTER", row, "CENTER", 0, 6)
+            row.modeText:SetJustifyH("CENTER")
+            row.modeText:SetWordWrap(false)
+
+            row.valueText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.valueText:SetFont(GetUnicodeSafeFont(), 11, "OUTLINE")
+            row.valueText:ClearAllPoints()
+            row.valueText:SetPoint("CENTER", row, "CENTER", 0, -6)
+            row.valueText:SetJustifyH("CENTER")
+            row.valueText:SetWordWrap(false)
+
+            row:EnableMouse(true)
+            row:SetScript("OnEnter", function(self)
+                if not self._fastDur or not self._fastT then return end
+                GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
+                GameTooltip:ClearLines()
+                GameTooltip:AddLine(ColorText("Fastest win: ") .. FormatDurationMinSec(self._fastDur))
+                GameTooltip:AddLine(ColorText("When: ") .. date("%d %b %Y %H:%M", self._fastT))
+                GameTooltip:Show()
+            end)
+            row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+            card.rows[i] = row
+        end
+
+        function card:LayoutStarPoints()
+            local w = self:GetWidth() or 0
+            local h = self:GetHeight() or 0
+            if w <= 1 then return end
+            if h <= 1 then return end
+
+            local rowW = Clamp(math.floor(w * 0.55), 140, 220)
+
+            local minDim = (w < h) and w or h
+            local r = Clamp(math.floor(minDim * 0.30), 34, 74)
+            local cy = -Clamp(math.floor(h * 0.10), 16, 28)
+
+            local function starXY(deg)
+                local rad = math.rad(deg)
+                return math.cos(rad) * r, (math.sin(rad) * r) + cy
+            end
+
+            local x1, y1 = starXY(90)
+            local x2, y2 = starXY(162)
+            local x3, y3 = starXY(18)
+            local x4, y4 = starXY(234)
+            local x5, y5 = starXY(306)
+
+            local pts = {
+                [1] = { x1, y1 }, -- SS
+                [2] = { x2, y2 }, -- 2v2
+                [3] = { x3, y3 }, -- 3v3
+                [4] = { x4, y4 }, -- RBG
+                [5] = { x5, y5 }, -- SRBG
+            }
+
+            for i = 1, #BRACKETS do
+                local rr = self.rows[i]
+                local p = pts[i]
+                if rr and p then
+                    rr:SetWidth(rowW)
+                    if rr.modeText then rr.modeText:SetWidth(rowW) end
+                    if rr.valueText then rr.valueText:SetWidth(rowW) end
+                    rr:ClearAllPoints()
+                    rr:SetPoint("CENTER", self, "CENTER", p[1], p[2])
+                end
+            end
+        end
+
+        card:SetScript("OnSizeChanged", function(self)
+            if self.LayoutStarPoints then self:LayoutStarPoints() end
+        end)
+        card:LayoutStarPoints()
+
+        function card:SetData(fastByMode)
+            for i, b in ipairs(BRACKETS) do
+                local r = self.rows[i]
+                local d = fastByMode and fastByMode[b.name] or nil
+                if r and d then
+                    r.modeText:SetText(d.modeShort or ModeShort(b.name))
+                    if d.duration and d.duration > 0 then
+                        r.valueText:SetText(FormatDurationMinSec(d.duration))
+                        r._fastDur = d.duration
+                        r._fastT = d.t
+                    else
+                        r.valueText:SetText("0")
+                        r._fastDur = nil
+                        r._fastT = nil
+                    end
+                elseif r then
+                    r.modeText:SetText(ModeShort(b.name))
+                    r.valueText:SetText("0")
+                    r._fastDur = nil
+                    r._fastT = nil
+                end
+            end
+        end
+
+        return card
+    end
+
+    f.fastestWinCard = CreateFastestWinCard(f.streakPanel)
 
     function f:LayoutStreakCards()
-        if not self.streakPanel or not self.streakCard or not self.placeholderCard then return end
+        if not self.streakPanel or not self.streakCard or not self.fastestWinCard then return end
         local w = self.streakPanel:GetWidth() or 0
         local h = self.streakPanel:GetHeight() or 0
         if w <= 1 or h <= 1 then return end
@@ -1732,11 +1908,11 @@ function Summary:Create(parentFrame)
         self.streakCard:SetPoint("TOPRIGHT", self.streakPanel, "TOPRIGHT", 0, 0)
         self.streakCard:SetHeight(halfH)
 
-        self.placeholderCard:ClearAllPoints()
-        self.placeholderCard:SetPoint("TOPLEFT", self.streakCard, "BOTTOMLEFT", 0, -gap)
-        self.placeholderCard:SetPoint("TOPRIGHT", self.streakCard, "BOTTOMRIGHT", 0, -gap)
-        self.placeholderCard:SetPoint("BOTTOMLEFT", self.streakPanel, "BOTTOMLEFT", 0, 0)
-        self.placeholderCard:SetPoint("BOTTOMRIGHT", self.streakPanel, "BOTTOMRIGHT", 0, 0)
+        self.fastestWinCard:ClearAllPoints()
+        self.fastestWinCard:SetPoint("TOPLEFT", self.streakCard, "BOTTOMLEFT", 0, -gap)
+        self.fastestWinCard:SetPoint("TOPRIGHT", self.streakCard, "BOTTOMRIGHT", 0, -gap)
+        self.fastestWinCard:SetPoint("BOTTOMLEFT", self.streakPanel, "BOTTOMLEFT", 0, 0)
+        self.fastestWinCard:SetPoint("BOTTOMRIGHT", self.streakPanel, "BOTTOMRIGHT", 0, 0)
     end    
 
     f.damageCard = CreateRecordCard(f.recordsPanel, "Best 10 Players - Most Damage Done (All Brackets)")
@@ -2017,5 +2193,10 @@ function Summary:Refresh()
     if self.frame and self.frame.streakCard and seasonStart and seasonFinish then
         local streakByMode = BuildBestWinStreakByBracket(perChar, seasonStart, seasonFinish)
         self.frame.streakCard:SetData(streakByMode)
+    end
+
+    if self.frame and self.frame.fastestWinCard and seasonStart and seasonFinish then
+        local fastByMode = BuildFastestWinByBracket(perChar, seasonStart, seasonFinish)
+        self.frame.fastestWinCard:SetData(fastByMode)
     end
 end
