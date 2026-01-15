@@ -1611,7 +1611,8 @@ function Summary:Create(parentFrame)
             row:EnableMouse(true)
             row:SetScript("OnEnter", function(self)
                 if not self._streakStart or not self._streakEnd then return end
-                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                -- ANCHOR_RIGHT anchors to the right edge of the (wide) row frame, which creates a big visible gap.
+                GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
                 GameTooltip:ClearLines()
                 local s = date("%d %b %Y %H:%M", self._streakStart)
                 local e = date("%d %b %Y %H:%M", self._streakEnd)
@@ -1633,19 +1634,33 @@ function Summary:Create(parentFrame)
             -- keep rows wide enough to show "SRBG" + value, but never so wide they clip out of the card
             local rowW = Clamp(math.floor(w * 0.55), 140, 220)
 
-            -- scale offsets so it still looks right when this card is half-height
-            local topY   = -Clamp(math.floor(h * 0.22), 26, 44)
-            local sideY  = -Clamp(math.floor(h * 0.10),  6, 18)
-            local botY   =  Clamp(math.floor(h * 0.22), 24, 44)
-            local sideX  =  Clamp(math.floor(w * 0.06), 12, 22)
-
-            local pts = {
-                [1] = { "TOP",         self, "TOP",          0,  topY  },      -- SS
-                [2] = { "LEFT",        self, "LEFT",        sideX, sideY },    -- 2v2
-                [3] = { "RIGHT",       self, "RIGHT",      -sideX, sideY },    -- 3v3
-                [4] = { "BOTTOMLEFT",  self, "BOTTOMLEFT",  sideX, botY },     -- RBG
-                [5] = { "BOTTOMRIGHT", self, "BOTTOMRIGHT", -sideX, botY },    -- SRBG
-            }
+			-- True 5-point star placement (angles around a center).
+			-- Center is nudged down a bit so it sits under the title.
+			local minDim = (w < h) and w or h
+			local r = Clamp(math.floor(minDim * 0.30), 34, 74)
+			local cy = -Clamp(math.floor(h * 0.10), 16, 28)
+	
+			local function starXY(deg)
+				local rad = math.rad(deg)
+				return math.cos(rad) * r, (math.sin(rad) * r) + cy
+			end
+	
+			-- Order maps to BRACKETS order: SS, 2v2, 3v3, RBG, SRBG
+			-- Angles chosen to look like a star/pentagram point layout:
+			-- 90(top), 162(upper-left), 18(upper-right), 234(lower-left), 306(lower-right)
+			local x1, y1 = starXY(90)
+			local x2, y2 = starXY(162)
+			local x3, y3 = starXY(18)
+			local x4, y4 = starXY(234)
+			local x5, y5 = starXY(306)
+	
+			local pts = {
+				[1] = { x1, y1 }, -- SS
+				[2] = { x2, y2 }, -- 2v2
+				[3] = { x3, y3 }, -- 3v3
+				[4] = { x4, y4 }, -- RBG
+				[5] = { x5, y5 }, -- SRBG
+			}
 
             for i = 1, #BRACKETS do
                 local r = self.rows[i]
@@ -1655,7 +1670,8 @@ function Summary:Create(parentFrame)
                     if r.modeText then r.modeText:SetWidth(rowW) end
                     if r.valueText then r.valueText:SetWidth(rowW) end
                     r:ClearAllPoints()
-                    r:SetPoint(p[1], p[2], p[3], p[4], p[5])
+                -- Center each label at its star point
+                r:SetPoint("CENTER", self, "CENTER", p[1], p[2])
                 end
             end
         end
