@@ -60,7 +60,16 @@
 			"COMBATLOG_OBJECT_TYPE_PLAYER",
 			"ReloadUI",
 			"ToggleDropDownMenu",
-			"NUM_CHAT_WINDOWS"
+			"NUM_CHAT_WINDOWS",
+			"GameTooltip",
+			"UIParent",
+			"CopyTable",
+			"HideUIPanel",
+			"SecondsToTime",
+			"tostringall",
+			"EventUtil",
+			"Settings",
+			"CreateSettingsListSectionHeaderInitializer"
 		]
 	}
 }
