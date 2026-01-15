@@ -288,6 +288,107 @@ local function Clamp(v, lo, hi)
     return v
 end
 
+local function FormatNumber(value)
+    if type(value) ~= "number" then
+        return tostring(value)
+    end
+
+    if value >= 1000000 then
+        return string.format("%.1fM", value / 1000000)
+    elseif value >= 1000 then
+        return string.format("%.1fk", value / 1000)
+    else
+        return tostring(math.floor(value))
+    end
+end
+
+local function BuildTopSoloShuffleRecords(history, valueKey, limit, seasonStart, seasonFinish)
+    if not history or #history == 0 then
+        return {}
+    end
+
+    local tmp = {}
+
+    for _, match in ipairs(history) do
+        local t = match.endTime or match.timestamp
+        if t and seasonStart and seasonFinish and t >= seasonStart and t < seasonFinish then
+            for _, ps in ipairs(match.playerStats or {}) do
+                local v = tonumber(ps[valueKey])
+                if v and v > 0 and ps.name then
+                    tmp[#tmp + 1] = { ps = ps, match = match, v = v, t = t }
+                end
+            end
+        end
+    end
+
+    table.sort(tmp, function(a, b) return a.v > b.v end)
+
+    local out = {}
+    local seen = {}
+
+    for _, r in ipairs(tmp) do
+        if not seen[r.ps.name] then
+            out[#out + 1] = r
+            seen[r.ps.name] = true
+            if #out >= (limit or 25) then
+                break
+            end
+        end
+    end
+
+    return out
+end
+
+local function UpdateRecordCard(card, records)
+    if not card or not card.rows then return end
+
+    for i = 1, 25 do
+        local row = card.rows[i]
+        local rec = records and records[i]
+
+        if rec and row then
+            row:Show()
+            row._rsPS = rec.ps
+            row._rsMatch = rec.match
+
+            row.nameText:SetText(rec.ps.name or "?")
+
+            -- RatedStats_Achiev icon (optional)
+            local achievIconPath, _, achievIconTint
+            if type(C_AddOns) == "table" and type(C_AddOns.GetAddOnEnableState) == "function" then
+                if C_AddOns.GetAddOnEnableState("RatedStats_Achiev", nil) > 0
+                    and type(_G.RSTATS_Achiev_GetHighestPvpRank) == "function"
+                then
+                    achievIconPath, _, achievIconTint = _G.RSTATS_Achiev_GetHighestPvpRank(rec.ps.name)
+                end
+            end
+
+            if achievIconPath then
+                row.iconBtn:Show()
+                row.iconTex:SetTexture(achievIconPath)
+
+                if achievIconTint and type(achievIconTint) == "table" then
+                    row.iconTex:SetVertexColor(achievIconTint[1] or 1, achievIconTint[2] or 1, achievIconTint[3] or 1)
+                else
+                    row.iconTex:SetVertexColor(1, 1, 1)
+                end
+
+                row.nameBtn:SetPoint("LEFT", row, "LEFT", 14, 0)
+            else
+                row.iconBtn:Hide()
+                row.nameBtn:SetPoint("LEFT", row, "LEFT", 2, 0)
+            end
+
+            local when = rec.t and date("%d %b %H:%M", rec.t) or "?"
+            row.valueText:SetText(FormatNumber(rec.v) .. "  " .. when)
+        elseif row then
+            row:Hide()
+            row._rsPS = nil
+            row._rsMatch = nil
+        end
+    end
+end
+
 -- Build per-season-week series.
 -- 1) wins: winrate% per week (0..100)
 -- 2) cr: cumulative CR delta across weeks
@@ -915,33 +1016,191 @@ function Summary:Create(parentFrame)
     f:SetScript("OnSizeChanged", function(self) self:LayoutCards() end)
     C_Timer.After(0, function() if f and f.LayoutCards then f:LayoutCards() end end)
 
-    -- Overall Highlights panel (bottom half)
-    f.highlights = CreateFrame("Frame", nil, f, "BackdropTemplate")
-    CreateBackdrop(f.highlights)
-    f.highlights:SetPoint("TOPLEFT", f.cards[1], "BOTTOMLEFT", 0, -14)
-    f.highlights:SetPoint("TOPRIGHT", f.cards[#f.cards], "BOTTOMRIGHT", 0, -14)
-    f.highlights:SetHeight(90)
+    -- Bottom content: Player model (left) + record cards (right)
+    f.bottom = CreateFrame("Frame", nil, f, "BackdropTemplate")
+    CreateBackdrop(f.bottom)
+    f.bottom:SetPoint("TOPLEFT", f.cards[1], "BOTTOMLEFT", 0, -14)
+    f.bottom:SetPoint("TOPRIGHT", f.cards[#f.cards], "BOTTOMRIGHT", 0, -14)
+    f.bottom:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 14, 14)
+    f.bottom:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -14, 14)
 
-    f.highTitle = f.highlights:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    f.highTitle:SetPoint("TOP", f.highlights, "TOP", 0, -6)
-    f.highTitle:SetFont(GetUnicodeSafeFont(), 14, "OUTLINE")
-    f.highTitle:SetText("Overall Highlights")
+    -- Left: 3D player model (uses your current character model)
+    f.modelPanel = CreateFrame("Frame", nil, f.bottom, "BackdropTemplate")
+    CreateBackdrop(f.modelPanel)
+    f.modelPanel:SetPoint("TOPLEFT", f.bottom, "TOPLEFT", 10, -10)
+    f.modelPanel:SetPoint("BOTTOMLEFT", f.bottom, "BOTTOMLEFT", 10, 10)
+    f.modelPanel:SetWidth(290)
 
-    f.highLines = {}
-    for i = 1, 6 do
-        local fs = f.highlights:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        fs:SetFont(GetUnicodeSafeFont(), 12, "OUTLINE")
-        f.highLines[i] = fs
+    f.modelTitle = f.modelPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    f.modelTitle:SetFont(GetUnicodeSafeFont(), 14, "OUTLINE")
+    f.modelTitle:SetPoint("TOP", f.modelPanel, "TOP", 0, -6)
+    f.modelTitle:SetText("Your Legend")
+
+    f.playerModel = CreateFrame("PlayerModel", nil, f.modelPanel)
+    f.playerModel:SetPoint("TOPLEFT", f.modelPanel, "TOPLEFT", 6, -24)
+    f.playerModel:SetPoint("BOTTOMRIGHT", f.modelPanel, "BOTTOMRIGHT", -6, 6)
+    f.playerModel:SetUnit("player")
+    if f.playerModel.SetCamDistanceScale then
+        f.playerModel:SetCamDistanceScale(0.9)
     end
 
-    -- 2 rows of 3 (like your mock)
-    f.highLines[1]:SetPoint("TOPLEFT", f.highlights, "TOPLEFT", 14, -34)
-    f.highLines[2]:SetPoint("LEFT", f.highLines[1], "RIGHT", 220, 0)
-    f.highLines[3]:SetPoint("LEFT", f.highLines[2], "RIGHT", 220, 0)
+    f.playerModel._rsRot = 0
+    f.playerModel._rsDragging = false
+    f.playerModel._rsDragX = nil
 
-    f.highLines[4]:SetPoint("TOPLEFT", f.highLines[1], "BOTTOMLEFT", 0, -10)
-    f.highLines[5]:SetPoint("LEFT", f.highLines[4], "RIGHT", 220, 0)
-    f.highLines[6]:SetPoint("LEFT", f.highLines[5], "RIGHT", 220, 0)
+    f.playerModel:EnableMouse(true)
+    f.playerModel:SetScript("OnEnter", function(self) self._rsHover = true end)
+    f.playerModel:SetScript("OnLeave", function(self) self._rsHover = false; self._rsDragging = false; self._rsDragX = nil end)
+
+    f.playerModel:SetScript("OnMouseDown", function(self, button)
+        if button == "LeftButton" then
+            self._rsDragging = true
+            local scale = UIParent and UIParent:GetEffectiveScale() or 1
+            local x = (GetCursorPosition() or 0) / scale
+            self._rsDragX = x
+        end
+    end)
+
+    f.playerModel:SetScript("OnMouseUp", function(self)
+        self._rsDragging = false
+        self._rsDragX = nil
+    end)
+
+    f.playerModel:SetScript("OnUpdate", function(self, elapsed)
+        elapsed = tonumber(elapsed) or 0
+        if self._rsDragging then
+            local scale = UIParent and UIParent:GetEffectiveScale() or 1
+            local x = (GetCursorPosition() or 0) / scale
+            if self._rsDragX then
+                local dx = x - self._rsDragX
+                self._rsRot = (self._rsRot + (dx * 0.01)) % (2 * math.pi)
+                self._rsDragX = x
+            else
+                self._rsDragX = x
+            end
+        elseif not self._rsHover then
+            self._rsRot = (self._rsRot + elapsed * 0.25) % (2 * math.pi)
+        else
+            return
+        end
+
+        if self.SetFacing then
+            self:SetFacing(self._rsRot)
+        end
+    end)
+
+    -- Right: record cards (scrollable lists)
+    f.recordsPanel = CreateFrame("Frame", nil, f.bottom)
+    f.recordsPanel:SetPoint("TOPLEFT", f.modelPanel, "TOPRIGHT", 10, 0)
+    f.recordsPanel:SetPoint("BOTTOMRIGHT", f.bottom, "BOTTOMRIGHT", -10, 10)
+
+    local function CreateRecordCard(parent, titleText)
+        local card = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+        CreateBackdrop(card)
+
+        card.title = card:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        card.title:SetFont(GetUnicodeSafeFont(), 13, "OUTLINE")
+        card.title:SetPoint("TOPLEFT", card, "TOPLEFT", 10, -8)
+        card.title:SetText(titleText)
+
+        card.scroll = CreateFrame("ScrollFrame", nil, card, "UIPanelScrollFrameTemplate")
+        card.scroll:SetPoint("TOPLEFT", card, "TOPLEFT", 6, -26)
+        card.scroll:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -24, 8)
+
+        card.scrollChild = CreateFrame("Frame", nil, card.scroll)
+        card.scrollChild:SetSize(1, 1)
+        card.scroll:SetScrollChild(card.scrollChild)
+
+        card.rows = {}
+
+        local rowH = 14
+        local nameColW = 150
+
+        for i = 1, 25 do
+            local row = CreateFrame("Frame", nil, card.scrollChild)
+            row:SetHeight(rowH)
+            row:SetPoint("TOPLEFT", card.scrollChild, "TOPLEFT", 0, -((i - 1) * rowH))
+            row:SetPoint("TOPRIGHT", card.scrollChild, "TOPRIGHT", 0, -((i - 1) * rowH))
+
+            row.iconBtn = CreateFrame("Button", nil, row)
+            row.iconBtn:SetSize(10, 10)
+            row.iconBtn:SetPoint("LEFT", row, "LEFT", 2, 0)
+            row.iconBtn:Hide()
+
+            row.iconTex = row.iconBtn:CreateTexture(nil, "OVERLAY")
+            row.iconTex:SetAllPoints()
+
+            row.nameBtn = CreateFrame("Button", nil, row)
+            row.nameBtn:SetSize(nameColW, rowH)
+            row.nameBtn:SetPoint("LEFT", row, "LEFT", 2, 0)
+
+            row.nameText = row.nameBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.nameText:SetFont(GetUnicodeSafeFont(), 10, "OUTLINE")
+            row.nameText:SetPoint("LEFT", row.nameBtn, "LEFT", 0, 0)
+            row.nameText:SetJustifyH("LEFT")
+
+            row.valueText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.valueText:SetFont(GetUnicodeSafeFont(), 10, "OUTLINE")
+            row.valueText:SetPoint("RIGHT", row, "RIGHT", -2, 0)
+            row.valueText:SetJustifyH("RIGHT")
+
+            row.nameBtn:SetScript("OnClick", function(self)
+                local parentRow = self:GetParent()
+                if parentRow and parentRow._rsPS and parentRow._rsMatch and type(RSTATS) == "table" and type(RSTATS.OpenPlayerDetails) == "function" then
+                    RSTATS.OpenPlayerDetails(parentRow._rsPS, parentRow._rsMatch)
+                end
+            end)
+
+            row.iconBtn:SetScript("OnClick", function(self)
+                local parentRow = self:GetParent()
+                if parentRow and parentRow._rsPS and parentRow._rsMatch and type(RSTATS) == "table" and type(RSTATS.OpenPlayerDetails) == "function" then
+                    RSTATS.OpenPlayerDetails(parentRow._rsPS, parentRow._rsMatch)
+                end
+            end)
+
+            row.iconBtn:SetScript("OnEnter", function(self)
+                local parentRow = self:GetParent()
+                if parentRow and parentRow._rsPS and parentRow._rsPS.name
+                    and type(_G.RSTATS_Achiev_AddAchievementInfoToTooltip) == "function"
+                then
+                    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                    local baseName, realm = strsplit("-", parentRow._rsPS.name)
+                    realm = realm or GetRealmName()
+                    _G.RSTATS_Achiev_AddAchievementInfoToTooltip(GameTooltip, baseName, realm)
+                    GameTooltip:Show()
+                end
+            end)
+
+            row.iconBtn:SetScript("OnLeave", function()
+                GameTooltip:Hide()
+            end)
+
+            card.rows[i] = row
+        end
+
+        card.scrollChild:SetHeight(25 * rowH)
+        return card
+    end
+
+    f.damageCard = CreateRecordCard(f.recordsPanel, "Best 25 Players - Most Damage Done (Solo Shuffle)")
+    f.healCard   = CreateRecordCard(f.recordsPanel, "Best 25 Players - Most Healing Done (Solo Shuffle)")
+
+    f.damageCard:SetPoint("TOPLEFT", f.recordsPanel, "TOPLEFT", 0, 0)
+    f.damageCard:SetPoint("TOPRIGHT", f.recordsPanel, "TOPRIGHT", 0, 0)
+    f.damageCard:SetHeight( (f.recordsPanel:GetHeight() or 220) * 0.5 - 6 )
+
+    f.healCard:SetPoint("TOPLEFT", f.damageCard, "BOTTOMLEFT", 0, -10)
+    f.healCard:SetPoint("TOPRIGHT", f.damageCard, "BOTTOMRIGHT", 0, -10)
+    f.healCard:SetPoint("BOTTOMLEFT", f.recordsPanel, "BOTTOMLEFT", 0, 0)
+    f.healCard:SetPoint("BOTTOMRIGHT", f.recordsPanel, "BOTTOMRIGHT", 0, 0)
+
+    f:SetScript("OnSizeChanged", function(self)
+        if self.LayoutCards then self:LayoutCards() end
+        if self.damageCard and self.healCard then
+            local h = (self.recordsPanel and self.recordsPanel:GetHeight()) or 220
+            self.damageCard:SetHeight(h * 0.5 - 6)
+        end
+    end)
 
     -- Start auto-cycling the per-card graphs (optional but looks good)
     self:_StartAutoCycle()
@@ -1133,5 +1392,15 @@ function Summary:Refresh()
         for i = 1, 6 do
             self.frame.highLines[i]:SetText("")
         end
+    end
+
+    -- Bottom record cards (Solo Shuffle)
+    if self.frame and self.frame.damageCard and self.frame.healCard then
+        local ssHistory = perChar["SoloShuffleHistory"] or {}
+        local topDmg  = BuildTopSoloShuffleRecords(ssHistory, "damageDone", 25, seasonStart, seasonFinish)
+        local topHeal = BuildTopSoloShuffleRecords(ssHistory, "healingDone", 25, seasonStart, seasonFinish)
+
+        UpdateRecordCard(self.frame.damageCard, topDmg)
+        UpdateRecordCard(self.frame.healCard, topHeal)
     end
 end
