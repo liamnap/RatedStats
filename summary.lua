@@ -1345,8 +1345,17 @@ function Summary:Create(parentFrame)
     end
 
     f:SetScript("OnShow", function(self) self:LayoutCards() end)
-    f:SetScript("OnSizeChanged", function(self) self:LayoutCards() end)
-    C_Timer.After(0, function() if f and f.LayoutCards then f:LayoutCards() end end)
+    -- Don't overwrite the earlier OnSizeChanged that drives LayoutCards().
+    -- Hook instead, so cards lay out first, then the bottom panels can size correctly.
+    f:HookScript("OnShow", function(self)
+        if self.LayoutRightPanels then self:LayoutRightPanels() end
+        if self.LayoutRecordCards then self:LayoutRecordCards() end
+    end)
+
+    f:HookScript("OnSizeChanged", function(self)
+        if self.LayoutRightPanels then self:LayoutRightPanels() end
+        if self.LayoutRecordCards then self:LayoutRecordCards() end
+    end)    C_Timer.After(0, function() if f and f.LayoutCards then f:LayoutCards() end end)
 
     -- Bottom content: Player model (left) + record cards (right)
     f.bottom = CreateFrame("Frame", nil, f, "BackdropTemplate")
