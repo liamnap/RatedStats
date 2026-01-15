@@ -311,6 +311,17 @@ local function ModeShort(bracketName)
     return tostring(bracketName or "?")
 end
 
+local function IsFriendlyForMatch(ps, myTeamIndex)
+    if not ps then return false end
+    if ps.isFriendly ~= nil then
+        return ps.isFriendly and true or false
+    end
+    if myTeamIndex ~= nil and ps.teamIndex ~= nil then
+        return ps.teamIndex == myTeamIndex
+    end
+    return false
+end
+
 local function BuildTopAllBracketRecords(perChar, valueKey, limit, seasonStart, seasonFinish)
     if type(perChar) ~= "table" then return {} end
     if not seasonStart or not seasonFinish then return {} end
@@ -380,8 +391,16 @@ local function BuildMostWinsFriendly(perChar, seasonStart, seasonFinish)
             if t and t >= seasonStart and t < seasonFinish then
                 local outcome = NormalizeOutcome(match.friendlyWinLoss)
                 if outcome then
+                    local myTeamIndex
                     for _, ps in ipairs(match.playerStats or {}) do
-                        if ps and ps.name and ps.name ~= me and ps.isFriendly then
+                        if ps and ps.name == me then
+                            myTeamIndex = ps.teamIndex
+                            break
+                        end
+                    end
+
+                    for _, ps in ipairs(match.playerStats or {}) do
+                        if ps and ps.name and ps.name ~= me and IsFriendlyForMatch(ps, myTeamIndex) then
                             local rec = byName[ps.name]
                             if not rec then
                                 rec = {
@@ -464,9 +483,11 @@ local function BuildSameSpecWithOrVs(perChar, seasonStart, seasonFinish)
                 end
 
                 local mySpec
+                local myTeamIndex
                 for _, ps in ipairs(match.playerStats or {}) do
                     if ps and ps.name == me then
                         mySpec = ps.spec
+                        myTeamIndex = ps.teamIndex
                         break
                     end
                 end
@@ -488,9 +509,10 @@ local function BuildSameSpecWithOrVs(perChar, seasonStart, seasonFinish)
 
                             rec.total = rec.total + 1
 
-                            if outcome == "W" and ps.isFriendly then
+                            local isFriend = IsFriendlyForMatch(ps, myTeamIndex)
+                            if outcome == "W" and isFriend then
                                 rec.withWins = rec.withWins + 1
-                            elseif outcome == "L" and (not ps.isFriendly) then
+                            elseif outcome == "L" and (not isFriend) then
                                 rec.beatYou = rec.beatYou + 1
                             end
                         end
@@ -535,6 +557,17 @@ local function UpdateRecordCard(card, records)
 
             row.nameText:SetText(rec.ps.name or "?")
 
+            local showStar = card._showStar and true or false
+            if row.starBtn then
+                if showStar then
+                    row.starBtn:Show()
+                    -- Star icon (exists in retail; we only need a small “favourite” marker)
+                    row.starTex:SetAtlas("auctionhouse-icon-favorite", true)
+                else
+                    row.starBtn:Hide()
+                end
+            end
+
             -- RatedStats_Achiev icon (optional)
             local achievIconPath, _, achievIconTint
             if type(C_AddOns) == "table" and type(C_AddOns.GetAddOnEnableState) == "function" then
@@ -555,10 +588,14 @@ local function UpdateRecordCard(card, records)
                     row.iconTex:SetVertexColor(1, 1, 1)
                 end
 
-                row.nameBtn:SetPoint("LEFT", row, "LEFT", 14, 0)
+                row.iconBtn:ClearAllPoints()
+                row.iconBtn:SetPoint("LEFT", row, "LEFT", showStar and 14 or 2, 0)
+
+                row.nameBtn:ClearAllPoints()
+                row.nameBtn:SetPoint("LEFT", row, "LEFT", showStar and 26 or 14, 0)
             else
-                row.iconBtn:Hide()
-                row.nameBtn:SetPoint("LEFT", row, "LEFT", 2, 0)
+                row.nameBtn:ClearAllPoints()
+                row.nameBtn:SetPoint("LEFT", row, "LEFT", showStar and 14 or 2, 0)
             end
 
             if rec.displayValue then
@@ -1302,6 +1339,14 @@ function Summary:Create(parentFrame)
             row:SetPoint("TOPLEFT", card, "TOPLEFT", 8, -26 - ((i - 1) * rowH))
             row:SetPoint("TOPRIGHT", card, "TOPRIGHT", -8, -26 - ((i - 1) * rowH))
 
+            row.starBtn = CreateFrame("Button", nil, row)
+            row.starBtn:SetSize(10, 10)
+            row.starBtn:SetPoint("LEFT", row, "LEFT", 2, 0)
+            row.starBtn:Hide()
+
+            row.starTex = row.starBtn:CreateTexture(nil, "OVERLAY")
+            row.starTex:SetAllPoints()
+
             row.iconBtn = CreateFrame("Button", nil, row)
             row.iconBtn:SetSize(10, 10)
             row.iconBtn:SetPoint("LEFT", row, "LEFT", 2, 0)
@@ -1332,6 +1377,13 @@ function Summary:Create(parentFrame)
             end)
 
             row.iconBtn:SetScript("OnClick", function(self)
+                local parentRow = self:GetParent()
+                if parentRow and parentRow._rsPS and parentRow._rsMatch and type(RSTATS) == "table" and type(RSTATS.OpenPlayerDetails) == "function" then
+                    RSTATS.OpenPlayerDetails(parentRow._rsPS, parentRow._rsMatch)
+                end
+            end)
+
+            row.starBtn:SetScript("OnClick", function(self)
                 local parentRow = self:GetParent()
                 if parentRow and parentRow._rsPS and parentRow._rsMatch and type(RSTATS) == "table" and type(RSTATS.OpenPlayerDetails) == "function" then
                     RSTATS.OpenPlayerDetails(parentRow._rsPS, parentRow._rsMatch)
@@ -1379,34 +1431,39 @@ function Summary:Create(parentFrame)
     f.healCard   = CreateRecordCard(f.recordsPanel, "Best 10 Players - Most Healing Done (All Brackets)")
     f.winsCard   = CreateRecordCard(f.recordsPanel, "Most Wins - Friendly Players (All Brackets)")
     f.specCard   = CreateRecordCard(f.recordsPanel, "Best Same Spec - With You / Beat You (All Brackets)")
+    f.winsCard._showStar = true
 
     function f:LayoutRecordCards()
-        local h = (self.recordsPanel and self.recordsPanel:GetHeight()) or 220
+        local panel = self.recordsPanel
+        if not panel then return end
+
+        local w = panel:GetWidth() or 0
+        local h = panel:GetHeight() or 0
+        if w <= 1 or h <= 1 then return end
+
         local gap = 10
-        local cardH = math.floor((h - (gap * 3)) / 4)
-        if cardH < 48 then cardH = 48 end
+        local cardW = math.floor((w - gap) / 2)
+        local cardH = math.floor((h - gap) / 2)
 
         self.damageCard:ClearAllPoints()
         self.healCard:ClearAllPoints()
         self.winsCard:ClearAllPoints()
         self.specCard:ClearAllPoints()
 
-        self.damageCard:SetPoint("TOPLEFT", self.recordsPanel, "TOPLEFT", 0, 0)
-        self.damageCard:SetPoint("TOPRIGHT", self.recordsPanel, "TOPRIGHT", 0, 0)
-        self.damageCard:SetHeight(cardH)
+        -- 2x2 grid (doubles height vs 4-high stack)
+        -- Top row
+        self.damageCard:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
+        self.damageCard:SetSize(cardW, cardH)
 
-        self.healCard:SetPoint("TOPLEFT", self.damageCard, "BOTTOMLEFT", 0, -gap)
-        self.healCard:SetPoint("TOPRIGHT", self.damageCard, "BOTTOMRIGHT", 0, -gap)
-        self.healCard:SetHeight(cardH)
+        self.healCard:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 0, 0)
+        self.healCard:SetSize(cardW, cardH)
 
-        self.winsCard:SetPoint("TOPLEFT", self.healCard, "BOTTOMLEFT", 0, -gap)
-        self.winsCard:SetPoint("TOPRIGHT", self.healCard, "BOTTOMRIGHT", 0, -gap)
-        self.winsCard:SetHeight(cardH)
+        -- Bottom row
+        self.winsCard:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 0, 0)
+        self.winsCard:SetSize(cardW, cardH)
 
-        self.specCard:SetPoint("TOPLEFT", self.winsCard, "BOTTOMLEFT", 0, -gap)
-        self.specCard:SetPoint("TOPRIGHT", self.winsCard, "BOTTOMRIGHT", 0, -gap)
-        self.specCard:SetPoint("BOTTOMLEFT", self.recordsPanel, "BOTTOMLEFT", 0, 0)
-        self.specCard:SetPoint("BOTTOMRIGHT", self.recordsPanel, "BOTTOMRIGHT", 0, 0)
+        self.specCard:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 0)
+        self.specCard:SetSize(cardW, cardH)
     end
 
     f:SetScript("OnSizeChanged", function(self)
