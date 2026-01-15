@@ -38,7 +38,9 @@ local MapListsByTab = {
 RatedStatsSeasons = {
     { label = "DF S4", start = time({ year = 2024, month = 4, day = 23 }), finish = time({ year = 2024, month = 7, day = 22 }) },
     { label = "TWW S1", start = time({ year = 2024, month = 9, day = 10 }), finish = time({ year = 2025, month = 2, day = 25 }) },
-    { label = "TWW S2", start = time({ year = 2025, month = 3, day = 4 }), finish = 9999999999 },
+    { label = "TWW S2", start = time({ year = 2025, month = 3, day = 4 }), finish = time({ year = 2025, month = 8, day = 5 }) },
+    { label = "TWW S3", start = time({ year = 2025, month = 8, day = 12 }), finish = time({ year = 2026, month = 1, day = 20 }) },
+    { label = "Midnight S1", start = time({ year = 2026, month = 3, day = 4 }), finish = time({ year = 2026, month = 8, day = 5 }) },
 }
 
 function RSTATS:GetCurrentSeasonStart()
@@ -269,10 +271,24 @@ end
 
 -- 🕒 Time-based filtering helper
 function FilterMatchesByTimeRange(matches, filterType)
-	if not filterType or filterType == "thisSeason" then return matches end
+	if not filterType then return matches end
 
 	local now = time()
 	local filtered = {}
+	local seasonStart, seasonFinish
+
+	-- Season ranges ("This Season" or explicit season labels like "TWW S3")
+	if filterType == "thisSeason" then
+		seasonStart  = RSTATS and RSTATS.GetCurrentSeasonStart  and RSTATS:GetCurrentSeasonStart()  or nil
+		seasonFinish = RSTATS and RSTATS.GetCurrentSeasonFinish and RSTATS:GetCurrentSeasonFinish() or nil
+	else
+		for _, season in ipairs(Seasons or {}) do
+			if season.label == filterType then
+				seasonStart, seasonFinish = season.start, season.finish
+				break
+			end
+		end
+	end
 
 	local function isSameDay(ts1, ts2)
 		return date("%x", ts1) == date("%x", ts2)
@@ -299,7 +315,9 @@ function FilterMatchesByTimeRange(matches, filterType)
 		if ts then
 			local include = false
 
-			if filterType == "today" and isSameDay(ts, now) then include = true
+			if seasonStart and seasonFinish then
+				include = (ts >= seasonStart and ts <= seasonFinish)
+			elseif filterType == "today" and isSameDay(ts, now) then include = true
 			elseif filterType == "yesterday" and isYesterday(ts) then include = true
 			elseif filterType == "thisWeek" and isSameWeek(ts) then include = true
 			elseif filterType == "thisMonth" and isSameMonth(ts) then include = true

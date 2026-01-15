@@ -96,6 +96,17 @@ function Config:Toggle()
     -- ✅ If we're showing the menu now, check for historyTable growth
     if wasHidden then
         local tabID = PanelTemplates_GetSelectedTab(RSTATS.UIConfig)
+
+        -- ✅ Summary: refresh after the frame is actually shown + laid out.
+        -- Without this, Summary can open "blank" until you tab away/back.
+        if tabID == 6 and RSTATS.Summary and RSTATS.Summary.Refresh then
+            C_Timer.After(0, function()
+                if menu:IsShown() and PanelTemplates_GetSelectedTab(RSTATS.UIConfig) == 6 then
+                    RSTATS.Summary:Refresh()
+                end
+            end)
+        end
+
         local data = ({
             [1] = Database.SoloShuffleHistory,
             [2] = Database.v2History,
@@ -342,7 +353,23 @@ end
 -- Function to get CR and MMR based on categoryID
 function GetCRandMMR(categoryID)
     local cr = select(1, GetPersonalRatedInfo(categoryID))
-    local mmr = select(10, GetPersonalRatedInfo(categoryID))
+    local mmr
+
+    -- Arena MMR: GetPersonalRatedInfo no longer provides this (select(10) is nil -> 0).
+    -- While the post-game scoreboard is up, team info has ratingMMR.
+    if (categoryID == 1 or categoryID == 2)
+        and C_PvP and C_PvP.GetTeamInfo
+        and C_PvP.IsRatedArena and C_PvP.IsRatedArena()
+    then
+        local teamInfo = C_PvP.GetTeamInfo(0)
+        mmr = teamInfo and teamInfo.ratingMMR
+    end
+
+    -- Legacy fallback (harmless if nil)
+    if mmr == nil then
+        mmr = select(10, GetPersonalRatedInfo(categoryID))
+    end
+
     return cr, mmr
 end
 
@@ -3199,7 +3226,7 @@ local function CreateFriendAndTalentButtons(stats, matchEntry, parent)
 end
 
 -- Pop-out frame + name box tweaks
-local function CreateCopyNameFrame(stats, matchEntry)
+function RSTATS.OpenPlayerDetails(stats, matchEntry)
     local frame = CreateFrame("Frame", "CreateCopyNameFrame", UIParent, "BackdropTemplate")
 	UIPanelWindows["CreateCopyNameFrame"] = { area = "center", pushable = 0, whileDead = true }
 	tinsert(UISpecialFrames, "CreateCopyNameFrame")
@@ -3245,7 +3272,7 @@ local function CreateCopyNameFrame(stats, matchEntry)
     frame:Show()
 end
 
-local function CreateClickableName(parent, stats, matchEntry, x, y, columnWidth, rowHeight)
+function RSTATS.CreateClickableName(parent, stats, matchEntry, x, y, columnWidth, rowHeight)
   local playerName = stats.name
 
   -- RatedStats_Achiev (optional): show highest PvP achievement icon if available
@@ -3304,7 +3331,7 @@ local function CreateClickableName(parent, stats, matchEntry, x, y, columnWidth,
   clickableFrame:SetPoint("CENTER", nameText, "CENTER")
 
   clickableFrame:SetScript("OnClick", function()
-    CreateCopyNameFrame(stats, matchEntry)
+    RSTATS.OpenPlayerDetails(stats, matchEntry)
   end)
 
   return nameText
@@ -3645,7 +3672,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     -- Populate friendly player stats
     for index, player in ipairs(friendlyPlayers) do
         local rowOffset = -(headerHeight + 15 * index)  -- Adjust rowOffset to account for headers
-		CreateClickableName(nestedTable, player, matchEntry, columnPositions[1], rowOffset, columnWidths[1], rowHeight)
+        RSTATS.CreateClickableName(nestedTable, player, matchEntry, columnPositions[1], rowOffset, columnWidths[1], rowHeight)
         local winHKValue = (isSS and player.wins) or (hideWinHK and "") or player.honorableKills
 
         for i, stat in ipairs({
@@ -3758,7 +3785,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     -- Populate enemy player stats
     for index, player in ipairs(enemyPlayers) do
 		local rowOffset = -(headerHeight + 15 * index)  -- Adjust rowOffset to account for headers
-        CreateClickableName(nestedTable, player, matchEntry, columnPositions[COLS_PER_TEAM + 1], rowOffset, columnWidths[COLS_PER_TEAM + 1], rowHeight)
+        RSTATS.CreateClickableName(nestedTable, player, matchEntry, columnPositions[COLS_PER_TEAM + 1], rowOffset, columnWidths[COLS_PER_TEAM + 1], rowHeight)
         local winHKValue = (isSS and player.wins) or (hideWinHK and "") or player.honorableKills
 
         for i, stat in ipairs({
@@ -3926,8 +3953,8 @@ end
 -- Define the DisplayCurrentCRMMR function
 function DisplayCurrentCRMMR(contentFrame, categoryID)
     -- Retrieve CR and MMR using GetPersonalRatedInfo for the specified categoryID
-    local currentCR = "-"
-	local currentMMR = "-"
+    local currentCR = "0"
+	local currentMMR = "0"
 	
     local categoryMappings = {
         [1] = "v2History",
@@ -3952,12 +3979,39 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
     end
 
     -- 2) If we found an entry with the highest matchID, get the stats from that match
-    if highestMatchEntry and highestMatchEntry.playerStats then
-        for _, stats in ipairs(highestMatchEntry.playerStats) do
-            if stats.name == playerName and stats.postmatchMMR and stats.postmatchMMR > 0 then
-                currentCR = stats.newrating or "0"
-                currentMMR = stats.postmatchMMR or "0"
-                break
+    if highestMatchEntry then
+        -- Always have a fallback from the match entry itself
+        currentCR  = tonumber(highestMatchEntry.cr)  or currentCR
+        -- Prefer the match's stored team MMR (what the table shows) over entry.mmr
+        local teamMMR = tonumber(highestMatchEntry.friendlyMMR)
+        if teamMMR and teamMMR > 0 then
+            currentMMR = teamMMR
+        else
+            currentMMR = tonumber(highestMatchEntry.mmr) or currentMMR
+        end
+
+        local isArena = (categoryID == 1 or categoryID == 2)
+
+        -- For 2v2/3v3 specifically, MMR should be from the *last match we played*.
+        -- Do NOT gate on > 0, because that causes '-' or stale values.
+        if highestMatchEntry.playerStats then
+            for _, stats in ipairs(highestMatchEntry.playerStats) do
+                if stats.name == playerName then
+                    local mmr = tonumber(stats.postmatchMMR)
+                    local cr  = tonumber(stats.newrating)
+                    if cr then currentCR = cr end
+                    -- postmatchMMR is often 0 in arena now; ignore zeros.
+                    if mmr and mmr > 0 then currentMMR = mmr end
+                    break
+                end
+            end
+        end
+        -- Arena fallback: use stored match team MMR if player postmatchMMR was 0/missing
+        if isArena then
+            local teamMMR = tonumber(highestMatchEntry.friendlyMMR)
+            local curMMR  = tonumber(currentMMR)
+            if teamMMR and teamMMR > 0 and (not curMMR or curMMR <= 0) then
+                currentMMR = teamMMR
             end
         end
     end
@@ -3988,14 +4042,14 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
 		contentFrame.crLabel:SetFont(GetUnicodeSafeFont(), 14)
 		contentFrame.crLabel:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 10, -10)
 	end
-	contentFrame.crLabel:SetText(RSTATS:ColorText("Current CR: ") .. currentCR)
+	contentFrame.crLabel:SetText(RSTATS:ColorText("Current CR: ") .. tostring(currentCR))
 	
 	if not contentFrame.mmrLabel then
 		contentFrame.mmrLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 		contentFrame.mmrLabel:SetFont(GetUnicodeSafeFont(), 14)
 		contentFrame.mmrLabel:SetPoint("TOPLEFT", contentFrame.crLabel, "BOTTOMLEFT", 0, -5)
 	end
-	contentFrame.mmrLabel:SetText(RSTATS:ColorText("Current MMR: ") .. currentMMR)
+	contentFrame.mmrLabel:SetText(RSTATS:ColorText("Current MMR: ") .. tostring(currentMMR))
 	
 	if not contentFrame.instructionLabel then
 		contentFrame.instructionLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -4097,7 +4151,12 @@ function Config:CreateMenu()
 		{ text = "This Season", value = "thisSeason" }
 	}
 
-    -- Create 5 frames + scrollFrames for each tab
+	-- Also allow explicit season lookups (DF S4 / TWW S1 / etc.)
+	for _, season in ipairs(RatedStatsSeasons or {}) do
+		table.insert(timeFilterOptions, { text = season.label, value = season.label })
+	end
+
+    -- Create 5 frames + scrollFrames for the match-history tabs
     for i = 1, 5 do
         local frame = CreateFrame("Frame", "TabFrame", UIConfig)
         frame:SetPoint("TOPLEFT", UIConfig, "TOPLEFT", 20, -100)
@@ -4197,13 +4256,27 @@ function Config:CreateMenu()
         scrollFrames[i]   = scrollFrame
         scrollContents[i] = content
     end
-	
+
+	-- Summary tab (Option B) content frame: no scroll rows, dashboard only.
+	-- Keep it as a normal contentFrame so the tab switching stays simple.
+	local summaryFrame = CreateFrame("Frame", "RatedStatsSummaryTab", UIConfig)
+	summaryFrame:SetPoint("TOPLEFT", UIConfig, "TOPLEFT", 20, -100)
+	summaryFrame:SetPoint("BOTTOMRIGHT", UIConfig, "BOTTOMRIGHT", -20, 40)
+	summaryFrame:SetClipsChildren(true)
+	summaryFrame:Hide()
+	contentFrames[6] = summaryFrame
+
      -- expose frames before any history is built
     RSTATS.UIConfig       = UIConfig
     RSTATS.ContentFrames  = contentFrames
     RSTATS.ScrollFrames   = scrollFrames
     RSTATS.ScrollContents = scrollContents
 	
+	-- Build the Summary dashboard UI (in a new file) once UIConfig exists.
+	if RSTATS.Summary and RSTATS.Summary.Create then
+		RSTATS.Summary:Create(summaryFrame)
+	end
+
 	local selectedTimeFilter = "today"
 	
 	local Filters = RatedStatsFilters  -- Already exposed globally
@@ -4366,7 +4439,7 @@ function Config:CreateMenu()
 	end
 
     -- Tab buttons
-    local tabNames = { "Solo Shuffle", "2v2", "3v3", "RBG", "Solo RBG" }
+    local tabNames = { "Solo Shuffle", "2v2", "3v3", "RBG", "Solo RBG", "Summary" }
     local tabs = {}
     for i, name in ipairs(tabNames) do
         local tab = CreateFrame("Button","RatedStatsTab"..i,UIConfig,"PanelTabButtonTemplate")
@@ -4376,6 +4449,9 @@ function Config:CreateMenu()
 
         if i == 1 then
             tab:SetPoint("TOPLEFT", UIConfig, "BOTTOMLEFT", 10, 2)
+        elseif i == 6 then
+			-- Summary sits far-right, outside the frame (matches your screenshot)
+			tab:SetPoint("TOPRIGHT", UIConfig, "BOTTOMRIGHT", -10, 2)
         else
             tab:SetPoint("LEFT", tabs[i - 1], "RIGHT", -8, 0)
         end
@@ -4389,12 +4465,34 @@ function Config:CreateMenu()
 			f:SetShown(j == tabID)
 			end
 			
+			-- Summary tab hides search/filters + bottom stats bar.
+			local isSummary = (tabID == 6)
+			if UIConfig.searchBox then UIConfig.searchBox:SetShown(not isSummary) end
+			if UIConfig.filterButton then UIConfig.filterButton:SetShown(not isSummary) end
+			if UIConfig.clearFilterButton then UIConfig.clearFilterButton:SetShown(not isSummary) end
+			if statsBar then statsBar:SetShown(not isSummary) end
+
+			-- Summary has no friendly/enemy paging.
+			if UIConfig.TeamLeftButton then UIConfig.TeamLeftButton:SetShown(UIConfig.isCompact and not isSummary) end
+			if UIConfig.TeamRightButton then UIConfig.TeamRightButton:SetShown(UIConfig.isCompact and not isSummary) end
+
 			-- always go back to page 1 on a brand-new tab
 			UIConfig.ActiveTeamView = 1
 			UpdateArrowState()
 		
 			ACTIVE_TAB_ID = tabID
 			
+			-- Summary refresh is separate (no rows, no filtering pass).
+			if isSummary then
+				if RSTATS.Summary and RSTATS.Summary.frame then
+					RSTATS.Summary.frame:Show()
+				end
+				if RSTATS.Summary and RSTATS.Summary.Refresh then
+					RSTATS.Summary:Refresh()
+				end
+				return
+			end
+
 			-- ✅ Adjust horizontal scroll to match current team view
 			local scrollFrame = RSTATS.ScrollFrames[tabID]
 			if UIConfig.isCompact then
@@ -4435,8 +4533,8 @@ function Config:CreateMenu()
         tabs[i] = tab
     end
     PanelTemplates_SetNumTabs(UIConfig, #tabs)
-    PanelTemplates_SetTab(UIConfig, 1)
-    contentFrames[1]:Show()
+    PanelTemplates_SetTab(UIConfig, 6)
+    contentFrames[6]:Show()
 
     -- A local function that calls your revised DisplayHistory (shown below)
     local function RefreshDisplay()
@@ -4548,7 +4646,11 @@ function Config:CreateMenu()
 			UIConfig.TeamLeftButton:Hide()
 			UIConfig.TeamRightButton:Hide()
 			UIConfig.ActiveTeamView = 1
-			RSTATS.ScrollFrames[ACTIVE_TAB_ID]:SetHorizontalScroll(0)
+            local tabID = ACTIVE_TAB_ID or UIConfig.selectedTab
+            local sf = RSTATS.ScrollFrames and tabID and RSTATS.ScrollFrames[tabID]
+            if sf and sf.SetHorizontalScroll then
+                sf:SetHorizontalScroll(0)
+            end
 			UpdateArrowState()  -- This ensures arrow buttons visually reflect current team view
         end
         for _, f in ipairs(contentFrames) do
@@ -4680,34 +4782,45 @@ function Config:CreateMenu()
 	
 	-- In Config:CreateMenu, after all frames and tabs are set up:
 
-	local DEFAULT_TAB_ID = 1
-	for i, name in ipairs(tabNames) do
+	local DEFAULT_TAB_ID = 6
+	for i = 1, 5 do
 		local frame = contentFrames[i]
 		local content = scrollContents[i]
 	
-		frame:SetScript("OnShow", function()
-			if not content._initialized then
-				content._initialized = true
-				C_Timer.After(0.05, function()
-					FilterAndSearchMatches(RatedStatsSearchBox and RatedStatsSearchBox:GetText() or "")
-				end)
-			end
-		end)
+		if frame and content then
+			frame:SetScript("OnShow", function()
+				if not content._initialized then
+					content._initialized = true
+					C_Timer.After(0.05, function()
+						FilterAndSearchMatches(RatedStatsSearchBox and RatedStatsSearchBox:GetText() or "")
+					end)
+				end
+			end)
+		end
 	end
 	
 	PanelTemplates_SetTab(UIConfig, DEFAULT_TAB_ID)
 	contentFrames[DEFAULT_TAB_ID]:Show()
 	ACTIVE_TAB_ID = DEFAULT_TAB_ID
 	
-	-- Run filter on first visible tab
-	scrollContents[DEFAULT_TAB_ID]._initialized = true
+	-- Default view is Summary: hide match controls and refresh the dashboard.
+	if UIConfig.searchBox then UIConfig.searchBox:Hide() end
+	if UIConfig.filterButton then UIConfig.filterButton:Hide() end
+	if UIConfig.clearFilterButton then UIConfig.clearFilterButton:Hide() end
+	if statsBar then statsBar:Hide() end
+	if UIConfig.TeamLeftButton then UIConfig.TeamLeftButton:Hide() end
+	if UIConfig.TeamRightButton then UIConfig.TeamRightButton:Hide() end
+
 	C_Timer.After(0.05, function()
-		local dropdown = RSTATS.Dropdowns[DEFAULT_TAB_ID]
+		local tabID = PanelTemplates_GetSelectedTab(RSTATS.UIConfig) or 1
+		if tabID > 5 then return end -- Summary tab: do not run row filtering / stats bar updates
+
+		local dropdown = RSTATS.Dropdowns[tabID]
 		local selected = dropdown and UIDropDownMenu_GetText(dropdown) or "Today"
 		local filterKey = selected:lower():gsub(" ", "") or "today"
-	
-		FilterAndSearchMatches("")
-		RSTATS:UpdateStatsView(filterKey, DEFAULT_TAB_ID)
+
+		FilterAndSearchMatches(RatedStatsSearchBox and RatedStatsSearchBox:GetText() or "")
+		RSTATS:UpdateStatsView(filterKey, tabID)
 	end)
 
     -- ↪ When the main window closes, also tear down the copy‐name popup if open
