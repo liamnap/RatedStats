@@ -1300,7 +1300,9 @@ function Summary:Create(parentFrame)
         local gap     = Clamp(math.floor(totalW * 0.01),  8, 20)   -- ~1% width
 
         -- Raise max so the 30% can actually take effect on larger frames
-        local cardH = Clamp(math.floor(totalH * 0.30), 150, 420)
+        -- Card height: keep it responsive, but DO NOT starve the bottom panel.
+        -- bottom is anchored to cards' bottom, so if cards get too tall the bottom collapses.
+        local desiredCardH = Clamp(math.floor(totalH * 0.30), 150, 420)
 
         -- Card width: derived so 5 cards ALWAYS fit with side padding + gaps
         local availW = totalW - (sidePad * 2) - (gap * 4)
@@ -1308,7 +1310,6 @@ function Summary:Create(parentFrame)
         if cardW < 140 then cardW = 140 end
 
         -- Compute header/notes block height dynamically so cards never overlap it
-        local headerH = (self.header and self.header:GetStringHeight()) or 18
         local headerH = (self.header and self.header:GetStringHeight()) or 18
         local n2H = (self.seasonNote2 and self.seasonNote2:GetStringHeight()) or 10
         local n3H = (self.seasonNote3 and self.seasonNote3:GetStringHeight()) or 10
@@ -1318,6 +1319,17 @@ function Summary:Create(parentFrame)
         local topGap = Clamp(math.floor(totalH * 0.02), 10, 20)  -- space under season notes
 
         local topY = -(topBlockH + topGap)
+
+        -- Ensure the bottom panel always has usable height.
+        local bottomGapBetween = 14   -- f.bottom is anchored 14px below cards
+        local bottomInset      = 14   -- f.bottom bottom inset to frame
+        local bottomMinH       = 260  -- minimum space you want for model + record cards
+
+        local maxCardH = totalH - (topBlockH + topGap) - bottomGapBetween - bottomInset - bottomMinH
+        -- Don’t let it go negative; if the window is tiny, just shrink cards hard.
+        maxCardH = Clamp(maxCardH, 110, 420)
+
+        local cardH = math.min(desiredCardH, maxCardH)
 
         for i = 1, #self.cards do
             local card = self.cards[i]
