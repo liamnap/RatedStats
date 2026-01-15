@@ -1362,6 +1362,7 @@ function Summary:Create(parentFrame)
 	
 		-- Now that bottom has real size, lay out the right-side panels/cards.
 		if self.LayoutRightPanels then self:LayoutRightPanels() end
+        if self.LayoutStreakCards then self:LayoutStreakCards() end
 		if self.LayoutRecordCards then self:LayoutRecordCards() end
     end
 
@@ -1370,13 +1371,16 @@ function Summary:Create(parentFrame)
     -- Hook instead, so cards lay out first, then the bottom panels can size correctly.
     f:HookScript("OnShow", function(self)
         if self.LayoutRightPanels then self:LayoutRightPanels() end
+        if self.LayoutStreakCards then self:LayoutStreakCards() end
         if self.LayoutRecordCards then self:LayoutRecordCards() end
     end)
 
     f:HookScript("OnSizeChanged", function(self)
         if self.LayoutRightPanels then self:LayoutRightPanels() end
+        if self.LayoutStreakCards then self:LayoutStreakCards() end
         if self.LayoutRecordCards then self:LayoutRecordCards() end
-    end)    C_Timer.After(0, function() if f and f.LayoutCards then f:LayoutCards() end end)
+    end)    
+    C_Timer.After(0, function() if f and f.LayoutCards then f:LayoutCards() end end)
 
     -- Bottom content: Player model (left) + record cards (right)
     f.bottom = CreateFrame("Frame", nil, f, "BackdropTemplate")
@@ -1583,13 +1587,6 @@ function Summary:Create(parentFrame)
         card.title:SetPoint("TOPLEFT", card, "TOPLEFT", 10, -8)
         card.title:SetText("Best Win Streak (All Brackets)")
 
-        -- Single star backdrop (NOT one per row)
-        card.bigStar = card:CreateTexture(nil, "ARTWORK")
-        card.bigStar:SetAtlas("auctionhouse-icon-favorite", true)
-        card.bigStar:SetSize(110, 110)
-        card.bigStar:SetPoint("CENTER", card, "CENTER", 0, -6)
-        card.bigStar:SetAlpha(0.28)
-
         card.rows = {}
         local rowH = 18
 
@@ -1625,17 +1622,25 @@ function Summary:Create(parentFrame)
 
         function card:LayoutStarPoints()
             local w = self:GetWidth() or 0
+            local h = self:GetHeight() or 0
             if w <= 1 then return end
+            if h <= 1 then return end
 
             -- keep rows wide enough to show "SRBG" + value, but never so wide they clip out of the card
             local rowW = Clamp(math.floor(w * 0.55), 140, 220)
 
+            -- scale offsets so it still looks right when this card is half-height
+            local topY   = -Clamp(math.floor(h * 0.22), 26, 44)
+            local sideY  = -Clamp(math.floor(h * 0.10),  6, 18)
+            local botY   =  Clamp(math.floor(h * 0.22), 24, 44)
+            local sideX  =  Clamp(math.floor(w * 0.06), 12, 22)
+
             local pts = {
-                [1] = { "TOP",         self, "TOP",          0,  -34 },
-                [2] = { "LEFT",        self, "LEFT",        14,  -10 },
-                [3] = { "RIGHT",       self, "RIGHT",      -14,  -10 },
-                [4] = { "BOTTOMLEFT",  self, "BOTTOMLEFT",  14,   36 },
-                [5] = { "BOTTOMRIGHT", self, "BOTTOMRIGHT", -14,  36 },
+                [1] = { "TOP",         self, "TOP",          0,  topY  },      -- SS
+                [2] = { "LEFT",        self, "LEFT",        sideX, sideY },    -- 2v2
+                [3] = { "RIGHT",       self, "RIGHT",      -sideX, sideY },    -- 3v3
+                [4] = { "BOTTOMLEFT",  self, "BOTTOMLEFT",  sideX, botY },     -- RBG
+                [5] = { "BOTTOMRIGHT", self, "BOTTOMRIGHT", -sideX, botY },    -- SRBG
             }
 
             for i = 1, #BRACKETS do
@@ -1680,6 +1685,38 @@ function Summary:Create(parentFrame)
 
     f.streakCard = CreateStreakCard(f.streakPanel)
     f.streakCard:SetAllPoints(f.streakPanel)
+
+    -- Placeholder card (fills the "other half" of the streak column for now)
+    f.placeholderCard = CreateFrame("Frame", nil, f.streakPanel, "BackdropTemplate")
+    CreateBackdrop(f.placeholderCard)
+
+    f.placeholderCard.title = f.placeholderCard:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    f.placeholderCard.title:SetFont(GetUnicodeSafeFont(), 13, "OUTLINE")
+    f.placeholderCard.title:SetPoint("TOPLEFT", f.placeholderCard, "TOPLEFT", 10, -8)
+    f.placeholderCard.title:SetText("Coming Soon")
+
+    function f:LayoutStreakCards()
+        if not self.streakPanel or not self.streakCard or not self.placeholderCard then return end
+        local w = self.streakPanel:GetWidth() or 0
+        local h = self.streakPanel:GetHeight() or 0
+        if w <= 1 or h <= 1 then return end
+
+        local gap = 10
+        local halfH = math.floor((h - gap) / 2)
+        if halfH < 60 then halfH = 60 end
+
+        self.streakCard:ClearAllPoints()
+        self.streakCard:SetPoint("TOPLEFT", self.streakPanel, "TOPLEFT", 0, 0)
+        self.streakCard:SetPoint("TOPRIGHT", self.streakPanel, "TOPRIGHT", 0, 0)
+        self.streakCard:SetHeight(halfH)
+
+        self.placeholderCard:ClearAllPoints()
+        self.placeholderCard:SetPoint("TOPLEFT", self.streakCard, "BOTTOMLEFT", 0, -gap)
+        self.placeholderCard:SetPoint("TOPRIGHT", self.streakCard, "BOTTOMRIGHT", 0, -gap)
+        self.placeholderCard:SetPoint("BOTTOMLEFT", self.streakPanel, "BOTTOMLEFT", 0, 0)
+        self.placeholderCard:SetPoint("BOTTOMRIGHT", self.streakPanel, "BOTTOMRIGHT", 0, 0)
+    end    
+
     f.damageCard = CreateRecordCard(f.recordsPanel, "Best 10 Players - Most Damage Done (All Brackets)")
     f.healCard   = CreateRecordCard(f.recordsPanel, "Best 10 Players - Most Healing Done (All Brackets)")
     f.winsCard   = CreateRecordCard(f.recordsPanel, "Most Wins - Friendly Players (All Brackets)")
@@ -1741,6 +1778,7 @@ function Summary:Create(parentFrame)
 
     f:SetScript("OnSizeChanged", function(self)
         if self.LayoutRightPanels then self:LayoutRightPanels() end
+        if self.LayoutStreakCards then self:LayoutStreakCards() end
         if self.LayoutRecordCards then self:LayoutRecordCards() end
     end)
 
