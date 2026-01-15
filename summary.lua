@@ -379,21 +379,61 @@ end
 local function GetMatchDurationSeconds(match)
     if type(match) ~= "table" then return nil end
 
-    -- Be tolerant: different parts of the addon have used slightly different keys over time.
+    local function parseDurationStringToSeconds(s)
+        if type(s) ~= "string" then return nil end
+        s = s:gsub(",", ""):gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+        if s == "" then return nil end
+
+        -- Handle hh:mm:ss or mm:ss
+        if s:find(":") then
+            local a, b, c = s:match("^(%d+):(%d+):(%d+)$")
+            if a and b and c then
+                return (tonumber(a) * 3600) + (tonumber(b) * 60) + tonumber(c)
+            end
+            local m, sec = s:match("^(%d+):(%d+)$")
+            if m and sec then
+                return (tonumber(m) * 60) + tonumber(sec)
+            end
+        end
+
+        -- Handle Blizzard SecondsToTime style: "1 Hr 2 Min 3 Sec" / "2 Min 10 Sec" / "45 Sec"
+        local lower = s:lower()
+        local h = lower:match("(%d+)%s*hr") or lower:match("(%d+)%s*hour")
+        local m = lower:match("(%d+)%s*min")
+        local sec = lower:match("(%d+)%s*sec")
+
+        if h or m or sec then
+            local total = 0
+            if h then total = total + (tonumber(h) * 3600) end
+            if m then total = total + (tonumber(m) * 60) end
+            if sec then total = total + tonumber(sec) end
+            if total > 0 then return total end
+        end
+
+        return nil
+    end
+
+    -- Prefer numeric durations first
     local d =
         tonumber(match.durationSeconds) or
         tonumber(match.durationSec) or
-        tonumber(match.duration) or
         tonumber(match.matchDuration) or
         tonumber(match.durationRaw)
 
+    -- match.duration might be number OR string (because config.lua mutates it via SecondsToTime)
+    if not d then
+        if type(match.duration) == "number" then
+            d = match.duration
+        elseif type(match.duration) == "string" then
+            d = parseDurationStringToSeconds(match.duration)
+        end
+    end
+
+    d = tonumber(d)
     if not d or d <= 0 then return nil end
 
     -- Some APIs return ms; matches will never be > 60,000 seconds, so treat big numbers as ms.
-    if d > 60000 then
-        d = d / 1000
-    end
-
+    if d > 60000 then d = d / 1000 end
     return math.floor(d + 0.5)
 end
 
