@@ -302,20 +302,38 @@ local function FormatNumber(value)
     end
 end
 
-local function BuildTopSoloShuffleRecords(history, valueKey, limit, seasonStart, seasonFinish)
-    if not history or #history == 0 then
-        return {}
-    end
+local function ModeShort(bracketName)
+    if bracketName == "Solo Shuffle" then return "SS" end
+    if bracketName == "2v2" then return "2v2" end
+    if bracketName == "3v3" then return "3v3" end
+    if bracketName == "RBG" then return "RBG" end
+    if bracketName == "Solo RBG" then return "SRBG" end
+    return tostring(bracketName or "?")
+end
+
+local function BuildTopAllBracketRecords(perChar, valueKey, limit, seasonStart, seasonFinish)
+    if type(perChar) ~= "table" then return {} end
+    if not seasonStart or not seasonFinish then return {} end
 
     local tmp = {}
 
-    for _, match in ipairs(history) do
-        local t = match.endTime or match.timestamp
-        if t and seasonStart and seasonFinish and t >= seasonStart and t < seasonFinish then
-            for _, ps in ipairs(match.playerStats or {}) do
-                local v = tonumber(ps[valueKey])
-                if v and v > 0 and ps.name then
-                    tmp[#tmp + 1] = { ps = ps, match = match, v = v, t = t }
+    for _, bracket in ipairs(BRACKETS) do
+        local history = perChar[bracket.historyKey] or {}
+        for _, match in ipairs(history) do
+            local t = match.endTime or match.timestamp
+            if t and t >= seasonStart and t < seasonFinish then
+                for _, ps in ipairs(match.playerStats or {}) do
+                    local v = tonumber(ps[valueKey])
+                    if v and v > 0 and ps.name then
+                        tmp[#tmp + 1] = {
+                            ps = ps,
+                            match = match,
+                            v = v,
+                            t = t,
+                            mode = bracket.name,
+                            modeShort = ModeShort(bracket.name),
+                        }
+                    end
                 end
             end
         end
@@ -330,7 +348,7 @@ local function BuildTopSoloShuffleRecords(history, valueKey, limit, seasonStart,
         if not seen[r.ps.name] then
             out[#out + 1] = r
             seen[r.ps.name] = true
-            if #out >= (limit or 25) then
+            if #out >= (limit or 10) then
                 break
             end
         end
@@ -339,14 +357,178 @@ local function BuildTopSoloShuffleRecords(history, valueKey, limit, seasonStart,
     return out
 end
 
+local function NormalizeOutcome(winLoss)
+    if type(winLoss) ~= "string" then return nil end
+    if winLoss:find("W") then return "W" end
+    if winLoss:find("L") then return "L" end
+    if winLoss:find("D") or winLoss:find("~") then return "D" end
+    return nil
+end
+
+-- Most Wins (friendly players) across all brackets in current season range
+local function BuildMostWinsFriendly(perChar, seasonStart, seasonFinish)
+    if type(perChar) ~= "table" then return {} end
+    if not seasonStart or not seasonFinish then return {} end
+
+    local me = GetPlayerFullName()
+    local byName = {}
+
+    for _, bracket in ipairs(BRACKETS) do
+        local history = perChar[bracket.historyKey] or {}
+        for _, match in ipairs(history) do
+            local t = match.endTime or match.timestamp
+            if t and t >= seasonStart and t < seasonFinish then
+                local outcome = NormalizeOutcome(match.friendlyWinLoss)
+                if outcome then
+                    for _, ps in ipairs(match.playerStats or {}) do
+                        if ps and ps.name and ps.name ~= me and ps.isFriendly then
+                            local rec = byName[ps.name]
+                            if not rec then
+                                rec = {
+                                    ps = ps,
+                                    match = match,
+                                    t = t,
+                                    wins = 0,
+                                    losses = 0,
+                                    draws = 0,
+                                    perMode = {},
+                                }
+                                byName[ps.name] = rec
+                            end
+
+                            -- keep latest ps/match for click-through
+                            rec.ps = ps
+                            if not rec.t or t > rec.t then
+                                rec.match = match
+                                rec.t = t
+                            end
+
+                            local modeKey = bracket.name
+                            rec.perMode[modeKey] = rec.perMode[modeKey] or { W = 0, L = 0, D = 0 }
+
+                            if outcome == "W" then
+                                rec.wins = rec.wins + 1
+                                rec.perMode[modeKey].W = rec.perMode[modeKey].W + 1
+                            elseif outcome == "L" then
+                                rec.losses = rec.losses + 1
+                                rec.perMode[modeKey].L = rec.perMode[modeKey].L + 1
+                            else
+                                rec.draws = rec.draws + 1
+                                rec.perMode[modeKey].D = rec.perMode[modeKey].D + 1
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    local out = {}
+    for _, rec in pairs(byName) do
+        local parts = {}
+        for _, b in ipairs(BRACKETS) do
+            local p = rec.perMode[b.name]
+            if p and (p.W + p.L + p.D) > 0 then
+                parts[#parts + 1] = string.format("%s %d-%d-%d", ModeShort(b.name), p.W, p.L, p.D)
+            end
+        end
+        rec.displayValue = string.format("%dW  %s", rec.wins, table.concat(parts, "  "))
+        out[#out + 1] = rec
+    end
+
+    table.sort(out, function(a, b)
+        if a.wins ~= b.wins then return a.wins > b.wins end
+        return (a.t or 0) > (b.t or 0)
+    end)
+
+    return out
+end
+
+-- Same spec as YOU in that match: counts "With X" (friendly wins together) and "Beat X" (enemy beat you)
+local function BuildSameSpecWithOrVs(perChar, seasonStart, seasonFinish)
+    if type(perChar) ~= "table" then return {} end
+    if not seasonStart or not seasonFinish then return {} end
+
+    local me = GetPlayerFullName()
+    local byName = {}
+
+    for _, bracket in ipairs(BRACKETS) do
+        local history = perChar[bracket.historyKey] or {}
+        for _, match in ipairs(history) do
+            local t = match.endTime or match.timestamp
+            if t and t >= seasonStart and t < seasonFinish then
+                local outcome = NormalizeOutcome(match.friendlyWinLoss)
+                if not outcome then
+                    -- still allow counting appearances, but "with/beat" needs outcome
+                    outcome = nil
+                end
+
+                local mySpec
+                for _, ps in ipairs(match.playerStats or {}) do
+                    if ps and ps.name == me then
+                        mySpec = ps.spec
+                        break
+                    end
+                end
+
+                if mySpec then
+                    for _, ps in ipairs(match.playerStats or {}) do
+                        if ps and ps.name and ps.name ~= me and ps.spec and ps.spec == mySpec then
+                            local rec = byName[ps.name]
+                            if not rec then
+                                rec = { ps = ps, match = match, t = t, withWins = 0, beatYou = 0, total = 0 }
+                                byName[ps.name] = rec
+                            end
+
+                            rec.ps = ps
+                            if not rec.t or t > rec.t then
+                                rec.match = match
+                                rec.t = t
+                            end
+
+                            rec.total = rec.total + 1
+
+                            if outcome == "W" and ps.isFriendly then
+                                rec.withWins = rec.withWins + 1
+                            elseif outcome == "L" and (not ps.isFriendly) then
+                                rec.beatYou = rec.beatYou + 1
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    local out = {}
+    for _, rec in pairs(byName) do
+        rec.displayValue = string.format("With %d  Beat %d  (%d)", rec.withWins, rec.beatYou, rec.total)
+        out[#out + 1] = rec
+    end
+
+    table.sort(out, function(a, b)
+        local as = (a.withWins or 0) + (a.beatYou or 0)
+        local bs = (b.withWins or 0) + (b.beatYou or 0)
+        if as ~= bs then return as > bs end
+        if (a.total or 0) ~= (b.total or 0) then return (a.total or 0) > (b.total or 0) end
+        return (a.t or 0) > (b.t or 0)
+    end)
+
+    return out
+end
+
 local function UpdateRecordCard(card, records)
     if not card or not card.rows then return end
 
-    for i = 1, 25 do
+    local visible = card._visibleRows or #card.rows
+    if visible < 1 then visible = 1 end
+    if visible > #card.rows then visible = #card.rows end
+
+    for i = 1, #card.rows do
         local row = card.rows[i]
         local rec = records and records[i]
 
-        if rec and row then
+        if rec and row and i <= visible then
             row:Show()
             row._rsPS = rec.ps
             row._rsMatch = rec.match
@@ -379,8 +561,13 @@ local function UpdateRecordCard(card, records)
                 row.nameBtn:SetPoint("LEFT", row, "LEFT", 2, 0)
             end
 
-            local when = rec.t and date("%d %b %H:%M", rec.t) or "?"
-            row.valueText:SetText(FormatNumber(rec.v) .. "  " .. when)
+            if rec.displayValue then
+                row.valueText:SetText(rec.displayValue)
+            else
+                local when = rec.t and date("%d %b %H:%M", rec.t) or "?"
+                local mode = rec.modeShort or rec.mode or "?"
+                row.valueText:SetText(mode .. ": " .. FormatNumber(rec.v) .. "  " .. when)
+            end
         elseif row then
             row:Hide()
             row._rsPS = nil
@@ -1103,24 +1290,17 @@ function Summary:Create(parentFrame)
         card.title:SetPoint("TOPLEFT", card, "TOPLEFT", 10, -8)
         card.title:SetText(titleText)
 
-        card.scroll = CreateFrame("ScrollFrame", nil, card, "UIPanelScrollFrameTemplate")
-        card.scroll:SetPoint("TOPLEFT", card, "TOPLEFT", 6, -26)
-        card.scroll:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -24, 8)
-
-        card.scrollChild = CreateFrame("Frame", nil, card.scroll)
-        card.scrollChild:SetSize(1, 1)
-        card.scroll:SetScrollChild(card.scrollChild)
-
         card.rows = {}
 
         local rowH = 14
-        local nameColW = 150
+        local nameColW = 220
+        local maxRows = 10
 
-        for i = 1, 25 do
-            local row = CreateFrame("Frame", nil, card.scrollChild)
+        for i = 1, maxRows do
+            local row = CreateFrame("Frame", nil, card)
             row:SetHeight(rowH)
-            row:SetPoint("TOPLEFT", card.scrollChild, "TOPLEFT", 0, -((i - 1) * rowH))
-            row:SetPoint("TOPRIGHT", card.scrollChild, "TOPRIGHT", 0, -((i - 1) * rowH))
+            row:SetPoint("TOPLEFT", card, "TOPLEFT", 8, -26 - ((i - 1) * rowH))
+            row:SetPoint("TOPRIGHT", card, "TOPRIGHT", -8, -26 - ((i - 1) * rowH))
 
             row.iconBtn = CreateFrame("Button", nil, row)
             row.iconBtn:SetSize(10, 10)
@@ -1178,29 +1358,63 @@ function Summary:Create(parentFrame)
             card.rows[i] = row
         end
 
-        card.scrollChild:SetHeight(25 * rowH)
+        -- If card is too short, hide extra rows (no scrollbars)
+        card:SetScript("OnSizeChanged", function(self)
+            local h = self:GetHeight() or 0
+            local usable = h - 34 -- title + padding
+            local canShow = math.floor(usable / rowH)
+            if canShow < 1 then canShow = 1 end
+            if canShow > maxRows then canShow = maxRows end
+            self._visibleRows = canShow
+            for i = 1, maxRows do
+                if self.rows[i] then
+                    self.rows[i]:SetShown(i <= canShow)
+                end
+            end
+        end)
         return card
     end
 
-    f.damageCard = CreateRecordCard(f.recordsPanel, "Best 25 Players - Most Damage Done (Solo Shuffle)")
-    f.healCard   = CreateRecordCard(f.recordsPanel, "Best 25 Players - Most Healing Done (Solo Shuffle)")
+    f.damageCard = CreateRecordCard(f.recordsPanel, "Best 10 Players - Most Damage Done (All Brackets)")
+    f.healCard   = CreateRecordCard(f.recordsPanel, "Best 10 Players - Most Healing Done (All Brackets)")
+    f.winsCard   = CreateRecordCard(f.recordsPanel, "Most Wins - Friendly Players (All Brackets)")
+    f.specCard   = CreateRecordCard(f.recordsPanel, "Best Same Spec - With You / Beat You (All Brackets)")
 
-    f.damageCard:SetPoint("TOPLEFT", f.recordsPanel, "TOPLEFT", 0, 0)
-    f.damageCard:SetPoint("TOPRIGHT", f.recordsPanel, "TOPRIGHT", 0, 0)
-    f.damageCard:SetHeight( (f.recordsPanel:GetHeight() or 220) * 0.5 - 6 )
+    function f:LayoutRecordCards()
+        local h = (self.recordsPanel and self.recordsPanel:GetHeight()) or 220
+        local gap = 10
+        local cardH = math.floor((h - (gap * 3)) / 4)
+        if cardH < 48 then cardH = 48 end
 
-    f.healCard:SetPoint("TOPLEFT", f.damageCard, "BOTTOMLEFT", 0, -10)
-    f.healCard:SetPoint("TOPRIGHT", f.damageCard, "BOTTOMRIGHT", 0, -10)
-    f.healCard:SetPoint("BOTTOMLEFT", f.recordsPanel, "BOTTOMLEFT", 0, 0)
-    f.healCard:SetPoint("BOTTOMRIGHT", f.recordsPanel, "BOTTOMRIGHT", 0, 0)
+        self.damageCard:ClearAllPoints()
+        self.healCard:ClearAllPoints()
+        self.winsCard:ClearAllPoints()
+        self.specCard:ClearAllPoints()
+
+        self.damageCard:SetPoint("TOPLEFT", self.recordsPanel, "TOPLEFT", 0, 0)
+        self.damageCard:SetPoint("TOPRIGHT", self.recordsPanel, "TOPRIGHT", 0, 0)
+        self.damageCard:SetHeight(cardH)
+
+        self.healCard:SetPoint("TOPLEFT", self.damageCard, "BOTTOMLEFT", 0, -gap)
+        self.healCard:SetPoint("TOPRIGHT", self.damageCard, "BOTTOMRIGHT", 0, -gap)
+        self.healCard:SetHeight(cardH)
+
+        self.winsCard:SetPoint("TOPLEFT", self.healCard, "BOTTOMLEFT", 0, -gap)
+        self.winsCard:SetPoint("TOPRIGHT", self.healCard, "BOTTOMRIGHT", 0, -gap)
+        self.winsCard:SetHeight(cardH)
+
+        self.specCard:SetPoint("TOPLEFT", self.winsCard, "BOTTOMLEFT", 0, -gap)
+        self.specCard:SetPoint("TOPRIGHT", self.winsCard, "BOTTOMRIGHT", 0, -gap)
+        self.specCard:SetPoint("BOTTOMLEFT", self.recordsPanel, "BOTTOMLEFT", 0, 0)
+        self.specCard:SetPoint("BOTTOMRIGHT", self.recordsPanel, "BOTTOMRIGHT", 0, 0)
+    end
 
     f:SetScript("OnSizeChanged", function(self)
         if self.LayoutCards then self:LayoutCards() end
-        if self.damageCard and self.healCard then
-            local h = (self.recordsPanel and self.recordsPanel:GetHeight()) or 220
-            self.damageCard:SetHeight(h * 0.5 - 6)
-        end
+        if self.LayoutRecordCards then self:LayoutRecordCards() end
     end)
+
+    f:LayoutRecordCards()
 
     -- Start auto-cycling the per-card graphs (optional but looks good)
     self:_StartAutoCycle()
@@ -1394,13 +1608,19 @@ function Summary:Refresh()
         end
     end
 
-    -- Bottom record cards (Solo Shuffle)
-    if self.frame and self.frame.damageCard and self.frame.healCard then
-        local ssHistory = perChar["SoloShuffleHistory"] or {}
-        local topDmg  = BuildTopSoloShuffleRecords(ssHistory, "damageDone", 25, seasonStart, seasonFinish)
-        local topHeal = BuildTopSoloShuffleRecords(ssHistory, "healingDone", 25, seasonStart, seasonFinish)
+    -- Bottom record cards (All Brackets)
+    if self.frame and self.frame.damageCard and self.frame.healCard and self.frame.winsCard and self.frame.specCard then
+        local limit = 10
+
+        -- IMPORTANT: your saved playerStats fields are "damage" and "healing"
+        local topDmg  = BuildTopAllBracketRecords(perChar, "damage",  limit, seasonStart, seasonFinish)
+        local topHeal = BuildTopAllBracketRecords(perChar, "healing", limit, seasonStart, seasonFinish)
+        local topWins = BuildMostWinsFriendly(perChar, seasonStart, seasonFinish)
+        local topSpec = BuildSameSpecWithOrVs(perChar, seasonStart, seasonFinish)
 
         UpdateRecordCard(self.frame.damageCard, topDmg)
         UpdateRecordCard(self.frame.healCard, topHeal)
+        UpdateRecordCard(self.frame.winsCard, topWins)
+        UpdateRecordCar
     end
 end
