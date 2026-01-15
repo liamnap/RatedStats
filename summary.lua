@@ -676,6 +676,7 @@ local function UpdateRecordCard(card, records)
                 end
 
                 row.iconBtn:ClearAllPoints()
+                row.iconBtn:SetPoint("LEFT", row, "LEFT", 2, 0)
 
                 row.nameBtn:ClearAllPoints()
                 row.nameBtn:SetPoint("LEFT", row, "LEFT", 14, 0)
@@ -1343,9 +1344,21 @@ function Summary:Create(parentFrame)
     f.bottom:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 14, 14)
     f.bottom:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -14, 14)
 
+    -- Make sure the bottom panel is not hidden behind any parent artwork textures.
+    -- (Cards are visible; bottom isn't -> classic framelevel ordering.)
+    do
+        local baseLevel = f:GetFrameLevel() or 0
+        if f.cards and f.cards[1] and f.cards[1].GetFrameLevel then
+            baseLevel = f.cards[1]:GetFrameLevel() or baseLevel
+        end
+        f.bottom:SetFrameStrata(f:GetFrameStrata())
+        f.bottom:SetFrameLevel(baseLevel + 10)
+    end
+
     -- Left: 3D player model (uses your current character model)
     f.modelPanel = CreateFrame("Frame", nil, f.bottom, "BackdropTemplate")
     CreateBackdrop(f.modelPanel)
+    f.modelPanel:SetFrameLevel(f.bottom:GetFrameLevel() + 1)
     f.modelPanel:SetPoint("TOPLEFT", f.bottom, "TOPLEFT", 10, -10)
     f.modelPanel:SetPoint("BOTTOMLEFT", f.bottom, "BOTTOMLEFT", 10, 10)
     f.modelPanel:SetWidth(290)
@@ -1356,6 +1369,7 @@ function Summary:Create(parentFrame)
     f.modelTitle:SetText("Your Legend")
 
     f.playerModel = CreateFrame("PlayerModel", nil, f.modelPanel)
+    f.playerModel:SetFrameLevel(f.modelPanel:GetFrameLevel() + 1)
     f.playerModel:SetPoint("TOPLEFT", f.modelPanel, "TOPLEFT", 6, -24)
     f.playerModel:SetPoint("BOTTOMRIGHT", f.modelPanel, "BOTTOMRIGHT", -6, 6)
     f.playerModel:SetUnit("player")
@@ -1411,10 +1425,12 @@ function Summary:Create(parentFrame)
     -- Right: record cards (scrollable lists)
     f.streakPanel = CreateFrame("Frame", nil, f.bottom, "BackdropTemplate")
     CreateBackdrop(f.streakPanel)
+    f.streakPanel:SetFrameLevel(f.bottom:GetFrameLevel() + 1)
     f.streakPanel:SetPoint("TOPLEFT", f.modelPanel, "TOPRIGHT", 10, 0)
     f.streakPanel:SetPoint("BOTTOMLEFT", f.modelPanel, "BOTTOMRIGHT", 10, 0)
 
     f.recordsPanel = CreateFrame("Frame", nil, f.bottom)
+    f.recordsPanel:SetFrameLevel(f.bottom:GetFrameLevel() + 1)
     f.recordsPanel:SetPoint("TOPLEFT", f.streakPanel, "TOPRIGHT", 10, 0)
     f.recordsPanel:SetPoint("TOPRIGHT", f.bottom, "TOPRIGHT", -10, -10)
     f.recordsPanel:SetPoint("BOTTOMRIGHT", f.bottom, "BOTTOMRIGHT", -10, 10)
