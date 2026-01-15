@@ -654,7 +654,10 @@ local function UpdateRecordCard(card, records)
             row._rsMatch = rec.match
 
             local displayName = (rec.ps and rec.ps.name) or "?"
-            row.nameText:SetText(string.format("%d. %s", i, displayName))
+            if row.numText then
+                row.numText:SetText(string.format("%d.", i))
+            end
+            row.nameText:SetText(displayName)
 
             -- RatedStats_Achiev icon (optional)
             local achievIconPath, _, achievIconTint
@@ -677,14 +680,14 @@ local function UpdateRecordCard(card, records)
                 end
 
                 row.iconBtn:ClearAllPoints()
-                row.iconBtn:SetPoint("LEFT", row, "LEFT", 2, 0)
+                row.iconBtn:SetPoint("LEFT", row.numText or row, row.numText and "RIGHT" or "LEFT", row.numText and 4 or 2, 0)
 
                 row.nameBtn:ClearAllPoints()
-                row.nameBtn:SetPoint("LEFT", row, "LEFT", 14, 0)
+                row.nameBtn:SetPoint("LEFT", row.iconBtn, "RIGHT", 4, 0)
             else
                 row.iconBtn:Hide()
                 row.nameBtn:ClearAllPoints()
-                row.nameBtn:SetPoint("LEFT", row, "LEFT", 2, 0)
+                row.nameBtn:SetPoint("LEFT", row.numText or row, row.numText and "RIGHT" or "LEFT", row.numText and 4 or 2, 0)
             end
 
             if rec.displayValue then
@@ -1491,9 +1494,16 @@ function Summary:Create(parentFrame)
             row:SetPoint("TOPLEFT", card, "TOPLEFT", 8, -26 - ((i - 1) * rowH))
             row:SetPoint("TOPRIGHT", card, "TOPRIGHT", -8, -26 - ((i - 1) * rowH))
 
+            -- Row number (always shown; comes before achiev icon)
+            row.numText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.numText:SetFont(GetUnicodeSafeFont(), 10, "OUTLINE")
+            row.numText:SetPoint("LEFT", row, "LEFT", 2, 0)
+            row.numText:SetWidth(18)
+            row.numText:SetJustifyH("RIGHT")
+
             row.iconBtn = CreateFrame("Button", nil, row)
             row.iconBtn:SetSize(10, 10)
-            row.iconBtn:SetPoint("LEFT", row, "LEFT", 2, 0)
+            row.iconBtn:SetPoint("LEFT", row.numText, "RIGHT", 4, 0)
             row.iconBtn:Hide()
 
             row.iconTex = row.iconBtn:CreateTexture(nil, "OVERLAY")
@@ -1501,7 +1511,7 @@ function Summary:Create(parentFrame)
 
             row.nameBtn = CreateFrame("Button", nil, row)
             row.nameBtn:SetSize(nameColW, rowH)
-            row.nameBtn:SetPoint("LEFT", row, "LEFT", 2, 0)
+            row.nameBtn:SetPoint("LEFT", row.numText, "RIGHT", 4, 0)
 
             row.nameText = row.nameBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             row.nameText:SetFont(GetUnicodeSafeFont(), 10, "OUTLINE")
@@ -1613,29 +1623,37 @@ function Summary:Create(parentFrame)
             card.rows[i] = row
         end
 
-        -- Arrange the 5 rows like points on a star (SS/2v2/3v3/RBG/SRBG)
-        -- 1 SS        = top
-        -- 2 2v2       = left
-        -- 3 3v3       = right
-        -- 4 RBG       = bottom-left
-        -- 5 Solo RBG  = bottom-right
-        do
+        function card:LayoutStarPoints()
+            local w = self:GetWidth() or 0
+            if w <= 1 then return end
+
+            -- keep rows wide enough to show "SRBG" + value, but never so wide they clip out of the card
+            local rowW = Clamp(math.floor(w * 0.55), 140, 220)
+
             local pts = {
-                [1] = { "TOP",         card, "TOP",         0,  -34 },
-                [2] = { "LEFT",        card, "LEFT",       14,  -10 },
-                [3] = { "RIGHT",       card, "RIGHT",     -14,  -10 },
-                [4] = { "BOTTOMLEFT",  card, "BOTTOMLEFT", 14,   36 },
-                [5] = { "BOTTOMRIGHT", card, "BOTTOMRIGHT",-14,  36 },
+                [1] = { "TOP",         self, "TOP",          0,  -34 },
+                [2] = { "LEFT",        self, "LEFT",        14,  -10 },
+                [3] = { "RIGHT",       self, "RIGHT",      -14,  -10 },
+                [4] = { "BOTTOMLEFT",  self, "BOTTOMLEFT",  14,   36 },
+                [5] = { "BOTTOMRIGHT", self, "BOTTOMRIGHT", -14,  36 },
             }
+
             for i = 1, #BRACKETS do
-                local r = card.rows[i]
+                local r = self.rows[i]
                 local p = pts[i]
                 if r and p then
+                    r:SetWidth(rowW)
                     r:ClearAllPoints()
                     r:SetPoint(p[1], p[2], p[3], p[4], p[5])
                 end
             end
         end
+
+        card:SetScript("OnSizeChanged", function(self)
+            if self.LayoutStarPoints then self:LayoutStarPoints() end
+        end)
+
+        card:LayoutStarPoints()
 
         function card:SetData(streakByMode)
             for i, b in ipairs(BRACKETS) do
