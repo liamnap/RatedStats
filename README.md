@@ -1,15 +1,15 @@
 # Rated Stats — Rated PvP Match Historian (Solo Shuffle • 2v2 • 3v3 • RBG • Blitz)
 
-Rated Stats saves your **rated PvP match history** and the **end-of-match scoreboard stats** so you can review them anytime — even long after the scoreboard is gone. :contentReference[oaicite:1]{index=1}
+Rated Stats saves your **rated PvP match history** and the **end-of-match scoreboard stats** so you can review them anytime — even long after the scoreboard is gone.
 
 **Supports 5 rated PvP modes:**
 - **Solo Shuffle**
 - **2v2**
 - **3v3**
 - **Rated Battlegrounds (RBG)**
-- **Battleground Blitz (Solo RBG / RBGB)** :contentReference[oaicite:2]{index=2}
+- **Battleground Blitz (Solo RBG / RBGB)**
 
-**Download (recommended):** CurseForge project page :contentReference[oaicite:3]{index=3}
+**Download (recommended):** https://www.curseforge.com/wow/addons/rated-stats
 
 ---
 
@@ -20,7 +20,7 @@ Rated Stats saves your **rated PvP match history** and the **end-of-match scoreb
 - **CR / rating change** and **MMR** where available
 - **Map**, **timestamp**, and **match duration**
 - **Team totals** (damage / healing)
-- **BG team scores** when the scoreboard provides them :contentReference[oaicite:4]{index=4}
+- **BG team scores** when the scoreboard provides them
 
 ### Scoreboard player stats (per match)
 Rated Stats stores what Blizzard provides on the end-of-match scoreboard, including:
@@ -28,7 +28,7 @@ Rated Stats stores what Blizzard provides on the end-of-match scoreboard, includ
 - **Killing blows**, deaths, honorable kills
 - **Rating change** and **post-match MMR** where provided
 - **Faction, race, class, spec/role, honor level**
-- **Objectives text** on BG scoreboards (flags, bases, carts, etc. depending on map) :contentReference[oaicite:5]{index=5}
+- **Objectives text** on BG scoreboards (flags, bases, carts, etc. depending on map)
 
 ---
 
@@ -36,30 +36,30 @@ Rated Stats stores what Blizzard provides on the end-of-match scoreboard, includ
 
 ### Minimap / DataBroker
 - **Left-click**: open Rated Stats window
-- **Shift + Right-click**: open Settings :contentReference[oaicite:6]{index=6}
+- **Shift + Right-click**: open Settings
 
 ### History UI
 - Click a **match row** to expand / collapse the full player table.
-- Click a **player name** to open player details and copy their name for quick external lookup. :contentReference[oaicite:7]{index=7}
+- Click a **player name** to open player details and copy their name for quick external lookup.
 
 ---
 
 ## Optional companion addons
 - **Rated Stats – Achievements** (separate addon)
-- **Rated Stats – NoChat** (separate addon) :contentReference[oaicite:8]{index=8}
+- **Rated Stats – NoChat** (separate addon)
 
 ---
 
 ## Limitations (Blizzard restrictions)
 Rated Stats can only store what the client exposes:
 - Some details are only present on the **end-of-match** scoreboard.
-- Enemy inspection/scanning restrictions apply in modern WoW, so anything that depends on that will be limited by Blizzard. :contentReference[oaicite:9]{index=9}
+- Enemy inspection/scanning restrictions apply in modern WoW, so anything that depends on that will be limited by Blizzard.
 
 ---
 
 ## Gallery
 
-Source gallery (CurseForge): :contentReference[oaicite:10]{index=10}
+Source gallery (CurseForge): https://www.curseforge.com/wow/addons/rated-stats#gallery
 
 <details>
 <summary><strong>Click to expand screenshots</strong></summary>
