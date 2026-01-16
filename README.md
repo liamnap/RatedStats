@@ -45,8 +45,8 @@ Rated Stats stores what Blizzard provides on the end-of-match scoreboard, includ
 ---
 
 ## Optional companion addons
-- **Rated Stats – Achievements** (separate addon)
-- **Rated Stats – NoChat** (separate addon)
+- **Rated Stats – Achievements** https://github.com/liamnap/RatedStats_Achievements
+- **Rated Stats – NoChat** https://github.com/liamnap/RatedStats_NoChat
 
 ---
 
