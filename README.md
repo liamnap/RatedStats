@@ -84,4 +84,8 @@ Source gallery (CurseForge): https://www.curseforge.com/wow/addons/rated-stats#g
 <p><strong>UI Detail</strong></p>
 <img src="https://media.forgecdn.net/attachments/1265/89/screenshot-2025-07-24-180304-png.png" width="360"/>
 
+<br/><br/>
+<p><strong>Player Name Copy and Loadout</strong></p>
+<img src="https://media.forgecdn.net/attachments/1470/538/screenshot-2026-01-16-185856-png.png" width="400"/>
+
 </details>
