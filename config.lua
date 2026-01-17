@@ -3330,6 +3330,13 @@ function RSTATS.CreateClickableName(parent, stats, matchEntry, x, y, columnWidth
   clickableFrame:SetSize(nameText:GetStringWidth(), nameText:GetStringHeight())
   clickableFrame:SetPoint("CENTER", nameText, "CENTER")
 
+  clickableFrame:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText(c("Click me to copy name and see loadout"))
+    GameTooltip:Show()
+  end)
+  clickableFrame:SetScript("OnLeave", GameTooltip_Hide)
+
   clickableFrame:SetScript("OnClick", function()
     RSTATS.OpenPlayerDetails(stats, matchEntry)
   end)
