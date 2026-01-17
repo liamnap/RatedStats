@@ -3459,7 +3459,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     local objectiveHeader = ((isSS or is2v2 or is3v3) and "" or "Objective")
 
     local headersPerTeam = {
-        "Character", "Faction", "Race", "Class", "Spec", "Role", "CR", "KBs", winHKHeader
+        "Character", "Faction", "Race", "Class", "Spec", "Role", "CR / MMR", "KBs", winHKHeader
     }
     if showDeaths then
         table.insert(headersPerTeam, 10, "Deaths")
@@ -3521,6 +3521,40 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
 	
 		headerText:SetPoint("TOPLEFT", nestedTable, "TOPLEFT", xPos, -headerHeight)
 		headerText:SetWidth(width)
+
+        -- Tooltips for combined CR/MMR + change columns
+        do
+            -- Normalize to per-team column index (1..COLS_PER_TEAM)
+            local perTeamIndex = (i <= totalColumnsPerTeam) and i or (i - totalColumnsPerTeam)
+            local CR_COL = 7
+            local CHG_COL = showDeaths and 13 or 12
+
+            if perTeamIndex == CR_COL then
+                headerText:EnableMouse(true)
+                headerText:SetScript("OnEnter", function()
+                    GameTooltip:SetOwner(headerText, "ANCHOR_RIGHT")
+                    GameTooltip:ClearLines()
+                    GameTooltip:AddLine("CR / MMR", 1, 1, 1)
+                    GameTooltip:AddLine("Post-match Combat Rating / Post-match Matchmaking Rating", 1, 1, 1)
+                    GameTooltip:Show()
+                end)
+                headerText:SetScript("OnLeave", function()
+                    GameTooltip:Hide()
+                end)
+            elseif perTeamIndex == CHG_COL then
+                headerText:EnableMouse(true)
+                headerText:SetScript("OnEnter", function()
+                    GameTooltip:SetOwner(headerText, "ANCHOR_RIGHT")
+                    GameTooltip:ClearLines()
+                    GameTooltip:AddLine("CR / MMR Change", 1, 1, 1)
+                    GameTooltip:AddLine("CR change / MMR change for this match", 1, 1, 1)
+                    GameTooltip:Show()
+                end)
+                headerText:SetScript("OnLeave", function()
+                    GameTooltip:Hide()
+                end)
+            end
+        end
 
         -- Fully hide the Wins/HKs header text for 2v2/3v3
         if IsHiddenWinHKCol(i) then
@@ -3701,6 +3735,44 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     local enemyTeamSize     = #enemyPlayers
     local totalPlayerCount  = #allPlayers
 
+    -- CR/MMR display helpers (scoreboard provides rating + (pre/post)match MMR in rated brackets)
+    local function HasMMR(p)
+        if not p then return false end
+        local post = tonumber(p.postmatchMMR) or 0
+        local pre  = tonumber(p.prematchMMR) or 0
+        return (post > 0) or (pre > 0)
+    end
+
+    local function FormatSignedNumber(n)
+        n = tonumber(n)
+        if n == nil then return "-" end
+        if n > 0 then
+            return "+" .. n
+        end
+        return tostring(n)
+    end
+
+    local function FormatCRMMR(p)
+        local crVal = tonumber(p and p.newrating) or tonumber(p and p.rating)
+        if crVal == nil then
+            return "-"
+        end
+        if HasMMR(p) then
+            local mmrVal = tonumber(p and p.postmatchMMR) or tonumber(p and p.prematchMMR) or 0
+            return string.format("%d / %d", crVal, mmrVal)
+        end
+        return tostring(crVal)
+    end
+
+    local function FormatCRMMRChange(p)
+        local crTxt = FormatSignedNumber(p and p.ratingChange)
+        if HasMMR(p) then
+            local mmrTxt = FormatSignedNumber(p and p.mmrChange)
+            return crTxt .. " / " .. mmrTxt
+        end
+        return crTxt
+    end
+
     -- Populate friendly player stats
     for index, player in ipairs(friendlyPlayers) do
         local rowOffset = -(headerHeight + 15 * index)  -- Adjust rowOffset to account for headers
@@ -3720,12 +3792,14 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 specIcons[player.spec] or player.spec,
                 roleIcons[player.role] or player.role,
                 player.newrating,
+                FormatCRMMR(player),
                 player.killingBlows,
                 winHKValue,
                 player.deaths or "-",
                 FormatNumber(player.damage),
                 FormatNumber(player.healing),
                 player.ratingChange,
+                FormatCRMMRChange(player),
                 ((isSS or is2v2 or is3v3) and "" or (player.objective or "-"))
             }
         else
@@ -3737,11 +3811,13 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 specIcons[player.spec] or player.spec,
                 roleIcons[player.role] or player.role,
                 player.newrating,
+                FormatCRMMR(player),
                 player.killingBlows,
                 winHKValue,
                 FormatNumber(player.damage),
                 FormatNumber(player.healing),
                 player.ratingChange,
+                FormatCRMMRChange(player),
                 ((isSS or is2v2 or is3v3) and "" or (player.objective or "-"))
             }
         end
@@ -3858,12 +3934,14 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 specIcons[player.spec] or player.spec,
                 roleIcons[player.role] or player.role,
                 player.newrating,
+                FormatCRMMR(player),
                 player.killingBlows,
                 winHKValue,
                 player.deaths or "-",
                 FormatNumber(player.damage),
                 FormatNumber(player.healing),
                 player.ratingChange,
+                FormatCRMMRChange(player),
                 ((isSS or is2v2 or is3v3) and "" or (player.objective or "-"))
             }
         else
@@ -3875,11 +3953,13 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 specIcons[player.spec] or player.spec,
                 roleIcons[player.role] or player.role,
                 player.newrating,
+                FormatCRMMR(player),
                 player.killingBlows,
                 winHKValue,
                 FormatNumber(player.damage),
                 FormatNumber(player.healing),
                 player.ratingChange,
+                FormatCRMMRChange(player),
                 ((isSS or is2v2 or is3v3) and "" or (player.objective or "-"))
             }
         end
