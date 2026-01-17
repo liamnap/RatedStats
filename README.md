@@ -24,6 +24,7 @@ Rated Stats saves your **rated PvP match history** and the **end-of-match scoreb
 
 ### Scoreboard player stats (per match)
 Rated Stats stores what Blizzard provides on the end-of-match scoreboard, including:
+- **Per player** stats **per round** in Solo Shuffle (**unique to Rated Stats**)
 - **Damage / Healing**
 - **Killing blows**, deaths, honorable kills
 - **Rating change** and **post-match MMR** where provided
