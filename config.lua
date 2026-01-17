@@ -3809,7 +3809,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                     local rankFontSize = math.max(7, (entryFontSize or 11) - 6)
                     local teamRank, overallRank, teamSize = nil, nil, friendlyTeamSize
 
-                    if i == 10 then
+                    if i == DAMAGE_COL then
                         teamRank = friendlyDamageRank[player]
                         overallRank = overallDamageRank[player]
                     else
@@ -3845,21 +3845,46 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
         RSTATS.CreateClickableName(nestedTable, player, matchEntry, columnPositions[COLS_PER_TEAM + 1], rowOffset, columnWidths[COLS_PER_TEAM + 1], rowHeight)
         local winHKValue = (isSS and player.wins) or (hideWinHK and "") or player.honorableKills
 
-        for i, stat in ipairs({
-			"",
-            factionIcons[player.faction] or player.faction, 
-            raceIcons[player.race] or player.race, 
-            classIcons[player.class] or player.class, 
-            specIcons[player.spec] or player.spec,
-            roleIcons[player.role] or player.role,  -- Replace numeric role with icon
-            player.newrating, 
-            player.killingBlows, 
-            winHKValue, 
-            FormatNumber(player.damage), 
-            FormatNumber(player.healing), 
-            player.ratingChange,
-            ((isSS or is2v2 or is3v3) and "" or (player.objective or "-"))
-        }) do
+        local DAMAGE_COL = showDeaths and 11 or 10
+        local HEAL_COL   = showDeaths and 12 or 11
+
+        local rowStats
+        if showDeaths then
+            rowStats = {
+                "",
+                factionIcons[player.faction] or player.faction,
+                raceIcons[player.race] or player.race,
+                classIcons[player.class] or player.class,
+                specIcons[player.spec] or player.spec,
+                roleIcons[player.role] or player.role,
+                player.newrating,
+                player.killingBlows,
+                winHKValue,
+                player.deaths or "-",
+                FormatNumber(player.damage),
+                FormatNumber(player.healing),
+                player.ratingChange,
+                ((isSS or is2v2 or is3v3) and "" or (player.objective or "-"))
+            }
+        else
+            rowStats = {
+                "",
+                factionIcons[player.faction] or player.faction,
+                raceIcons[player.race] or player.race,
+                classIcons[player.class] or player.class,
+                specIcons[player.spec] or player.spec,
+                roleIcons[player.role] or player.role,
+                player.newrating,
+                player.killingBlows,
+                winHKValue,
+                FormatNumber(player.damage),
+                FormatNumber(player.healing),
+                player.ratingChange,
+                ((isSS or is2v2 or is3v3) and "" or (player.objective or "-"))
+            }
+        end
+
+        for i, stat in ipairs(rowStats) do
             local ci    = COLS_PER_TEAM + i
             local xPos  = columnPositions[ci]
             local width = columnWidths[ci]
@@ -3875,7 +3900,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
             elseif i == 6 then
                 -- Add role tooltip
                 CreateIconWithTooltip(nestedTable, stat, roleTooltips[player.role], xPos, rowOffset, width, rowHeight)
-            elseif i == 13 then
+            elseif i == COLS_PER_TEAM then
                 local textValue = stat or "-"
                 local fs = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
                 fs:SetFont(GetUnicodeSafeFont(), entryFontSize)
@@ -3919,11 +3944,11 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 local text = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
                 text:SetFont(GetUnicodeSafeFont(), entryFontSize)
 
-                if i == 10 or i == 11 then
+                if i == DAMAGE_COL or i == HEAL_COL then
                     local rankFontSize = math.max(7, (entryFontSize or 11) - 6)
                     local teamRank, overallRank, teamSize = nil, nil, enemyTeamSize
 
-                    if i == 10 then
+                    if i == DAMAGE_COL then
                         teamRank = enemyDamageRank[player]
                         overallRank = overallDamageRank[player]
                     else
