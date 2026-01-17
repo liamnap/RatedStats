@@ -1437,6 +1437,7 @@ function GetInitialCRandMMR()
                     newrating = cr,
                     killingBlows = "-",
                     honorableKills = "-",
+                    deaths = "-",
                     damage = "-",
                     healing = "-",
                     ratingChange = "-"
@@ -1456,6 +1457,7 @@ function GetInitialCRandMMR()
 				newrating = "-",
 				killingBlows = "-",
 				honorableKills = "-",
+                deaths = "-",
 				damage = "-",
 				healing = "-",
 				ratingChange = "-"
@@ -1574,6 +1576,7 @@ function CheckForMissedGames()
 						newrating = currentCR,
 						killingBlows = "-",
 						honorableKills = "-",
+                        deaths = "-",
 						damage = "-",
 						healing = "-",
 						ratingChange = crChange
@@ -1593,6 +1596,7 @@ function CheckForMissedGames()
 					newrating = "-",
 					killingBlows = "-",
 					honorableKills = "-",
+                    deaths = "-",
 					damage = "-",
 					healing = "-",
 					ratingChange = "-"
@@ -3330,6 +3334,13 @@ function RSTATS.CreateClickableName(parent, stats, matchEntry, x, y, columnWidth
   clickableFrame:SetSize(nameText:GetStringWidth(), nameText:GetStringHeight())
   clickableFrame:SetPoint("CENTER", nameText, "CENTER")
 
+  clickableFrame:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText(c("Click me to copy name and see loadout"))
+    GameTooltip:Show()
+  end)
+  clickableFrame:SetScript("OnLeave", GameTooltip_Hide)
+
   clickableFrame:SetScript("OnClick", function()
     RSTATS.OpenPlayerDetails(stats, matchEntry)
   end)
@@ -3373,6 +3384,9 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     local isSS = (tabID == 1)
     local is2v2 = (tabID == 2)
     local is3v3 = (tabID == 3)
+    local isRBG = (tabID == 4)
+    local isSoloRBG = (tabID == 5)
+    local showDeaths = (isRBG or isSoloRBG)
 
     -- ------------------------------------------------------------------
     -- column geometry (dynamic based on parent:GetWidth())
@@ -3393,6 +3407,12 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
 		0.039920,  -- 12 Rating Chg
 		((is2v2 or is3v3) and (0.019960 + 0.019960) or 0.019960),   -- 13 Objective absorbs slack
 	}
+
+	if showDeaths then
+		-- Insert Deaths after HKs/Wins (RBG / RBGB only)
+		table.insert(baseFracs, 10, 0.019960)
+	end
+
     local COLS_PER_TEAM = #baseFracs                             -- still =13
     
     -- build ally+enemy columnWidths at runtime
@@ -3436,10 +3456,22 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
 
     local winHKHeader = (isSS and "Wins") or (hideWinHK and "") or "HKs"
 
-    local headers = {
-        "Character", "Faction", "Race", "Class", "Spec", "Role", "CR", "KBs", winHKHeader, "Damage", "Healing", "Rating Chg", ((isSS or is2v2 or is3v3) and "" or "Objective"),
-        "Character", "Faction", "Race", "Class", "Spec", "Role", "CR", "KBs", winHKHeader, "Damage", "Healing", "Rating Chg", ((isSS or is2v2 or is3v3) and "" or "Objective")
+    local objectiveHeader = ((isSS or is2v2 or is3v3) and "" or "Objective")
+
+    local headersPerTeam = {
+        "Character", "Faction", "Race", "Class", "Spec", "Role", "CR / MMR", "KBs", winHKHeader
     }
+    if showDeaths then
+        table.insert(headersPerTeam, 10, "Deaths")
+    end
+    table.insert(headersPerTeam, "Damage")
+    table.insert(headersPerTeam, "Healing")
+    table.insert(headersPerTeam, "Rating Chg")
+    table.insert(headersPerTeam, objectiveHeader)
+
+    local headers = {}
+    for i = 1, #headersPerTeam do headers[#headers+1] = headersPerTeam[i] end
+    for i = 1, #headersPerTeam do headers[#headers+1] = headersPerTeam[i] end
 
     local headerHeight = 18  -- Height of the header row
 
@@ -3490,6 +3522,40 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
 		headerText:SetPoint("TOPLEFT", nestedTable, "TOPLEFT", xPos, -headerHeight)
 		headerText:SetWidth(width)
 
+        -- Tooltips for combined CR/MMR + change columns
+        do
+            -- Normalize to per-team column index (1..COLS_PER_TEAM)
+            local perTeamIndex = (i <= totalColumnsPerTeam) and i or (i - totalColumnsPerTeam)
+            local CR_COL = 7
+            local CHG_COL = showDeaths and 13 or 12
+
+            if perTeamIndex == CR_COL then
+                headerText:EnableMouse(true)
+                headerText:SetScript("OnEnter", function()
+                    GameTooltip:SetOwner(headerText, "ANCHOR_RIGHT")
+                    GameTooltip:ClearLines()
+                    GameTooltip:AddLine("CR / MMR", 1, 1, 1)
+                    GameTooltip:AddLine("Post-match Combat Rating / Post-match Matchmaking Rating", 1, 1, 1)
+                    GameTooltip:Show()
+                end)
+                headerText:SetScript("OnLeave", function()
+                    GameTooltip:Hide()
+                end)
+            elseif perTeamIndex == CHG_COL then
+                headerText:EnableMouse(true)
+                headerText:SetScript("OnEnter", function()
+                    GameTooltip:SetOwner(headerText, "ANCHOR_RIGHT")
+                    GameTooltip:ClearLines()
+                    GameTooltip:AddLine("CR / MMR Change", 1, 1, 1)
+                    GameTooltip:AddLine("CR change / MMR change for this match", 1, 1, 1)
+                    GameTooltip:Show()
+                end)
+                headerText:SetScript("OnLeave", function()
+                    GameTooltip:Hide()
+                end)
+            end
+        end
+
         -- Fully hide the Wins/HKs header text for 2v2/3v3
         if IsHiddenWinHKCol(i) then
             headerText:SetText("")
@@ -3505,7 +3571,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
         for i = 1, playersPerTeam do
             table.insert(enemyPlayers, {
                 name = "-", faction = "-", race = "-", class = "-", spec = "-", role = "-", 
-                newrating = "-", killingBlows = "-", honorableKills = "-", damage = "-", healing = "-", ratingChange = "-"
+                newrating = "-", killingBlows = "-", honorableKills = "-", deaths = "-", damage = "-", healing = "-", ratingChange = "-"
             })  -- Add placeholder entries for the enemy
         end
     elseif matchEntry and matchEntry.isSoloShuffle then
@@ -3669,27 +3735,98 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     local enemyTeamSize     = #enemyPlayers
     local totalPlayerCount  = #allPlayers
 
+    -- CR/MMR display helpers (scoreboard provides rating + (pre/post)match MMR in rated brackets)
+    local function HasMMR(p)
+        if not p then return false end
+        local post = tonumber(p.postmatchMMR) or 0
+        local pre  = tonumber(p.prematchMMR) or 0
+        return (post > 0) or (pre > 0)
+    end
+
+    local function FormatSignedNumber(n)
+        n = tonumber(n)
+        if n == nil then return "-" end
+        if n > 0 then
+            return "+" .. n
+        end
+        return tostring(n)
+    end
+
+    local function FormatCRMMR(p)
+        local crVal = tonumber(p and p.newrating) or tonumber(p and p.rating)
+        if crVal == nil then
+            return "-"
+        end
+        if HasMMR(p) then
+            local mmrVal = tonumber(p and p.postmatchMMR) or tonumber(p and p.prematchMMR) or 0
+            return string.format("%d / %d", crVal, mmrVal)
+        end
+        return tostring(crVal)
+    end
+
+    local function FormatCRMMRChange(p)
+        local crTxt = FormatSignedNumber(p and p.ratingChange)
+        if HasMMR(p) then
+            local pre  = tonumber(p and p.prematchMMR) or 0
+            local post = tonumber(p and p.postmatchMMR) or 0
+            local delta = 0
+
+            if pre > 0 and post > 0 then
+                delta = post - pre
+            end
+
+            local mmrTxt = FormatSignedNumber(delta)
+            return crTxt .. " / " .. mmrTxt
+        end
+        return crTxt
+    end
+
     -- Populate friendly player stats
     for index, player in ipairs(friendlyPlayers) do
         local rowOffset = -(headerHeight + 15 * index)  -- Adjust rowOffset to account for headers
         RSTATS.CreateClickableName(nestedTable, player, matchEntry, columnPositions[1], rowOffset, columnWidths[1], rowHeight)
         local winHKValue = (isSS and player.wins) or (hideWinHK and "") or player.honorableKills
 
-        for i, stat in ipairs({
-			"",
-            factionIcons[player.faction] or player.faction, 
-            raceIcons[player.race] or player.race, 
-            classIcons[player.class] or player.class, 
-            specIcons[player.spec] or player.spec, 
-            roleIcons[player.role] or player.role,  -- Replace numeric role with icon
-            player.newrating, 
-            player.killingBlows, 
-            winHKValue, 
-            FormatNumber(player.damage), 
-            FormatNumber(player.healing), 
-            player.ratingChange,
-            ((isSS or is2v2 or is3v3) and "" or (player.objective or "-"))
-        }) do
+        local DAMAGE_COL = showDeaths and 11 or 10
+        local HEAL_COL   = showDeaths and 12 or 11
+
+        local rowStats
+        if showDeaths then
+            rowStats = {
+			    "",
+                factionIcons[player.faction] or player.faction,
+                raceIcons[player.race] or player.race,
+                classIcons[player.class] or player.class,
+                specIcons[player.spec] or player.spec,
+                roleIcons[player.role] or player.role,
+                FormatCRMMR(player),
+                player.killingBlows,
+                winHKValue,
+                player.deaths or "-",
+                FormatNumber(player.damage),
+                FormatNumber(player.healing),
+                FormatCRMMRChange(player),
+                ((isSS or is2v2 or is3v3) and "" or (player.objective or "-"))
+            }
+        else
+            rowStats = {
+			    "",
+                factionIcons[player.faction] or player.faction,
+                raceIcons[player.race] or player.race,
+                classIcons[player.class] or player.class,
+                specIcons[player.spec] or player.spec,
+                roleIcons[player.role] or player.role,
+                FormatCRMMR(player),
+                player.killingBlows,
+                winHKValue,
+                FormatNumber(player.damage),
+                FormatNumber(player.healing),
+                FormatCRMMRChange(player),
+                ((isSS or is2v2 or is3v3) and "" or (player.objective or "-"))
+            }
+        end
+
+        for i, stat in ipairs(rowStats) do
             if i == 2 then
                 CreateIconWithTooltip(nestedTable, stat, player.faction, columnPositions[i], rowOffset, columnWidths[i], rowHeight)
             elseif i == 3 then
@@ -3701,7 +3838,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
             elseif i == 6 then
                 -- Add role tooltip
                 CreateIconWithTooltip(nestedTable, stat, roleTooltips[player.role], columnPositions[i], rowOffset, columnWidths[i], rowHeight)
-            elseif i == 13 then
+            elseif i == COLS_PER_TEAM then
                 local textValue = stat or "-"
                 local fs = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
                 fs:SetFont(GetUnicodeSafeFont(), entryFontSize)
@@ -3748,11 +3885,11 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
 
                 text:SetFont(GetUnicodeSafeFont(), entryFontSize)
 
-                if i == 10 or i == 11 then
+                if i == DAMAGE_COL or i == HEAL_COL then
                     local rankFontSize = math.max(7, (entryFontSize or 11) - 6)
                     local teamRank, overallRank, teamSize = nil, nil, friendlyTeamSize
 
-                    if i == 10 then
+                    if i == DAMAGE_COL then
                         teamRank = friendlyDamageRank[player]
                         overallRank = overallDamageRank[player]
                     else
@@ -3788,21 +3925,46 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
         RSTATS.CreateClickableName(nestedTable, player, matchEntry, columnPositions[COLS_PER_TEAM + 1], rowOffset, columnWidths[COLS_PER_TEAM + 1], rowHeight)
         local winHKValue = (isSS and player.wins) or (hideWinHK and "") or player.honorableKills
 
-        for i, stat in ipairs({
-			"",
-            factionIcons[player.faction] or player.faction, 
-            raceIcons[player.race] or player.race, 
-            classIcons[player.class] or player.class, 
-            specIcons[player.spec] or player.spec,
-            roleIcons[player.role] or player.role,  -- Replace numeric role with icon
-            player.newrating, 
-            player.killingBlows, 
-            winHKValue, 
-            FormatNumber(player.damage), 
-            FormatNumber(player.healing), 
-            player.ratingChange,
-            ((isSS or is2v2 or is3v3) and "" or (player.objective or "-"))
-        }) do
+        local DAMAGE_COL = showDeaths and 11 or 10
+        local HEAL_COL   = showDeaths and 12 or 11
+
+        local rowStats
+        if showDeaths then
+            rowStats = {
+                "",
+                factionIcons[player.faction] or player.faction,
+                raceIcons[player.race] or player.race,
+                classIcons[player.class] or player.class,
+                specIcons[player.spec] or player.spec,
+                roleIcons[player.role] or player.role,
+                FormatCRMMR(player),
+                player.killingBlows,
+                winHKValue,
+                player.deaths or "-",
+                FormatNumber(player.damage),
+                FormatNumber(player.healing),
+                FormatCRMMRChange(player),
+                ((isSS or is2v2 or is3v3) and "" or (player.objective or "-"))
+            }
+        else
+            rowStats = {
+                "",
+                factionIcons[player.faction] or player.faction,
+                raceIcons[player.race] or player.race,
+                classIcons[player.class] or player.class,
+                specIcons[player.spec] or player.spec,
+                roleIcons[player.role] or player.role,
+                FormatCRMMR(player),
+                player.killingBlows,
+                winHKValue,
+                FormatNumber(player.damage),
+                FormatNumber(player.healing),
+                FormatCRMMRChange(player),
+                ((isSS or is2v2 or is3v3) and "" or (player.objective or "-"))
+            }
+        end
+
+        for i, stat in ipairs(rowStats) do
             local ci    = COLS_PER_TEAM + i
             local xPos  = columnPositions[ci]
             local width = columnWidths[ci]
@@ -3818,7 +3980,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
             elseif i == 6 then
                 -- Add role tooltip
                 CreateIconWithTooltip(nestedTable, stat, roleTooltips[player.role], xPos, rowOffset, width, rowHeight)
-            elseif i == 13 then
+            elseif i == COLS_PER_TEAM then
                 local textValue = stat or "-"
                 local fs = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
                 fs:SetFont(GetUnicodeSafeFont(), entryFontSize)
@@ -3862,11 +4024,11 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 local text = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
                 text:SetFont(GetUnicodeSafeFont(), entryFontSize)
 
-                if i == 10 or i == 11 then
+                if i == DAMAGE_COL or i == HEAL_COL then
                     local rankFontSize = math.max(7, (entryFontSize or 11) - 6)
                     local teamRank, overallRank, teamSize = nil, nil, enemyTeamSize
 
-                    if i == 10 then
+                    if i == DAMAGE_COL then
                         teamRank = enemyDamageRank[player]
                         overallRank = overallDamageRank[player]
                     else

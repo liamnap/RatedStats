@@ -70,10 +70,23 @@ local function GetRelevantUnits(callback)
 
     local seen = {}
     local foundCount = 0
+    local seededPlayer = false
 
     local function ScanLoop()
+        -- Always include self once (party/raid tokens do not include "player")
+        if not seededPlayer and UnitExists("player") and UnitIsPlayer("player") then
+            local pguid = NormalizeGUID(UnitGUID("player"))
+            if pguid and not seen[pguid] then
+                seen[pguid] = true
+                foundCount = foundCount + 1
+                callback("player", pguid)
+            end
+            seededPlayer = true
+        end
+
         for _, prefix in ipairs(tokenTypes) do
             for i = 1, 20 do
+                local unit = prefix .. i
                 if UnitExists(unit) and UnitIsPlayer(unit) then
                     -- Midnight: only process friendlies; enemies can produce "secret" values.
                     if UnitIsFriend("player", unit) then
