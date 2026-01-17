@@ -3785,38 +3785,34 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
         local rowStats
         if showDeaths then
             rowStats = {
-			"",
+			    "",
                 factionIcons[player.faction] or player.faction,
                 raceIcons[player.race] or player.race,
                 classIcons[player.class] or player.class,
                 specIcons[player.spec] or player.spec,
                 roleIcons[player.role] or player.role,
-                player.newrating,
                 FormatCRMMR(player),
                 player.killingBlows,
                 winHKValue,
                 player.deaths or "-",
                 FormatNumber(player.damage),
                 FormatNumber(player.healing),
-                player.ratingChange,
                 FormatCRMMRChange(player),
                 ((isSS or is2v2 or is3v3) and "" or (player.objective or "-"))
             }
         else
             rowStats = {
-			"",
+			    "",
                 factionIcons[player.faction] or player.faction,
                 raceIcons[player.race] or player.race,
                 classIcons[player.class] or player.class,
                 specIcons[player.spec] or player.spec,
                 roleIcons[player.role] or player.role,
-                player.newrating,
                 FormatCRMMR(player),
                 player.killingBlows,
                 winHKValue,
                 FormatNumber(player.damage),
                 FormatNumber(player.healing),
-                player.ratingChange,
                 FormatCRMMRChange(player),
                 ((isSS or is2v2 or is3v3) and "" or (player.objective or "-"))
             }
@@ -3933,14 +3929,12 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 classIcons[player.class] or player.class,
                 specIcons[player.spec] or player.spec,
                 roleIcons[player.role] or player.role,
-                player.newrating,
                 FormatCRMMR(player),
                 player.killingBlows,
                 winHKValue,
                 player.deaths or "-",
                 FormatNumber(player.damage),
                 FormatNumber(player.healing),
-                player.ratingChange,
                 FormatCRMMRChange(player),
                 ((isSS or is2v2 or is3v3) and "" or (player.objective or "-"))
             }
@@ -3952,13 +3946,11 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 classIcons[player.class] or player.class,
                 specIcons[player.spec] or player.spec,
                 roleIcons[player.role] or player.role,
-                player.newrating,
                 FormatCRMMR(player),
                 player.killingBlows,
                 winHKValue,
                 FormatNumber(player.damage),
                 FormatNumber(player.healing),
-                player.ratingChange,
                 FormatCRMMRChange(player),
                 ((isSS or is2v2 or is3v3) and "" or (player.objective or "-"))
             }
