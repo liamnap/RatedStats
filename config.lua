@@ -3767,7 +3767,15 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     local function FormatCRMMRChange(p)
         local crTxt = FormatSignedNumber(p and p.ratingChange)
         if HasMMR(p) then
-            local mmrTxt = FormatSignedNumber(p and p.mmrChange)
+            local pre  = tonumber(p and p.prematchMMR) or 0
+            local post = tonumber(p and p.postmatchMMR) or 0
+            local delta = 0
+
+            if pre > 0 and post > 0 then
+                delta = post - pre
+            end
+
+            local mmrTxt = FormatSignedNumber(delta)
             return crTxt .. " / " .. mmrTxt
         end
         return crTxt
