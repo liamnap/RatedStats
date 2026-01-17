@@ -1638,7 +1638,7 @@ function Summary:Create(parentFrame)
             end)
 
             row.nameBtn:SetScript("OnEnter", function(self)
-                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
                 GameTooltip:SetText(ColorText("Click me to copy name and see loadout"))
                 GameTooltip:Show()
             end)
@@ -1657,7 +1657,7 @@ function Summary:Create(parentFrame)
                 if parentRow and parentRow._rsPS and parentRow._rsPS.name
                     and type(_G.RSTATS_Achiev_AddAchievementInfoToTooltip) == "function"
                 then
-                    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                    GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
                     local baseName, realm = strsplit("-", parentRow._rsPS.name)
                     realm = realm or GetRealmName()
                     _G.RSTATS_Achiev_AddAchievementInfoToTooltip(GameTooltip, baseName, realm)
@@ -1722,7 +1722,6 @@ function Summary:Create(parentFrame)
             row:EnableMouse(true)
             row:SetScript("OnEnter", function(self)
                 if not self._streakStart or not self._streakEnd then return end
-                -- ANCHOR_RIGHT anchors to the right edge of the (wide) row frame, which creates a big visible gap.
                 GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
                 GameTooltip:ClearLines()
                 local s = date("%d %b %Y %H:%M", self._streakStart)
