@@ -1637,6 +1637,14 @@ function Summary:Create(parentFrame)
                 end
             end)
 
+            row.nameBtn:SetScript("OnEnter", function(self)
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                GameTooltip:SetText(ColorText("Click me to copy name and see loadout"))
+                GameTooltip:Show()
+            end)
+
+            row.nameBtn:SetScript("OnLeave", GameTooltip_Hide)
+
             row.iconBtn:SetScript("OnClick", function(self)
                 local parentRow = self:GetParent()
                 if parentRow and parentRow._rsPS and parentRow._rsMatch and type(RSTATS) == "table" and type(RSTATS.OpenPlayerDetails) == "function" then
