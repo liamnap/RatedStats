@@ -1453,10 +1453,14 @@ function GetInitialCRandMMR()
             duoPartner = GetRBGBDuoPartnerNameRealm()
         end
 
+        local mySpecID, mySpecName = GetActiveSpecIDAndName()
+
         -- Create an entry with the current timestamp
         local entry = {
 			matchID = 1,
             timestamp = GetTimestamp(),
+            specID = mySpecID,
+            specName = mySpecName,
             cr = cr,
             mmr = "-",
             isInitial = true,
@@ -1529,6 +1533,146 @@ function GetInitialCRandMMR()
     end
 
     SaveData()
+end
+
+-- ==========================================================
+-- Spec-based rated ladders (SS / Solo RBG) need spec-scoped history
+-- ==========================================================
+
+local function GetActiveSpecIDAndName()
+	local specIndex = GetSpecialization()
+	if not specIndex then return nil, nil end
+	local specID, specName = GetSpecializationInfo(specIndex)
+	return specID, specName
+end
+
+local function SpecHistoryHasInitial(t)
+	if type(t) ~= "table" then return false end
+	for _, m in ipairs(t) do
+		if m and m.isInitial then return true end
+	end
+	return false
+end
+
+-- Ensures Database.<BySpecKey>[specID] exists and has an initial row.
+-- Returns the spec history table or nil.
+local function EnsureSpecHistory(categoryID, specID, specName)
+	if categoryID ~= 7 and categoryID ~= 9 then return nil end
+
+	specID = specID or select(1, GetActiveSpecIDAndName())
+	if not specID then return nil end
+
+	local bySpecKey = (categoryID == 7) and "SoloShuffleHistoryBySpec" or "SoloRBGHistoryBySpec"
+
+	Database[bySpecKey] = Database[bySpecKey] or {}
+	Database[bySpecKey][specID] = Database[bySpecKey][specID] or {}
+
+	local specHistory = Database[bySpecKey][specID]
+
+	if not SpecHistoryHasInitial(specHistory) then
+		local cr = select(1, GetPersonalRatedInfo(categoryID))
+		local mmr = select(10, GetPersonalRatedInfo(categoryID))
+		local played = select(4, GetPersonalRatedInfo(categoryID))
+
+		-- Keep existing Playedfor* field behavior (legacy); we’re not breaking DB.
+		local playedField = (categoryID == 7) and "PlayedforSoloShuffle" or "PlayedforSoloRBG"
+		Database[playedField] = played
+
+		local duoPartner = nil
+		if categoryID == 9 then
+			duoPartner = GetRBGBDuoPartnerNameRealm()
+		end
+
+		local playerFullName = GetPlayerFullName()
+		local _, sn = GetActiveSpecIDAndName()
+		specName = specName or sn or "N/A"
+
+		local entry = {
+			matchID = 1,
+			timestamp = GetTimestamp(),
+			cr = cr,
+			mmr = "-",
+			isInitial = true,
+			winLoss = "I",
+			friendlyWinLoss = "I",
+			mapName = "N/A",
+			endTime = GetTimestamp(),
+			duration = "N/A",
+			duoPartner = duoPartner,
+			teamFaction = UnitFactionGroup("player"),
+			friendlyRaidLeader = playerFullName,
+			friendlyAvgCR = cr,
+			friendlyMMR = mmr,
+			friendlyTotalDamage = "-",
+			friendlyTotalHealing = "-",
+			friendlyRatingChange = "-",
+			enemyFaction = "-",
+			enemyRaidLeader = "-",
+			enemyAvgCR = "-",
+			enemyMMR = "-",
+			enemyTotalDamage = "-",
+			enemyTotalHealing = "-",
+			enemyRatingChange = "-",
+			specID = specID,
+			specName = specName,
+			playerStats = {
+				{
+					name = playerFullName,
+					faction = UnitFactionGroup("player"),
+					race = UnitRace("player"),
+					class = UnitClass("player"),
+					spec = specName,
+					role = GetPlayerRole(),
+					newrating = cr,
+					killingBlows = "-",
+					honorableKills = "-",
+					deaths = "-",
+					damage = "-",
+					healing = "-",
+					ratingChange = "-",
+				},
+			},
+		}
+
+		-- Enemy placeholder row (matches your existing initial entry shape)
+		table.insert(entry.playerStats, {
+			name = "-",
+			faction = "-",
+			race = "-",
+			class = "-",
+			spec = "-",
+			role = "-",
+			newrating = "-",
+			killingBlows = "-",
+			honorableKills = "-",
+			deaths = "-",
+			damage = "-",
+			healing = "-",
+			ratingChange = "-",
+		})
+
+		table.insert(specHistory, 1, entry)
+	end
+
+	return specHistory
+end
+
+-- Expose a single accessor the UI can use everywhere.
+function RSTATS:GetHistoryForTab(tabID)
+	if tabID == 1 then
+		local sid, sname = GetActiveSpecIDAndName()
+		return EnsureSpecHistory(7, sid, sname) or (Database.SoloShuffleHistory or {})
+	elseif tabID == 5 then
+		local sid, sname = GetActiveSpecIDAndName()
+		return EnsureSpecHistory(9, sid, sname) or (Database.SoloRBGHistory or {})
+	elseif tabID == 2 then
+		return Database.v2History or {}
+	elseif tabID == 3 then
+		return Database.v3History or {}
+	elseif tabID == 4 then
+		return Database.RBGHistory or {}
+	end
+	return {}
 end
 
 -- Helper function to get player full name
@@ -2323,6 +2467,12 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
         -- Skip table insert for now, let the 20second delay handle it
     else
         table.insert(historyTable, 1, entry)
+        if categoryID == 7 or categoryID == 9 then
+            local specTable = EnsureSpecHistory(categoryID, mySpecID, mySpecName)
+            if specTable then
+                table.insert(specTable, 1, entry)
+            end
+        end
         SaveData()
     end
 
@@ -2425,6 +2575,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                 matchID = appendHistoryMatchID,
                 isSoloShuffle = true,
                 timestamp = endTime,
+                specID = mySpecID,
+                specName = mySpecName,
                 cr = cr,
                 mmr = mmr,
                 isInitial = false,
@@ -2455,6 +2607,12 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             }
 
             table.insert(historyTable, 1, ssRoundData)
+            do
+                local specTable = EnsureSpecHistory(7, mySpecID, mySpecName)
+                if specTable then
+                    table.insert(specTable, 1, ssRoundData)
+                end
+            end
 			SaveData()
             playerDeathSeen = false
 		end)
@@ -5003,13 +5161,7 @@ function Config:CreateMenu()
 	function RSTATS:UpdateStatsView(filterType, tabID)
 		tabID = tabID or PanelTemplates_GetSelectedTab(RSTATS.UIConfig)
 
-		local allMatches = ({
-			[1] = Database.SoloShuffleHistory,
-			[2] = Database.v2History,
-			[3] = Database.v3History,
-			[4] = Database.RBGHistory,
-			[5] = Database.SoloRBGHistory,
-		})[tabID] or {}
+        local allMatches = RSTATS:GetHistoryForTab(tabID) or {}
 	
 		-- Apply current tab filters
 		local filtered = {}
@@ -5279,7 +5431,7 @@ function Config:CreateMenu()
     local function RefreshDisplay()
         -- For each bracket
         local mmrLabel1 = DisplayCurrentCRMMR(contentFrames[1],7)
-        local headers1, frames1 = RSTATS:DisplayHistory(scrollContents[1], Database.SoloShuffleHistory, mmrLabel1, 1)
+        local headers1, frames1 = RSTATS:DisplayHistory(scrollContents[1], RSTATS:GetHistoryForTab(1), mmrLabel1, 1)
         AdjustContentHeight(scrollContents[1])   -- simplified call
 
         local mmrLabel2 = DisplayCurrentCRMMR(contentFrames[2],1)
@@ -5295,7 +5447,7 @@ function Config:CreateMenu()
         AdjustContentHeight(scrollContents[4])
 
         local mmrLabel5 = DisplayCurrentCRMMR(contentFrames[5],9)
-        local headers5, frames5 = RSTATS:DisplayHistory(scrollContents[5], Database.SoloRBGHistory, mmrLabel5, 5)
+        local headers5, frames5 = RSTATS:DisplayHistory(scrollContents[5], RSTATS:GetHistoryForTab(5), mmrLabel5, 5)
         AdjustContentHeight(scrollContents[5])
 
     end
