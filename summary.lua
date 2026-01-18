@@ -2127,7 +2127,10 @@ function Summary:Refresh()
 
         local cardData = {
             name = bracket.name,
-            currentCR = perChar[bracket.crKey] or 0,
+            currentCR = (function()
+                local cr = select(1, GetPersonalRatedInfo(bracket.bracketID))
+                return tonumber(cr) or 0
+            end)(),
             currentMMR = (function()
                 local mmr = perChar[bracket.mmrKey] or 0
                 if bracket.tabID == 2 or bracket.tabID == 3 then
