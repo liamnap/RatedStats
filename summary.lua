@@ -2103,8 +2103,6 @@ function Summary:Refresh()
             end)
         end
 
-    end
-
         local history = perChar[bracket.historyKey] or {}
         if bracket.bracketID == 7 or bracket.bracketID == 9 then
             local sid = GetActiveSpecID()
