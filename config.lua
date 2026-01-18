@@ -1396,6 +1396,16 @@ local function GetPlayerRole()
     end
 end
 
+-- ==========================================================
+-- Active spec helpers (used by initial entries + spec history)
+-- ==========================================================
+local function GetActiveSpecIDAndName()
+    local specIndex = GetSpecialization()
+    if not specIndex then return nil, nil end
+    local specID, specName = GetSpecializationInfo(specIndex)
+    return specID, specName
+end
+
 -- Function to get initial and current CR and MMR values
 function GetInitialCRandMMR()
     -- Define category mappings with history table names and display names
@@ -1538,14 +1548,6 @@ end
 -- ==========================================================
 -- Spec-based rated ladders (SS / Solo RBG) need spec-scoped history
 -- ==========================================================
-
-local function GetActiveSpecIDAndName()
-	local specIndex = GetSpecialization()
-	if not specIndex then return nil, nil end
-	local specID, specName = GetSpecializationInfo(specIndex)
-	return specID, specName
-end
-
 local function SpecHistoryHasInitial(t)
 	if type(t) ~= "table" then return false end
 	for _, m in ipairs(t) do
