@@ -4654,6 +4654,9 @@ function Config:CreateMenu()
     local scrollContents = {}
     local contentFrames  = {}
     
+    -- forward declare so tab OnClick can force full mode for Summary
+    local ApplyCompactState
+
     local parentWidth  = UIParent:GetWidth()
     local parentHeight = UIParent:GetHeight()
 
@@ -5056,6 +5059,27 @@ function Config:CreateMenu()
 			if UIConfig.TeamLeftButton then UIConfig.TeamLeftButton:SetShown(UIConfig.isCompact and not isSummary) end
 			if UIConfig.TeamRightButton then UIConfig.TeamRightButton:SetShown(UIConfig.isCompact and not isSummary) end
 
+            -- Summary must always be full mode: force compact OFF when switching to Summary.
+            if isSummary and UIConfig.isCompact and ApplyCompactState then
+                ApplyCompactState(false)
+            end
+
+            -- Summary has no compact button: hide it and shift Settings right.
+            if isSummary then
+                if UIConfig.ToggleViewButton then UIConfig.ToggleViewButton:Hide() end
+                if UIConfig.SettingsButton then
+                    UIConfig.SettingsButton:ClearAllPoints()
+                    UIConfig.SettingsButton:SetPoint("RIGHT", UIConfig.CloseButton, "LEFT", 0, 0)
+                end
+            else
+                -- Match tabs: show compact button and keep Settings left of it.
+                if UIConfig.ToggleViewButton then UIConfig.ToggleViewButton:Show() end
+                if UIConfig.SettingsButton and UIConfig.ToggleViewButton then
+                    UIConfig.SettingsButton:ClearAllPoints()
+                    UIConfig.SettingsButton:SetPoint("RIGHT", UIConfig.ToggleViewButton, "LEFT", 0, 0)
+                end
+            end
+
 			-- always go back to page 1 on a brand-new tab
 			UIConfig.ActiveTeamView = 1
 			UpdateArrowState()
@@ -5213,8 +5237,9 @@ function Config:CreateMenu()
     end)
     UIConfig.ToggleViewButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    UIConfig.ToggleViewButton:SetScript("OnClick", function()
-        UIConfig.isCompact = not UIConfig.isCompact
+    -- Centralized compact apply so Summary can force full mode cleanly.
+    ApplyCompactState = function(enabled)
+        UIConfig.isCompact = enabled and true or false
         if UIConfig.isCompact then
             UIConfig:SetWidth(parentWidth * 0.5)
             UIConfig.ToggleViewButton:SetNormalAtlas("RedButton-Expand")
@@ -5292,6 +5317,13 @@ function Config:CreateMenu()
 		-- Refresh every nested table in the now-active scrollFrame
 		RefreshAllNestedTables(RSTATS.ScrollFrames[ACTIVE_TAB_ID])
 		UpdateCompactHeaders(ACTIVE_TAB_ID)
+    end
+
+    UIConfig.ToggleViewButton:SetScript("OnClick", function()
+        -- Compact is not allowed on Summary.
+        local tabID = PanelTemplates_GetSelectedTab(UIConfig) or ACTIVE_TAB_ID or 1
+        if tabID == 6 then return end
+        ApplyCompactState(not UIConfig.isCompact)
     end)
 	
     -- Small Arrow Buttons for Team View (like Spellbook arrows)
