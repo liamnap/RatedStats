@@ -1808,7 +1808,9 @@ function CheckForMissedGames()
 				currentMMR = prevMMR
 			end
 
-            for n = 1, gap do
+                local mySpecID, mySpecName = GetActiveSpecIDAndName()
+
+                for n = 1, gap do
 				local matchID = highestMatchID + n
 				local crChange = (n == gap) and (currentCR - previousCR) or 0
 
@@ -1818,6 +1820,8 @@ function CheckForMissedGames()
 					winLoss = "Missed Game",
 					friendlyWinLoss = "Missed Game",
 					timestamp = GetTimestamp(),
+                    specID = mySpecID,
+                    specName = mySpecName,
 					-- keep both naming styles so the rest of the addon stays happy
 					cr = currentCR,
 					mmr = currentMMR,
@@ -1851,7 +1855,7 @@ function CheckForMissedGames()
 						faction = UnitFactionGroup("player"),
 						race = UnitRace("player"),
 						class = UnitClass("player"),
-						spec = GetSpecialization() and select(2, GetSpecializationInfo(GetSpecialization())) or "N/A",
+                        spec = mySpecName or (GetSpecialization() and select(2, GetSpecializationInfo(GetSpecialization())) or "N/A"),
 						role = GetPlayerRole(),
 						newrating = currentCR,
                         postmatchMMR = currentMMR,
@@ -1883,6 +1887,12 @@ function CheckForMissedGames()
 				})
 
 				table.insert(historyTable, 1, entry)
+                if (category.id == 7 or category.id == 9) and mySpecID then
+                    local specTable = EnsureSpecHistory(category.id, mySpecID, mySpecName)
+                    if specTable then
+                        table.insert(specTable, 1, entry)
+                    end
+                end
 			end
 ---			Log("Inserted missed match entry for category ID " .. category.id)
 		else
@@ -4514,6 +4524,8 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
 
     local currentCR  = 0
     local currentMMR = 0
+    local useSpec = (categoryID == 7 or categoryID == 9)
+    local _, playerClassTag = UnitClass("player")
 
     local function GetActiveSpecID()
         local specIndex = GetSpecialization()
@@ -4524,27 +4536,29 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
     local function ResolveEntrySpecID(entry)
         if not entry or type(entry) ~= "table" then return nil end
         if entry.specID then return entry.specID end
-        if type(entry.playerStats) ~= "table" then return nil end
-
-        for _, stats in ipairs(entry.playerStats) do
-            if stats and stats.name == playerName then
-                local classTag = stats.classToken
-                local specName = stats.spec
-                if classTag and specName and RSTATS and RSTATS.Roles
-                    and RSTATS.Roles[classTag] and RSTATS.Roles[classTag][specName]
-                    and RSTATS.Roles[classTag][specName].specID
-                then
-                    entry.specID = RSTATS.Roles[classTag][specName].specID
-                    return entry.specID
+        local specName = entry.specName
+        if (not specName or specName == "") and type(entry.playerStats) == "table" then
+            for _, stats in ipairs(entry.playerStats) do
+                if stats and stats.name == playerName then
+                    specName = stats.spec
+                    break
                 end
-                break
             end
+        end
+
+        if specName and playerClassTag and RSTATS and RSTATS.Roles
+            and RSTATS.Roles[playerClassTag]
+            and RSTATS.Roles[playerClassTag][specName]
+            and RSTATS.Roles[playerClassTag][specName].specID
+        then
+            entry.specID = RSTATS.Roles[playerClassTag][specName].specID
+            return entry.specID
         end
 
         return nil
     end
 
-    local activeSpecID = GetActiveSpecID()
+    local activeSpecID = useSpec and GetActiveSpecID() or nil
 
     -- Live rating: updates immediately when the player swaps spec.
     do
@@ -4577,7 +4591,7 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
     if historyTable and #historyTable > 0 then
         for _, entry in ipairs(historyTable) do
             local ok = true
-            if activeSpecID then
+            if useSpec and activeSpecID then
                 local sid = ResolveEntrySpecID(entry)
                 ok = (sid == activeSpecID)
             end
