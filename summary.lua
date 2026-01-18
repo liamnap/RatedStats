@@ -2148,19 +2148,19 @@ function Summary:Refresh()
                 return tonumber(cr) or 0
             end)(),
             currentMMR = (function()
-                -- Spec-based ladders: MMR changes with spec, so read live MMR.
-                if bracket.bracketID == 7 or bracket.bracketID == 9 then
-                    local mmr = select(10, GetPersonalRatedInfo(bracket.bracketID))
-                    return tonumber(mmr) or 0
+                -- Prefer last stored post-match MMR from our match data (playerStats / friendlyMMR).
+                local last = GetLatestPostMMRFromHistory(history)
+                if last and tonumber(last) and tonumber(last) > 0 then
+                    return tonumber(last)
                 end
 
-                -- Other brackets: keep existing behavior (DB / history fallback).
-                local mmr = perChar[bracket.mmrKey] or 0
-                if bracket.tabID == 2 or bracket.tabID == 3 then
-                    local last = GetLatestPostMMRFromHistory(history)
-                    if last then mmr = last end
-                end
-                return mmr
+                -- Next fallback: DB cached MMR (written by DisplayCurrentCRMMR / end-of-match logic).
+                local mmr = tonumber(perChar[bracket.mmrKey]) or 0
+                if mmr > 0 then return mmr end
+
+                -- Final fallback (initial seed only): live API.
+                local live = select(10, GetPersonalRatedInfo(bracket.bracketID))
+                return tonumber(live) or 0
             end)(),
 
             win = summary.win or 0,
