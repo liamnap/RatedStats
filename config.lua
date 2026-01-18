@@ -2806,7 +2806,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
     local duoHeaderText = (tabID == 5) and c("Duo") or ""
 
 	local headers = {
-		c("Win/Loss"), c(scoreHeaderText), c("Map"), c("Match End Time"), c("Duration"), duoHeaderText, "", "",
+		c("Win/Loss"), duoHeaderText,c(scoreHeaderText), c("Map"), c("Match End Time"), c("Duration"), "",
 		c(factionHeaderText), c("Raid Leader"), c("Avg CR"), c("MMR"), c("Damage"), c("Healing"), c("Avg Rat Chg"), "",
 		 "", c(factionHeaderText), c("Raid Leader"), c("Avg CR"), c("MMR"), c("Damage"), c("Healing"), c("Avg Rat Chg"), c("Note")
 	}
