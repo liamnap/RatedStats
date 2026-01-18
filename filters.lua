@@ -338,15 +338,21 @@ function ApplyFilters(match)
 	-- 🧹 Auto-hide 'Initial' games if history has > 2 matches
 	if match.friendlyWinLoss == "I" then
 		local tabID = PanelTemplates_GetSelectedTab(RSTATS.UIConfig)
-		local tableByTab = {
-			[1] = Database.SoloShuffleHistory,
-			[2] = Database.v2History,
-			[3] = Database.v3History,
-			[4] = Database.RBGHistory,
-			[5] = Database.SoloRBGHistory,
-		}
+		local historyTable
 
-		local historyTable = tableByTab[tabID]
+		-- SS / RBGB are spec-scoped, so count the *active* spec table (not the base DB table)
+		if (tabID == 1 or tabID == 5) and RSTATS and RSTATS.GetHistoryForTab then
+			historyTable = RSTATS:GetHistoryForTab(tabID)
+		else
+			local tableByTab = {
+				[1] = Database.SoloShuffleHistory,
+				[2] = Database.v2History,
+				[3] = Database.v3History,
+				[4] = Database.RBGHistory,
+				[5] = Database.SoloRBGHistory,
+			}
+			historyTable = tableByTab[tabID]
+		end
 		-- SS / Solo RBG are spec-based: count the active spec table, not the base table.
 		if (tabID == 1 or tabID == 5) and RSTATS and RSTATS.GetHistoryForTab then
 			historyTable = RSTATS:GetHistoryForTab(tabID) or historyTable
