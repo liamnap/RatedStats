@@ -4582,7 +4582,9 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
                 ok = (sid == activeSpecID)
             end
 
-            if ok and entry.matchID and (not highestMatchID or entry.matchID > highestMatchID) then
+            -- Never let placeholder "Missed Game" rows drive Current CR/MMR display.
+            local isMissed = entry and (entry.isMissedGame or entry.winLoss == "Missed Game" or entry.friendlyWinLoss == "Missed Game")
+            if ok and (not isMissed) and entry.matchID and (not highestMatchID or entry.matchID > highestMatchID) then
                 highestMatchID = entry.matchID
                 highestMatchEntry = entry
             end
