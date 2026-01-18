@@ -1300,6 +1300,23 @@ do
             Update3v3Display()
             UpdateRBGDisplay()
             UpdateSoloRBGDisplay()
+
+            -- If we're currently viewing a spec-scoped ladder, rebuild the rows using the new spec table.
+            if ACTIVE_TAB_ID == 1 or ACTIVE_TAB_ID == 5 then
+                local tabID = ACTIVE_TAB_ID
+                local dropdown = RSTATS.Dropdowns and RSTATS.Dropdowns[tabID]
+                local selected = dropdown and UIDropDownMenu_GetText(dropdown) or "Today"
+                local filterKey = selected:lower():gsub(" ", "") or "today"
+
+                local content = RSTATS.ScrollContents and RSTATS.ScrollContents[tabID]
+                if content then
+                    ClearStaleMatchFrames(content)
+                end
+
+                FilterAndSearchMatches(RatedStatsSearchBox and RatedStatsSearchBox:GetText() or "")
+                RSTATS:UpdateStatsView(filterKey, tabID)
+                UpdateCompactHeaders(tabID)
+            end
         end
 
         if RSTATS and RSTATS.Summary and RSTATS.Summary.frame and RSTATS.Summary.frame:IsShown() then
@@ -1344,7 +1361,7 @@ local function GetPlayerRole()
             -- Evoker
             [1467] = 8,      -- Devastation Evoker (DPS)
             [1468] = 4,      -- Preservation Evoker (HEALER)
-            [1473] = 2,      -- Augmentation Evoker (TANK)
+            [1473] = 8,      -- Augmentation Evoker (DPS)
         
             -- Hunter
             [253] = 8,       -- Beast Mastery Hunter (DPS)
@@ -1406,6 +1423,71 @@ local function GetActiveSpecIDAndName()
     return specID, specName
 end
 
+-- ==========================================================
+-- Spec-scoped history helpers (SS / Solo RBG)
+-- ==========================================================
+if not EnsureSpecHistory then
+    function EnsureSpecHistory(categoryID, specID, specName)
+        if not Database or not categoryID or not specID then return nil end
+
+        Database.SpecHistory = Database.SpecHistory or {}
+        local bucket = Database.SpecHistory[categoryID]
+        if type(bucket) ~= "table" then
+            bucket = {}
+            Database.SpecHistory[categoryID] = bucket
+        end
+
+        bucket._specNames = bucket._specNames or {}
+        if specName and specName ~= "" then
+            bucket._specNames[specID] = specName
+        end
+
+        if type(bucket[specID]) ~= "table" then
+            bucket[specID] = {}
+        end
+
+        -- One-time backfill from the main history table so spec switching shows existing rows.
+        bucket._backfilled = bucket._backfilled or {}
+        if not bucket._backfilled[specID] and #bucket[specID] == 0 then
+            local baseKey = (categoryID == 7 and "SoloShuffleHistory")
+                        or (categoryID == 9 and "SoloRBGHistory")
+                        or nil
+            local base = baseKey and Database[baseKey]
+            if type(base) == "table" then
+                for _, entry in ipairs(base) do
+                    if entry and entry.specID == specID then
+                        table.insert(bucket[specID], entry)
+                    end
+                end
+            end
+            bucket._backfilled[specID] = true
+        end
+
+        return bucket[specID]
+    end
+end
+
+-- If another file already defines this, don't override it.
+if RSTATS and not RSTATS.GetHistoryForTab then
+    function RSTATS:GetHistoryForTab(tabID)
+        if tabID == 1 then
+            local specID, specName = GetActiveSpecIDAndName()
+            local t = specID and EnsureSpecHistory(7, specID, specName)
+            return t or (Database.SoloShuffleHistory or {})
+        elseif tabID == 5 then
+            local specID, specName = GetActiveSpecIDAndName()
+            local t = specID and EnsureSpecHistory(9, specID, specName)
+            return t or (Database.SoloRBGHistory or {})
+        end
+
+        return ({
+            [2] = Database.v2History,
+            [3] = Database.v3History,
+            [4] = Database.RBGHistory,
+        })[tabID] or {}
+    end
+end
+
 -- Function to get initial and current CR and MMR values
 function GetInitialCRandMMR()
     -- Define category mappings with history table names and display names
@@ -1448,6 +1530,7 @@ function GetInitialCRandMMR()
         if not Database[historyTableName] then
             Database[historyTableName] = {}
         end
+        local historyTable = Database[historyTableName]
 
         -- Get initial CR, MMR, and played games
         local cr = GetInitialCR(categoryID)
@@ -1464,6 +1547,26 @@ function GetInitialCRandMMR()
         end
 
         local mySpecID, mySpecName = GetActiveSpecIDAndName()
+
+        -- Only insert an initial entry if this bracket actually has no history.
+        -- For spec-based ladders (SS/RBGB), only insert if THIS spec has no history.
+        if categoryID == 7 or categoryID == 9 then
+            if EnsureSpecHistory and mySpecID then
+                local specTable = EnsureSpecHistory(categoryID, mySpecID, mySpecName)
+                if type(specTable) == "table" and #specTable > 0 then
+                    return
+                end
+            else
+                -- No spec info available: fall back to main table.
+                if #historyTable > 0 then
+                    return
+                end
+            end
+        else
+            if #historyTable > 0 then
+                return
+            end
+        end
 
         -- Create an entry with the current timestamp
         local entry = {
@@ -1532,8 +1635,22 @@ function GetInitialCRandMMR()
 			})
 		end
 
-        -- Insert the entry into the history table
-        table.insert(Database[historyTableName], 1, entry)
+        -- Insert the entry:
+        -- - Non-spec brackets: main table only
+        -- - SS/RBGB: insert into spec table; only insert into main if it's completely empty (keeps main clean)
+        if categoryID == 7 or categoryID == 9 then
+            if EnsureSpecHistory and mySpecID then
+                local specTable = EnsureSpecHistory(categoryID, mySpecID, mySpecName)
+                if type(specTable) == "table" then
+                    table.insert(specTable, 1, entry)
+                end
+            end
+            if #historyTable == 0 then
+                table.insert(historyTable, 1, entry)
+            end
+        else
+            table.insert(historyTable, 1, entry)
+        end
 
     end
 
