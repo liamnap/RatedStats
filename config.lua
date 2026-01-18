@@ -3695,9 +3695,34 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     end
     
     -- ------------------------------------------------------------------
-    -- Theme colour (used for row highlighting)
+    -- Theme colour (kept - removing Config:GetThemeColor causes a lua error)
+    -- BUT: row highlighting should use the addon text colour (COLOR_HEX),
+    -- not the theme (00ccff).
     -- ------------------------------------------------------------------
     local themeR, themeG, themeB = Config:GetThemeColor()
+
+    local function HexToRGB01(hex)
+        if type(hex) ~= "string" then return nil end
+        hex = hex:gsub("^|cff", ""):gsub("^#", "")
+        if #hex == 8 then
+            -- if someone ever feeds AARRGGBB, drop AA
+            hex = hex:sub(3)
+        end
+        if #hex ~= 6 then return nil end
+        local r = tonumber(hex:sub(1, 2), 16)
+        local g = tonumber(hex:sub(3, 4), 16)
+        local b = tonumber(hex:sub(5, 6), 16)
+        if not (r and g and b) then return nil end
+        return r / 255, g / 255, b / 255
+    end
+
+    local highlightR, highlightG, highlightB = themeR, themeG, themeB
+    do
+        local r, g, b = HexToRGB01(COLOR_HEX)
+        if r then
+            highlightR, highlightG, highlightB = r, g, b
+        end
+    end
 
     -- ------------------------------------------------------------------
     -- Damage/Healing rank indicators (team + overall)
@@ -3749,8 +3774,8 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
         botFS:SetText(string.format("%d/%d", overallRank, totalSize))
 
         if highlightRow then
-            topFS:SetTextColor(themeR, themeG, themeB)
-            botFS:SetTextColor(themeR, themeG, themeB)
+            topFS:SetTextColor(highlightR, highlightG, highlightB)
+            botFS:SetTextColor(highlightR, highlightG, highlightB)
         end
 
         local hit = CreateFrame("Frame", nil, parentFrame)
@@ -3864,7 +3889,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
         local highlightRow = ShouldHighlightRow(player)
         local nameText = RSTATS.CreateClickableName(nestedTable, player, matchEntry, columnPositions[1], rowOffset, columnWidths[1], rowHeight)
         if nameText and highlightRow then
-            nameText:SetTextColor(themeR, themeG, themeB)
+            nameText:SetTextColor(highlightR, highlightG, highlightB)
         end
         local winHKValue = (isSS and player.wins) or (hideWinHK and "") or player.honorableKills
 
@@ -3927,7 +3952,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 fs:SetPoint("CENTER", nestedTable, "TOPLEFT", columnPositions[i] + (columnWidths[i] / 2), rowOffset - (rowHeight / 2))
                 fs:SetText(tostring(textValue))
                 if highlightRow then
-                    fs:SetTextColor(themeR, themeG, themeB)
+                    fs:SetTextColor(highlightR, highlightG, highlightB)
                 end
 
                 -- Add objective tooltip
@@ -3988,7 +4013,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                         text:SetPoint("RIGHT", nestedTable, "TOPLEFT", xPos + width - 28, rowOffset - (rowHeight / 2))
                         text:SetText(tostring(textValue))
                         if highlightRow then
-                            text:SetTextColor(themeR, themeG, themeB)
+                            text:SetTextColor(highlightR, highlightG, highlightB)
                         end
 
                         CreateRankIndicator(nestedTable, xPos, width, rowOffset, rowHeight, teamRank, teamSize, overallRank, totalPlayerCount, rankFontSize, highlightRow)
@@ -3997,7 +4022,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                         text:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
                         text:SetText(tostring(textValue))
                         if highlightRow then
-                            text:SetTextColor(themeR, themeG, themeB)
+                            text:SetTextColor(highlightR, highlightG, highlightB)
                         end
                     end
                 else
@@ -4005,7 +4030,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                     text:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
                     text:SetText(tostring(textValue))  -- Ensure the value is converted to a string
                     if highlightRow then
-                        text:SetTextColor(themeR, themeG, themeB)
+                            text:SetTextColor(highlightR, highlightG, highlightB)
                     end
                 end
             end
