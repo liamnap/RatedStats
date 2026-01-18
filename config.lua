@@ -1682,6 +1682,9 @@ function GetPlayerFullName()
     return name .. "-" .. realm
 end
 
+-- Prevent overlapping login retries from creating duplicate "missed game" inserts.
+local _missedGamesRunToken = 0
+
 function CheckForMissedGames()
 ---    local function Log(msg)
 ---        -- Green [Debug] label, yellow message
@@ -1689,6 +1692,8 @@ function CheckForMissedGames()
 ---    end
 
 ---    Log("CheckForMissedGames triggered.")
+    _missedGamesRunToken = _missedGamesRunToken + 1
+    local runToken = _missedGamesRunToken
 
     local categoryMappings = {
         SoloShuffle = { id = 7, historyTable = "SoloShuffleHistory", displayName = "SoloShuffle" },
@@ -1699,6 +1704,11 @@ function CheckForMissedGames()
     }
 
 	local function StoreMissedGame(categoryName, category, attempts)
+        -- If a newer CheckForMissedGames() call started, abandon this chain.
+        if runToken ~= _missedGamesRunToken then
+            return
+        end
+
 		local _, _, _, totalGames = GetPersonalRatedInfo(category.id)
 		attempts = attempts or 0
 		
@@ -1706,6 +1716,7 @@ function CheckForMissedGames()
 			if attempts < 10 then
 ---			Log("Skipped category ID " .. category.id .. " — totalGames is nil.")
 				C_Timer.After(3, function()
+                    if runToken ~= _missedGamesRunToken then return end
 					StoreMissedGame(categoryName, category, attempts + 1)
 				end)
 			end
@@ -1713,6 +1724,14 @@ function CheckForMissedGames()
 		end
 	
 		local playedField = "Playedfor" .. categoryName
+		-- If this bracket has never been initialised for THIS character,
+		-- do NOT backfill their entire lifetime as "missed games".
+		-- Just sync the counter and move on.
+		if Database[playedField] == nil then
+			Database[playedField] = totalGames
+			return
+		end
+
 		local lastRecorded = tonumber(Database[playedField]) or 0
 		local historyTable = Database[category.historyTable]
 		if type(historyTable) ~= "table" then
@@ -1720,6 +1739,27 @@ function CheckForMissedGames()
 			Database[category.historyTable] = historyTable
 		end
 	
+        -- If we already have history rows but Playedfor* is missing/stale, do NOT backfill.
+        -- Just sync Playedfor* to the API value.
+        if lastRecorded == 0 and #historyTable > 0 then
+            Database[playedField] = totalGames
+            return
+        end
+
+        local gap = totalGames - lastRecorded
+        -- Sanity guard: a disconnect should not create dozens of missed games.
+        -- If this ever happens, it’s a DB mismatch, so just sync and do nothing.
+        if gap > 3 then
+            Database[playedField] = totalGames
+            return
+        end
+
+		-- Same deal: empty history means no baseline; sync count and stop.
+		if #historyTable == 0 then
+			Database[playedField] = totalGames
+			return
+		end
+
 ---		Log(string.format("Checking category ID %d | Last Recorded: %d | Total Games: %d", category.id, lastRecorded, totalGames))
 	
 		if totalGames > lastRecorded then
@@ -1778,8 +1818,7 @@ function CheckForMissedGames()
 				currentMMR = prevMMR
 			end
 
-			local gap = totalGames - lastRecorded
-			for n = 1, gap do
+            for n = 1, gap do
 				local matchID = highestMatchID + n
 				local crChange = (n == gap) and (currentCR - previousCR) or 0
 
