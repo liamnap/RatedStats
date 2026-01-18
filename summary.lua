@@ -2102,7 +2102,9 @@ function Summary:Refresh()
                 end
             end)
         end
+    end
 
+    for i, bracket in ipairs(BRACKETS) do
         local history = perChar[bracket.historyKey] or {}
         if bracket.bracketID == 7 or bracket.bracketID == 9 then
             local sid = GetActiveSpecID()
