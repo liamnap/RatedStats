@@ -1288,56 +1288,55 @@ end
 -- Refresh visible UI when the player changes spec (rated ladders are spec-based).
 do
     local specRefreshFrame = CreateFrame("Frame")
-    specRefreshFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
     specRefreshFrame:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
+    specRefreshFrame:RegisterEvent("PLAYER_TALENT_UPDATE")
+    specRefreshFrame:RegisterEvent("TRAIT_CONFIG_UPDATED")
+
     specRefreshFrame:SetScript("OnEvent", function(_, event, unit)
-    if event == "PLAYER_SPECIALIZATION_CHANGED" and unit ~= "player" then return end
+        -- Run next frame so spec/talent state is actually updated.
+        C_Timer.After(0, function()
+            if UIConfig and UIConfig.IsShown and UIConfig:IsShown() then
+                UpdateSoloShuffleDisplay()
+                Update2v2Display()
+                Update3v3Display()
+                UpdateRBGDisplay()
+                UpdateSoloRBGDisplay()
 
-    -- Run next frame so GetSpecialization()/GetSpecializationInfo() has updated.
-    C_Timer.After(0, function()
-        if UIConfig and UIConfig.IsShown and UIConfig:IsShown() then
-            UpdateSoloShuffleDisplay()
-            Update2v2Display()
-            Update3v3Display()
-            UpdateRBGDisplay()
-            UpdateSoloRBGDisplay()
-
-            -- If we switched spec and SS/RBGB has no history for THIS spec, insert a new Initial entry.
-            -- (GetInitialCRandMMR already contains the per-spec "only insert when empty" guard.)
-            if EnsureSpecHistory and GetActiveSpecIDAndName then
-                local specID, specName = GetActiveSpecIDAndName()
-                if specID then
-                    local ss   = EnsureSpecHistory(7, specID, specName) -- Solo Shuffle
-                    local rbgb = EnsureSpecHistory(9, specID, specName) -- Solo RBG
-                    if (type(ss) == "table" and #ss == 0) or (type(rbgb) == "table" and #rbgb == 0) then
-                        GetInitialCRandMMR()
+                -- If we switched into a spec with no SS/RBGB rows, insert a new Initial entry (your existing logic).
+                if EnsureSpecHistory and GetActiveSpecIDAndName and GetInitialCRandMMR then
+                    local specID, specName = GetActiveSpecIDAndName()
+                    if specID then
+                        local ss   = EnsureSpecHistory(7, specID, specName) -- Solo Shuffle
+                        local rbgb = EnsureSpecHistory(9, specID, specName) -- Solo RBG
+                        if (type(ss) == "table" and #ss == 0) or (type(rbgb) == "table" and #rbgb == 0) then
+                            GetInitialCRandMMR()
+                        end
                     end
                 end
-            end
 
-            -- If we're currently viewing a spec-scoped ladder, rebuild the rows using the new spec table.
-            if ACTIVE_TAB_ID == 1 or ACTIVE_TAB_ID == 5 then
-                local tabID = ACTIVE_TAB_ID
-                local dropdown = RSTATS.Dropdowns and RSTATS.Dropdowns[tabID]
-                local selected = dropdown and UIDropDownMenu_GetText(dropdown) or "Today"
-                local filterKey = selected:lower():gsub(" ", "") or "today"
+                -- Rebuild the currently selected tab (ACTIVE_TAB_ID can be stale).
+                local tabID = PanelTemplates_GetSelectedTab(RSTATS.UIConfig)
+                if tabID then
+                    local dropdown = RSTATS.Dropdowns and RSTATS.Dropdowns[tabID]
+                    local selected = dropdown and UIDropDownMenu_GetText(dropdown) or "Today"
+                    local filterKey = selected:lower():gsub(" ", "") or "today"
 
-                local content = RSTATS.ScrollContents and RSTATS.ScrollContents[tabID]
-                if content then
-                    ClearStaleMatchFrames(content)
+                    local content = RSTATS.ScrollContents and RSTATS.ScrollContents[tabID]
+                    if content then
+                        ClearStaleMatchFrames(content)
+                    end
+
+                    FilterAndSearchMatches(RatedStatsSearchBox and RatedStatsSearchBox:GetText() or "")
+                    RSTATS:UpdateStatsView(filterKey, tabID)
+                    UpdateCompactHeaders(tabID)
                 end
-
-                FilterAndSearchMatches(RatedStatsSearchBox and RatedStatsSearchBox:GetText() or "")
-                RSTATS:UpdateStatsView(filterKey, tabID)
-                UpdateCompactHeaders(tabID)
             end
-        end
 
-        if RSTATS and RSTATS.Summary and RSTATS.Summary.frame and RSTATS.Summary.frame:IsShown() then
-            RSTATS.Summary:Refresh()
-        end
+            if RSTATS and RSTATS.Summary and RSTATS.Summary.frame and RSTATS.Summary.frame:IsShown() then
+                RSTATS.Summary:Refresh()
+            end
+        end)
     end)
-end)
 end
 
 local function GetPlayerRole()
