@@ -1546,38 +1546,91 @@ function CheckForMissedGames()
 		end
 	
 		local playedField = "Playedfor" .. categoryName
-	
-		local lastRecorded = Database[playedField]
+		local lastRecorded = tonumber(Database[playedField]) or 0
 		local historyTable = Database[category.historyTable]
+		if type(historyTable) ~= "table" then
+			historyTable = {}
+			Database[category.historyTable] = historyTable
+		end
 	
 ---		Log(string.format("Checking category ID %d | Last Recorded: %d | Total Games: %d", category.id, lastRecorded, totalGames))
 	
 		if totalGames > lastRecorded then
 			local currentCR, currentMMR = GetCRandMMR(category.id)
-	
+			currentCR  = tonumber(currentCR)  or 0
+			currentMMR = tonumber(currentMMR) or 0	
 ---			Log(string.format("Missed game detected in category ID %d | Previous CR: %d | Current CR: %d | Change: %+d", category.id, previousCR, currentCR, crChange))
 	
 			local highestMatchID = 0
-			for _, entry in ipairs(historyTable) do
-				if entry.matchID and tonumber(entry.matchID) > highestMatchID then
-					highestMatchID = tonumber(entry.matchID)
-					previousCR = entry.cr
+			local highestMatchEntry = nil
+			for _, e in ipairs(historyTable) do
+				local mid = tonumber(e.matchID)
+				if mid and mid > highestMatchID then
+					highestMatchID = mid
+					highestMatchEntry = e
 				end
 			end
 
-			local crChange = currentCR - previousCR
-			local matchID = highestMatchID + 1
-	
-			local entry = {
-				matchID = matchID,
-				isMissedGame = true,
-				winLoss = "Missed Game",
-				friendlyWinLoss = "Missed Game",  -- ✅ Add this
-				timestamp = GetTimestamp(),
-				rating = currentCR,
-				postMatchMMR = currentMMR,
-				ratingChange = crChange,
-				note = "Disconnected or Crashed, Missing Data",
+			local previousCR = 0
+			if highestMatchEntry then
+				previousCR = tonumber(highestMatchEntry.cr) or tonumber(highestMatchEntry.rating) or 0
+			end
+			if currentCR == 0 and previousCR > 0 then
+				currentCR = previousCR
+			end
+
+			-- MMR fallback for missed games:
+			-- - SS: repeat *player* postmatchMMR from last row if possible
+			-- - 2v2/3v3: repeat team (friendlyMMR) from last row
+			-- - RBG/RBGB: repeat friendlyMMR if present, else last row mmr
+			local function GetPreviousMMR()
+				if not highestMatchEntry then return 0 end
+
+				local myName = GetPlayerFullName()
+				if category.id == 7 and type(highestMatchEntry.playerStats) == "table" then
+					for _, s in ipairs(highestMatchEntry.playerStats) do
+						if s.name == myName then
+							local v = tonumber(s.postmatchMMR) or tonumber(s.postMatchMMR) or 0
+							if v > 0 then return v end
+							break
+						end
+					end
+				end
+
+				local v = tonumber(highestMatchEntry.friendlyMMR) or 0
+				if v > 0 then return v end
+
+				v = tonumber(highestMatchEntry.mmr) or tonumber(highestMatchEntry.postMatchMMR) or 0
+				if v > 0 then return v end
+
+				return 0
+			end
+
+			local prevMMR = GetPreviousMMR()
+			if currentMMR <= 0 and prevMMR > 0 then
+				currentMMR = prevMMR
+			end
+
+			local gap = totalGames - lastRecorded
+			for n = 1, gap do
+				local matchID = highestMatchID + n
+				local crChange = (n == gap) and (currentCR - previousCR) or 0
+
+				local entry = {
+					matchID = matchID,
+					isMissedGame = true,
+					winLoss = "Missed Game",
+					friendlyWinLoss = "Missed Game",
+					timestamp = GetTimestamp(),
+					-- keep both naming styles so the rest of the addon stays happy
+					cr = currentCR,
+					mmr = currentMMR,
+					rating = currentCR,
+					postMatchMMR = currentMMR,
+					ratingChange = crChange,
+					note = (gap > 1)
+						and ("Disconnected or Crashed, Missing Data (" .. n .. "/" .. gap .. ")")
+						or "Disconnected or Crashed, Missing Data",
 			
 				mapName = "N/A",
 				endTime = GetTimestamp(),
@@ -1605,6 +1658,7 @@ function CheckForMissedGames()
 						spec = GetSpecialization() and select(2, GetSpecializationInfo(GetSpecialization())) or "N/A",
 						role = GetPlayerRole(),
 						newrating = currentCR,
+                        postmatchMMR = currentMMR,
 						killingBlows = "-",
 						honorableKills = "-",
                         deaths = "-",
@@ -1615,8 +1669,7 @@ function CheckForMissedGames()
 				}
 			}
 			
-			-- Repeat the enemy placeholder for the second half of the row
-			for i = 1, 1 do
+				-- Repeat the enemy placeholder for the second half of the row
 				table.insert(entry.playerStats, {
 					name = "-",
 					faction = "-",
@@ -1627,14 +1680,14 @@ function CheckForMissedGames()
 					newrating = "-",
 					killingBlows = "-",
 					honorableKills = "-",
-                    deaths = "-",
+					deaths = "-",
 					damage = "-",
 					healing = "-",
 					ratingChange = "-"
 				})
+
+				table.insert(historyTable, 1, entry)
 			end
-	
-			table.insert(historyTable, 1, entry)
 ---			Log("Inserted missed match entry for category ID " .. category.id)
 		else
 ---			Log("No missed game in category ID " .. category.id .. ". Syncing played count.")
