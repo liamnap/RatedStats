@@ -1285,6 +1285,29 @@ function UpdateSoloRBGDisplay()
     end
 end
 
+-- Refresh visible UI when the player changes spec (rated ladders are spec-based).
+do
+    local specRefreshFrame = CreateFrame("Frame")
+    specRefreshFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+    specRefreshFrame:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
+    specRefreshFrame:SetScript("OnEvent", function(_, event, unit)
+        if event == "PLAYER_SPECIALIZATION_CHANGED" and unit ~= "player" then return end
+
+        -- Only bother if the addon UI is actually up.
+        if UIConfig and UIConfig.IsShown and UIConfig:IsShown() then
+            UpdateSoloShuffleDisplay()
+            Update2v2Display()
+            Update3v3Display()
+            UpdateRBGDisplay()
+            UpdateSoloRBGDisplay()
+        end
+
+        if RSTATS and RSTATS.Summary and RSTATS.Summary.frame and RSTATS.Summary.frame:IsShown() then
+            RSTATS.Summary:Refresh()
+        end
+    end)
+end
+
 local function GetPlayerRole()
     local role = UnitGroupRolesAssigned("player")
     
