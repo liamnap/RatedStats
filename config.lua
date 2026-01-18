@@ -3718,7 +3718,9 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
 
     local highlightR, highlightG, highlightB = themeR, themeG, themeB
     do
-        local r, g, b = HexToRGB01(COLOR_HEX)
+        -- Use the actual addon text colour (core.lua -> RSTATS.Config.ThemeColor = "b69e86")
+        local addonHex = (RSTATS and RSTATS.Config and RSTATS.Config.ThemeColor) or COLOR_HEX
+        local r, g, b = HexToRGB01(addonHex)
         if r then
             highlightR, highlightG, highlightB = r, g, b
         end
