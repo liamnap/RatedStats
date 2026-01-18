@@ -4368,11 +4368,11 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
         panel.leftIcon:SetTexture(downTier.icon)
         panel.leftTierText:SetText(RSTATS:ColorText(downTier.name))
 
-        local lines = { LabelNum(\"CR Drop below: \", curTier.descendRating) }
+        local lines = { LabelNum("CR Drop below: ", curTier.descendRating) }
         if tonumber(currentMMR) and tonumber(currentMMR) > 0 then
-            lines[#lines + 1] = LabelNum(\"MMR Drop below: \", curTier.descendRating)
+            lines[#lines + 1] = LabelNum("MMR Drop below: ", curTier.descendRating)
         end
-        panel.leftReqText:SetText(table.concat(lines, \"\\n\"))
+        panel.leftReqText:SetText(table.concat(lines, "\n"))
     else
         panel.leftIcon:Hide()
         panel.leftArrow:Hide()
@@ -4390,11 +4390,11 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
         panel.rightIcon:SetTexture(upTier.icon)
         panel.rightTierText:SetText(RSTATS:ColorText(upTier.name))
 
-        local lines = { LabelNum(\"CR Reach: \", curTier.ascendRating) }
+        local lines = { LabelNum("CR Reach: ", curTier.ascendRating) }
         if tonumber(currentMMR) and tonumber(currentMMR) > 0 then
-            lines[#lines + 1] = LabelNum(\"MMR Reach: \", curTier.ascendRating)
+            lines[#lines + 1] = LabelNum("MMR Reach: ", curTier.ascendRating)
         end
-        panel.rightReqText:SetText(table.concat(lines, \"\\n\"))
+        panel.rightReqText:SetText(table.concat(lines, "\n"))
     else
         panel.rightIcon:Hide()
         panel.rightArrow:Hide()
