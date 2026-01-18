@@ -1324,6 +1324,7 @@ do
             RSTATS.Summary:Refresh()
         end
     end)
+end)
 end
 
 local function GetPlayerRole()
