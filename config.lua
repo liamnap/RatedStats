@@ -1569,7 +1569,9 @@ local function EnsureSpecHistory(categoryID, specID, specName)
 
 	local specHistory = Database[bySpecKey][specID]
 
-	if not SpecHistoryHasInitial(specHistory) then
+	-- Only create an initial baseline if this spec has NO rows at all.
+	-- Never insert if any history already exists (even if older rows lack isInitial).
+	if #specHistory == 0 then
 		local cr = select(1, GetPersonalRatedInfo(categoryID))
 		local mmr = select(10, GetPersonalRatedInfo(categoryID))
 		local played = select(4, GetPersonalRatedInfo(categoryID))
