@@ -1,5 +1,5 @@
 ## Title: RatedStats
-## Version: TWW S3
+## Version: v3.3
 ## Author: liamnap
 ## Interface: 110207, 120000
 ## DefaultState: enabled

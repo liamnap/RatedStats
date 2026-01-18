@@ -794,6 +794,31 @@ local function BuildObjectiveTextFromStats(stats)
     return (#parts > 0) and table.concat(parts, " / ") or "-"
 end
 
+-- RBGB: if queued as a 2-man home party, return the partner Name-Realm, otherwise nil.
+local function GetRBGBDuoPartnerNameRealm()
+    if not IsInGroup(LE_PARTY_CATEGORY_HOME) then return nil end
+    if IsInRaid(LE_PARTY_CATEGORY_HOME) then return nil end
+
+    local n = GetNumGroupMembers(LE_PARTY_CATEGORY_HOME) or 0
+    if n ~= 2 then return nil end
+
+    local myName = UnitName("player")
+    for i = 1, 4 do
+        local unit = "party" .. i
+        if UnitExists(unit) and UnitIsPlayer(unit) then
+            local name, realm = UnitFullName(unit)
+            if name and name ~= myName then
+                if not realm or realm == "" then
+                    realm = GetRealmName()
+                end
+                return name .. "-" .. realm
+            end
+        end
+    end
+
+    return nil
+end
+
 local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categoryName, categoryID, startTime)
     local mapID = GetCurrentMapID()
     local mapName = GetMapName(mapID) or "Unknown"
@@ -1400,6 +1425,11 @@ function GetInitialCRandMMR()
 		local playedField = "Playedfor" .. categoryName
 		Database[playedField] = played
 
+        local duoPartner = nil
+        if categoryID == 9 then -- Solo RBG (RBGB)
+            duoPartner = GetRBGBDuoPartnerNameRealm()
+        end
+
         -- Create an entry with the current timestamp
         local entry = {
 			matchID = 1,
@@ -1412,6 +1442,7 @@ function GetInitialCRandMMR()
             mapName = "N/A",
             endTime = GetTimestamp(),
             duration = "N/A",
+            duoPartner = duoPartner,
             teamFaction = UnitFactionGroup("player"),
             friendlyRaidLeader = playerFullName, -- Set to the player's full name
             friendlyAvgCR = cr,
@@ -1515,38 +1546,91 @@ function CheckForMissedGames()
 		end
 	
 		local playedField = "Playedfor" .. categoryName
-	
-		local lastRecorded = Database[playedField]
+		local lastRecorded = tonumber(Database[playedField]) or 0
 		local historyTable = Database[category.historyTable]
+		if type(historyTable) ~= "table" then
+			historyTable = {}
+			Database[category.historyTable] = historyTable
+		end
 	
 ---		Log(string.format("Checking category ID %d | Last Recorded: %d | Total Games: %d", category.id, lastRecorded, totalGames))
 	
 		if totalGames > lastRecorded then
 			local currentCR, currentMMR = GetCRandMMR(category.id)
-	
+			currentCR  = tonumber(currentCR)  or 0
+			currentMMR = tonumber(currentMMR) or 0	
 ---			Log(string.format("Missed game detected in category ID %d | Previous CR: %d | Current CR: %d | Change: %+d", category.id, previousCR, currentCR, crChange))
 	
 			local highestMatchID = 0
-			for _, entry in ipairs(historyTable) do
-				if entry.matchID and tonumber(entry.matchID) > highestMatchID then
-					highestMatchID = tonumber(entry.matchID)
-					previousCR = entry.cr
+			local highestMatchEntry = nil
+			for _, e in ipairs(historyTable) do
+				local mid = tonumber(e.matchID)
+				if mid and mid > highestMatchID then
+					highestMatchID = mid
+					highestMatchEntry = e
 				end
 			end
 
-			local crChange = currentCR - previousCR
-			local matchID = highestMatchID + 1
-	
-			local entry = {
-				matchID = matchID,
-				isMissedGame = true,
-				winLoss = "Missed Game",
-				friendlyWinLoss = "Missed Game",  -- ✅ Add this
-				timestamp = GetTimestamp(),
-				rating = currentCR,
-				postMatchMMR = currentMMR,
-				ratingChange = crChange,
-				note = "Disconnected or Crashed, Missing Data",
+			local previousCR = 0
+			if highestMatchEntry then
+				previousCR = tonumber(highestMatchEntry.cr) or tonumber(highestMatchEntry.rating) or 0
+			end
+			if currentCR == 0 and previousCR > 0 then
+				currentCR = previousCR
+			end
+
+			-- MMR fallback for missed games:
+			-- - SS: repeat *player* postmatchMMR from last row if possible
+			-- - 2v2/3v3: repeat team (friendlyMMR) from last row
+			-- - RBG/RBGB: repeat friendlyMMR if present, else last row mmr
+			local function GetPreviousMMR()
+				if not highestMatchEntry then return 0 end
+
+				local myName = GetPlayerFullName()
+				if category.id == 7 and type(highestMatchEntry.playerStats) == "table" then
+					for _, s in ipairs(highestMatchEntry.playerStats) do
+						if s.name == myName then
+							local v = tonumber(s.postmatchMMR) or tonumber(s.postMatchMMR) or 0
+							if v > 0 then return v end
+							break
+						end
+					end
+				end
+
+				local v = tonumber(highestMatchEntry.friendlyMMR) or 0
+				if v > 0 then return v end
+
+				v = tonumber(highestMatchEntry.mmr) or tonumber(highestMatchEntry.postMatchMMR) or 0
+				if v > 0 then return v end
+
+				return 0
+			end
+
+			local prevMMR = GetPreviousMMR()
+			if currentMMR <= 0 and prevMMR > 0 then
+				currentMMR = prevMMR
+			end
+
+			local gap = totalGames - lastRecorded
+			for n = 1, gap do
+				local matchID = highestMatchID + n
+				local crChange = (n == gap) and (currentCR - previousCR) or 0
+
+				local entry = {
+					matchID = matchID,
+					isMissedGame = true,
+					winLoss = "Missed Game",
+					friendlyWinLoss = "Missed Game",
+					timestamp = GetTimestamp(),
+					-- keep both naming styles so the rest of the addon stays happy
+					cr = currentCR,
+					mmr = currentMMR,
+					rating = currentCR,
+					postMatchMMR = currentMMR,
+					ratingChange = crChange,
+					note = (gap > 1)
+						and ("Disconnected or Crashed, Missing Data (" .. n .. "/" .. gap .. ")")
+						or "Disconnected or Crashed, Missing Data",
 			
 				mapName = "N/A",
 				endTime = GetTimestamp(),
@@ -1574,6 +1658,7 @@ function CheckForMissedGames()
 						spec = GetSpecialization() and select(2, GetSpecializationInfo(GetSpecialization())) or "N/A",
 						role = GetPlayerRole(),
 						newrating = currentCR,
+                        postmatchMMR = currentMMR,
 						killingBlows = "-",
 						honorableKills = "-",
                         deaths = "-",
@@ -1584,8 +1669,7 @@ function CheckForMissedGames()
 				}
 			}
 			
-			-- Repeat the enemy placeholder for the second half of the row
-			for i = 1, 1 do
+				-- Repeat the enemy placeholder for the second half of the row
 				table.insert(entry.playerStats, {
 					name = "-",
 					faction = "-",
@@ -1596,14 +1680,14 @@ function CheckForMissedGames()
 					newrating = "-",
 					killingBlows = "-",
 					honorableKills = "-",
-                    deaths = "-",
+					deaths = "-",
 					damage = "-",
 					healing = "-",
 					ratingChange = "-"
 				})
+
+				table.insert(historyTable, 1, entry)
 			end
-	
-			table.insert(historyTable, 1, entry)
 ---			Log("Inserted missed match entry for category ID " .. category.id)
 		else
 ---			Log("No missed game in category ID " .. category.id .. ". Syncing played count.")
@@ -2143,6 +2227,11 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 		friendlyWinLoss = "~   D"
 	end
 
+    local duoPartner = nil
+    if categoryID == 9 then -- Solo RBG (RBGB)
+        duoPartner = GetRBGBDuoPartnerNameRealm()
+    end
+
     local entry = {
         matchID = appendHistoryMatchID,
         isSoloShuffle = C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() or false,
@@ -2154,6 +2243,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
         mapName = mapName,
         endTime = endTime,
         duration = duration,
+        duoPartner = duoPartner,
 		damp = damp,
         teamFaction = teamFaction,
         myTeamIndex = myTeamIndex,
@@ -2766,8 +2856,10 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
     local scoreHeaderText = (tabID == 2 or tabID == 3) and "" or "Score"
 	local c = function(text) return RSTATS:ColorText(text) end
     local factionHeaderText = (tabID == 1 or tabID == 2 or tabID == 3) and "Team" or "Faction"
+    local duoHeaderText = (tabID == 5) and c("Duo") or ""
+
 	local headers = {
-		c("Win/Loss"), c(scoreHeaderText), c("Map"), c("Match End Time"), c("Duration"), "", "",
+		c("Win/Loss"), duoHeaderText,c(scoreHeaderText), c("Map"), c("Match End Time"), c("Duration"), "",
 		c(factionHeaderText), c("Raid Leader"), c("Avg CR"), c("MMR"), c("Damage"), c("Healing"), c("Avg Rat Chg"), "",
 		 "", c(factionHeaderText), c("Raid Leader"), c("Avg CR"), c("MMR"), c("Damage"), c("Healing"), c("Avg Rat Chg"), c("Note")
 	}
@@ -2822,13 +2914,18 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 		
 		local mapDisplay = mapShortName[match.mapName] or match.mapName or "N/A"
 
+        local duoText = ""
+        if tabID == 5 then
+            duoText = match.duoPartner or "Solo"
+        end
+
         return {
             (match.friendlyWinLoss or "-"),
+            duoText,
             scoreText,
             (mapDisplay or "N/A"),
             date("%a %d %b %Y - %H:%M:%S", match.endTime) or "N/A",
             (match.duration or "N/A"),
-            "",
             "",
             (match.teamFaction or "N/A"),
             (match.friendlyRaidLeader or "N/A"),
@@ -2902,7 +2999,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 	if not headerFrame then
 		-- First time on this tab → actually create the widgets
 		headerFrame = CreateFrame("Frame", "HeaderFrame", contentFrame)
-		headerFrame:SetPoint("TOPLEFT", mmrLabel, "BOTTOMLEFT", 0, -30)
+		headerFrame:SetPoint("TOPLEFT", mmrLabel, "BOTTOMLEFT", 0, -8)
 		
 		if UIConfig.isCompact then
 			startWidth = contentFrame:GetWidth() * 2
@@ -2979,7 +3076,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
     -- 5) Create a base anchor frame placed immediately below mmrLabel.
     local baseAnchor = CreateFrame("Frame", "HeadingAnchor", content)
     baseAnchor:SetSize(1, 1)
-    baseAnchor:SetPoint("TOPLEFT", mmrLabel, "BOTTOMLEFT", 0, -35)
+    baseAnchor:SetPoint("TOPLEFT", mmrLabel, "BOTTOMLEFT", 0, -12)
     content.baseAnchor = baseAnchor
 
     -- 6) Create each match row (all parented to content)
@@ -3037,7 +3134,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 				if j == 5 and match.damp and (tabID == 1 or tabID == 2 or tabID == 3) then
 					fs:EnableMouse(true)
 					fs:SetScript("OnEnter", function()
-						GameTooltip:SetOwner(fs, "ANCHOR_RIGHT")
+						GameTooltip:SetOwner(fs, "ANCHOR_CURSOR")
 						GameTooltip:ClearLines()
 						GameTooltip:AddLine(string.format("%d%% Dampening", match.damp), 1, 1, 1)
 						GameTooltip:Show()
@@ -3651,6 +3748,38 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     end
     
     -- ------------------------------------------------------------------
+    -- Theme colour (kept - removing Config:GetThemeColor causes a lua error)
+    -- BUT: row highlighting should use the addon text colour (COLOR_HEX),
+    -- not the theme (00ccff).
+    -- ------------------------------------------------------------------
+    local themeR, themeG, themeB = Config:GetThemeColor()
+
+    local function HexToRGB01(hex)
+        if type(hex) ~= "string" then return nil end
+        hex = hex:gsub("^|cff", ""):gsub("^#", "")
+        if #hex == 8 then
+            -- if someone ever feeds AARRGGBB, drop AA
+            hex = hex:sub(3)
+        end
+        if #hex ~= 6 then return nil end
+        local r = tonumber(hex:sub(1, 2), 16)
+        local g = tonumber(hex:sub(3, 4), 16)
+        local b = tonumber(hex:sub(5, 6), 16)
+        if not (r and g and b) then return nil end
+        return r / 255, g / 255, b / 255
+    end
+
+    local highlightR, highlightG, highlightB = themeR, themeG, themeB
+    do
+        -- Use the actual addon text colour (core.lua -> RSTATS.Config.ThemeColor = "b69e86")
+        local addonHex = (RSTATS and RSTATS.Config and RSTATS.Config.ThemeColor) or COLOR_HEX
+        local r, g, b = HexToRGB01(addonHex)
+        if r then
+            highlightR, highlightG, highlightB = r, g, b
+        end
+    end
+
+    -- ------------------------------------------------------------------
     -- Damage/Healing rank indicators (team + overall)
     -- ------------------------------------------------------------------
     local function BuildRankMap(players, field)
@@ -3679,7 +3808,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
         return map
     end
 
-    local function CreateRankIndicator(parentFrame, xPos, width, rowOffset, rowHeight, teamRank, teamSize, overallRank, totalSize, fontSize)
+    local function CreateRankIndicator(parentFrame, xPos, width, rowOffset, rowHeight, teamRank, teamSize, overallRank, totalSize, fontSize, highlightRow)
         if not (teamRank and overallRank and teamSize and totalSize) then
             return
         end
@@ -3698,6 +3827,11 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
         botFS:SetJustifyH("RIGHT")
         botFS:SetPoint("RIGHT", parentFrame, "TOPLEFT", rightX, centerY - 4)
         botFS:SetText(string.format("%d/%d", overallRank, totalSize))
+
+        if highlightRow then
+            topFS:SetTextColor(highlightR, highlightG, highlightB)
+            botFS:SetTextColor(highlightR, highlightG, highlightB)
+        end
 
         local hit = CreateFrame("Frame", nil, parentFrame)
         hit:SetPoint("TOPLEFT", parentFrame, "TOPLEFT", xPos + width - 26, rowOffset)
@@ -3781,10 +3915,37 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
         return crTxt
     end
 
+    -- Highlight rules:
+    -- - Always tint YOUR row
+    -- - RBGB only: if the match was a duo, also tint the duo partner row
+    local myGUID = UnitGUID("player")
+    local duoPartnerName = (tabID == 5 and matchEntry and matchEntry.duoPartner) or nil
+
+    local function NamesMatch(a, b)
+        if not (a and b) then return false end
+        if a == b then return true end
+        -- allow comparing "Name-Realm" vs "Name"
+        local abase = a:match("^(.-)%-") or a
+        local bbase = b:match("^(.-)%-") or b
+        return abase == bbase
+    end
+
+    local function ShouldHighlightRow(p)
+        if not p then return false end
+        if myGUID and p.guid and p.guid == myGUID then return true end
+        if p.name and playerName and NamesMatch(p.name, playerName) then return true end
+        if duoPartnerName and p.name and NamesMatch(p.name, duoPartnerName) then return true end
+        return false
+    end
+
     -- Populate friendly player stats
     for index, player in ipairs(friendlyPlayers) do
         local rowOffset = -(headerHeight + 15 * index)  -- Adjust rowOffset to account for headers
-        RSTATS.CreateClickableName(nestedTable, player, matchEntry, columnPositions[1], rowOffset, columnWidths[1], rowHeight)
+        local highlightRow = ShouldHighlightRow(player)
+        local nameText = RSTATS.CreateClickableName(nestedTable, player, matchEntry, columnPositions[1], rowOffset, columnWidths[1], rowHeight)
+        if nameText and highlightRow then
+            nameText:SetTextColor(highlightR, highlightG, highlightB)
+        end
         local winHKValue = (isSS and player.wins) or (hideWinHK and "") or player.honorableKills
 
         local DAMAGE_COL = showDeaths and 11 or 10
@@ -3845,6 +4006,9 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 fs:SetJustifyH("CENTER")
                 fs:SetPoint("CENTER", nestedTable, "TOPLEFT", columnPositions[i] + (columnWidths[i] / 2), rowOffset - (rowHeight / 2))
                 fs:SetText(tostring(textValue))
+                if highlightRow then
+                    fs:SetTextColor(highlightR, highlightG, highlightB)
+                end
 
                 -- Add objective tooltip
                 fs:EnableMouse(true)
@@ -3903,17 +4067,26 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                         text:SetWidth(width - 30)
                         text:SetPoint("RIGHT", nestedTable, "TOPLEFT", xPos + width - 28, rowOffset - (rowHeight / 2))
                         text:SetText(tostring(textValue))
+                        if highlightRow then
+                            text:SetTextColor(highlightR, highlightG, highlightB)
+                        end
 
-                        CreateRankIndicator(nestedTable, xPos, width, rowOffset, rowHeight, teamRank, teamSize, overallRank, totalPlayerCount, rankFontSize)
+                        CreateRankIndicator(nestedTable, xPos, width, rowOffset, rowHeight, teamRank, teamSize, overallRank, totalPlayerCount, rankFontSize, highlightRow)
                     else
                         text:SetJustifyH("CENTER")
                         text:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
                         text:SetText(tostring(textValue))
+                        if highlightRow then
+                            text:SetTextColor(highlightR, highlightG, highlightB)
+                        end
                     end
                 else
                     text:SetJustifyH("CENTER")
                     text:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
                     text:SetText(tostring(textValue))  -- Ensure the value is converted to a string
+                    if highlightRow then
+                            text:SetTextColor(highlightR, highlightG, highlightB)
+                    end
                 end
             end
         end  -- This 'end' closes the inner 'for' loop
@@ -4115,15 +4288,18 @@ end
 -- Define the DisplayCurrentCRMMR function
 function DisplayCurrentCRMMR(contentFrame, categoryID)
     -- Retrieve CR and MMR using GetPersonalRatedInfo for the specified categoryID
-    local currentCR = "0"
-	local currentMMR = "0"
+    -- categoryID here is the rated bracket index (1=2v2, 2=3v3, 4=RBG, 7=Solo Shuffle, 9=Blitz)
+    -- We prefer the last match entry for CR/MMR display (most reliable), but tier icons are derived from the same bracket.
+
+    local currentCR  = "0"
+    local currentMMR = "0"
 	
     local categoryMappings = {
         [1] = "v2History",
         [2] = "v3History",
         [4] = "RBGHistory",
         [7] = "SoloShuffleHistory",
-        [9] = "SoloRBGHistory"
+        [9] = "SoloRBGHistory",
     }
 	
     local historyTable = Database[categoryMappings[categoryID]]
@@ -4142,9 +4318,7 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
 
     -- 2) If we found an entry with the highest matchID, get the stats from that match
     if highestMatchEntry then
-        -- Always have a fallback from the match entry itself
-        currentCR  = tonumber(highestMatchEntry.cr)  or currentCR
-        -- Prefer the match's stored team MMR (what the table shows) over entry.mmr
+        currentCR = tonumber(highestMatchEntry.cr) or currentCR
         local teamMMR = tonumber(highestMatchEntry.friendlyMMR)
         if teamMMR and teamMMR > 0 then
             currentMMR = teamMMR
@@ -4154,33 +4328,26 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
 
         local isArena = (categoryID == 1 or categoryID == 2)
 
-        -- For 2v2/3v3 specifically, MMR should be from the *last match we played*.
-        -- Do NOT gate on > 0, because that causes '-' or stale values.
         if highestMatchEntry.playerStats then
             for _, stats in ipairs(highestMatchEntry.playerStats) do
                 if stats.name == playerName then
                     local mmr = tonumber(stats.postmatchMMR)
                     local cr  = tonumber(stats.newrating)
                     if cr then currentCR = cr end
-                    -- postmatchMMR is often 0 in arena now; ignore zeros.
                     if mmr and mmr > 0 then currentMMR = mmr end
                     break
                 end
             end
         end
-        -- Arena fallback: use stored match team MMR if player postmatchMMR was 0/missing
         if isArena then
-            local teamMMR = tonumber(highestMatchEntry.friendlyMMR)
-            local curMMR  = tonumber(currentMMR)
-            if teamMMR and teamMMR > 0 and (not curMMR or curMMR <= 0) then
-                currentMMR = teamMMR
+            local teamMMR2 = tonumber(highestMatchEntry.friendlyMMR)
+            local curMMR   = tonumber(currentMMR)
+            if teamMMR2 and teamMMR2 > 0 and (not curMMR or curMMR <= 0) then
+                currentMMR = teamMMR2
             end
         end
     end
     
-    -- Display or return currentCR/currentMMR as desired
-    -- e.g., update your contentFrame here
-   
     -- Save these values to the Database
     if categoryID == 7 then
         Database.CurrentCRforSoloShuffle = currentCR
@@ -4199,30 +4366,334 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
         Database.CurrentMMRforSoloRBG = currentMMR
     end
     
-	if not contentFrame.crLabel then
-		contentFrame.crLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-		contentFrame.crLabel:SetFont(GetUnicodeSafeFont(), 14)
-		contentFrame.crLabel:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 10, -10)
-	end
-	contentFrame.crLabel:SetText(RSTATS:ColorText("Current CR: ") .. tostring(currentCR))
-	
-	if not contentFrame.mmrLabel then
-		contentFrame.mmrLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-		contentFrame.mmrLabel:SetFont(GetUnicodeSafeFont(), 14)
-		contentFrame.mmrLabel:SetPoint("TOPLEFT", contentFrame.crLabel, "BOTTOMLEFT", 0, -5)
-	end
-	contentFrame.mmrLabel:SetText(RSTATS:ColorText("Current MMR: ") .. tostring(currentMMR))
-	
-	if not contentFrame.instructionLabel then
-		contentFrame.instructionLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-		contentFrame.instructionLabel:SetFont(GetUnicodeSafeFont(), 12)
-		contentFrame.instructionLabel:SetPoint("TOP", contentFrame, "TOP", 0, -10)
-		contentFrame.instructionLabel:SetJustifyH("CENTER")
-	end
-	contentFrame.instructionLabel:SetText("Click on rows to expand.    \nClick on a player name to copy name and any friendly team member to see their talents (loadout code).\nAchievements Tracking uses memory due to a large filesize, right click minimap to toggle it ON/OFF.\nBattle.net Add Friend button on nameplates, for when you meet good peeps!")
-    
-    -- Return the last label for potential further positioning
-    return contentFrame.mmrLabel
+	-- Replace the legacy CR/MMR + helper text block with a tier badge panel.
+	-- (We still keep currentCR/currentMMR logic above, because last-match data is most reliable.)
+    if contentFrame.crLabel then contentFrame.crLabel:Hide() end
+    if contentFrame.mmrLabel then contentFrame.mmrLabel:Hide() end
+    if contentFrame.instructionLabel then contentFrame.instructionLabel:Hide() end
+
+    local function LabelNum(label, num)
+        return RSTATS:ColorText(label) .. "|cffffffff" .. tostring(num) .. "|r"
+    end
+
+    local function ReachCR(cr)
+        return LabelNum("Reach: ", cr) .. " " .. RSTATS:ColorText("CR")
+    end
+
+    local function DropCR(cr)
+        return LabelNum("Drop below: ", cr) .. " " .. RSTATS:ColorText("CR")
+    end
+
+    local function ReachAndWins(crReq, winsReq)
+        -- Reach: 2400 CR and 25 Wins above 2400 CR
+        return LabelNum("Reach: ", crReq) .. " " .. RSTATS:ColorText("CR")
+            .. " " .. RSTATS:ColorText("and ")
+            .. "|cffffffff" .. tostring(winsReq) .. "|r"
+            .. " " .. RSTATS:ColorText("Wins above ")
+            .. "|cffffffff" .. tostring(crReq) .. "|r"
+            .. " " .. RSTATS:ColorText("CR")
+    end
+
+    local function ProgressLine(cur, max)
+        return RSTATS:ColorText("Progress: ")
+            .. "|cffffffff" .. tostring(cur) .. "|r"
+            .. RSTATS:ColorText(" / ")
+            .. "|cffffffff" .. tostring(max) .. "|r"
+    end
+
+    local function CountWinsAboveCR(bracketID, crReq, winsMode)
+        local key = categoryMappings[bracketID]
+        local tbl = key and Database[key]
+        if type(tbl) ~= "table" then return 0 end
+
+        crReq = tonumber(crReq) or 0
+        local total = 0
+
+        for _, e in ipairs(tbl) do
+            local ecr = tonumber(e and e.cr) or 0
+            if ecr >= crReq then
+                if winsMode == "ss_rounds" then
+                    -- Solo Shuffle: we store per-player rounds won as playerData.wins
+                    local added = 0
+                    if e.playerStats then
+                        for _, ps in ipairs(e.playerStats) do
+                            if ps and ps.name == playerName then
+                                added = tonumber(ps.wins) or 0
+                                break
+                            end
+                        end
+                    end
+                    if added <= 0 then
+                        added = tonumber(e.roundsWon) or 0
+                    end
+                    total = total + added
+                else
+                    -- Other brackets: count match wins from friendlyWinLoss
+                    local wl = e and e.friendlyWinLoss
+                    if type(wl) == "string" and wl:find("W", 1, true) then
+                        total = total + 1
+                    end
+                end
+            end
+        end
+
+        return total
+    end
+
+    -- ------------------------------------------------------------------
+    -- PvP Tier (Combatant -> Elite) MUST come from the API (same as filters).
+    -- We use pvpTier from GetPersonalRatedInfo, then GetPvpTierInfo for name/icon/thresholds.
+    -- ------------------------------------------------------------------
+    local function GetApiTierInfo(bracketID)
+        if not (C_PvP and C_PvP.GetPvpTierInfo) then return nil, nil, nil end
+        local pvpTier = select(10, GetPersonalRatedInfo(bracketID))
+        pvpTier = tonumber(pvpTier) or 0
+        if pvpTier <= 0 then return nil, nil, nil end
+
+        local cur = C_PvP.GetPvpTierInfo(pvpTier)
+        if not cur then return nil, nil, nil end
+
+        local down = (cur.descendTier and tonumber(cur.descendTier) and tonumber(cur.descendTier) > 0)
+            and C_PvP.GetPvpTierInfo(cur.descendTier) or nil
+
+        local up = (cur.ascendTier and tonumber(cur.ascendTier) and tonumber(cur.ascendTier) > 0)
+            and C_PvP.GetPvpTierInfo(cur.ascendTier) or nil
+
+        return cur, down, up
+    end
+
+    local function SetIcon(tex, path, tint)
+        tex:SetTexture(path or "Interface\\Icons\\INV_Misc_QuestionMark")
+        if tint and type(tint) == "table" then
+            tex:SetVertexColor(tint[1] or 1, tint[2] or 1, tint[3] or 1)
+        else
+            tex:SetVertexColor(1, 1, 1)
+        end
+    end
+
+    -- ------------------------------------------------------------------
+    -- Bracket milestone "up" badge (Strategist / Legend / Glad / 3's Company / HotX / R1)
+    -- Uses the same base-game icon paths + tints you already defined in Achiev.
+    -- ------------------------------------------------------------------
+    local function GetMilestoneForBracket(bracketID, cr)
+        cr = tonumber(cr) or 0
+
+        -- icon paths + tints copied from RatedStats_Achiev/achievements.lua
+        local ICON_ELITEPLUS = "Interface\\PVPFrame\\Icons\\UI_RankedPvP_07_Small.blp"
+        local ICON_3C        = "Interface\\Icons\\Achievement_Arena_3v3_7"
+        local ICON_HERO_H    = "Interface\\PvPRankBadges\\PvPRankHorde.blp"
+        local ICON_HERO_A    = "Interface\\PvPRankBadges\\PvPRankAlliance.blp"
+
+        local TINT_STRAT = { 0.20, 1.00, 0.20 }
+        local TINT_GLAD  = { 1.00, 0.35, 0.95 }
+        local TINT_LEG   = { 1.00, 0.35, 0.20 }
+
+        -- Only meaningful once you're at/above Elite (2400+). Caller gates display.
+
+        if bracketID == 9 then
+            local progStrat = CountWinsAboveCR(9, 2400, "match_wins")
+            if progStrat < 25 then
+                return { name="Strategist", icon=ICON_ELITEPLUS, tint=TINT_STRAT, reqCR=2400, reqWins=25, winsMode="match_wins" }
+            end
+            local progR1 = CountWinsAboveCR(9, 2400, "match_wins")
+            if progR1 < 50 then
+                return { name="Rank 1", icon=ICON_ELITEPLUS, tint=nil, reqCR=2400, reqWins=50, topText="Top 0.1% of Season", winsMode="match_wins" }
+            end
+            return nil
+        end
+
+        if bracketID == 7 then
+            local progLeg = CountWinsAboveCR(7, 2400, "ss_rounds")
+            if progLeg < 100 then
+                return { name="Legend", icon=ICON_ELITEPLUS, tint=TINT_LEG, reqCR=2400, reqWins=100, winsMode="ss_rounds" }
+            end
+            local progR1 = CountWinsAboveCR(7, 2400, "ss_rounds")
+            if progR1 < 50 then
+                return { name="Rank 1", icon=ICON_ELITEPLUS, tint=nil, reqCR=2400, reqWins=50, topText="Top 0.1% of Season", winsMode="ss_rounds" }
+            end
+            return nil
+        end
+
+        if bracketID == 2 then
+            local progGlad = CountWinsAboveCR(2, 2400, "match_wins")
+            if progGlad < 50 then
+                return { name="Gladiator", icon=ICON_ELITEPLUS, tint=TINT_GLAD, reqCR=2400, reqWins=50, winsMode="match_wins" }
+            end
+            if cr < 2700 then
+                return { name="Three's Company", icon=ICON_3C, tint=nil, reqCR=2700 }
+            end
+            local progR1 = CountWinsAboveCR(2, 2700, "match_wins")
+            if progR1 < 50 then
+                return { name="Rank 1", icon=ICON_ELITEPLUS, tint=nil, reqCR=2700, reqWins=50, topText="Top 0.1% of Season", winsMode="match_wins" }
+            end
+            return nil
+        end
+
+        if bracketID == 4 then
+            -- HotX: 2400 + X wins + Top 0.1%. Wins counted only at/above 2400.
+            local faction = UnitFactionGroup("player")
+            local icon = (faction == "Horde") and ICON_HERO_H or ICON_HERO_A
+            local prog = CountWinsAboveCR(4, 2400, "match_wins")
+            if prog < 50 then
+                return { name="HotX", icon=icon, tint=nil, reqCR=2400, reqWins=50, topText="Top 0.1% of Season", winsMode="match_wins" }
+            end
+            return nil
+        end
+
+        return nil
+    end
+
+    -- Panel: 3 icons (down << current >> up). No extra icon row.
+    local panel = contentFrame.rankPanel
+    if not panel then
+        panel = CreateFrame("Frame", nil, contentFrame)
+        panel:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 0, -6)
+        panel:SetPoint("TOPRIGHT", contentFrame, "TOPRIGHT", 0, -6)
+        panel:SetHeight(96)
+        contentFrame.rankPanel = panel
+
+        panel.centerIcon = panel:CreateTexture(nil, "OVERLAY")
+        panel.centerIcon:SetSize(58, 58)
+        panel.centerIcon:SetPoint("TOP", panel, "TOP", 0, 0)
+
+        panel.leftIcon = panel:CreateTexture(nil, "OVERLAY")
+        panel.leftIcon:SetSize(42, 42)
+        panel.leftIcon:SetPoint("RIGHT", panel.centerIcon, "LEFT", -54, -2)
+
+        panel.rightIcon = panel:CreateTexture(nil, "OVERLAY")
+        panel.rightIcon:SetSize(42, 42)
+        panel.rightIcon:SetPoint("LEFT", panel.centerIcon, "RIGHT", 54, -2)
+
+        panel.leftArrow = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        panel.leftArrow:SetFont(GetUnicodeSafeFont(), 18, "OUTLINE")
+        panel.leftArrow:SetPoint("RIGHT", panel.centerIcon, "LEFT", -14, 6)
+        panel.leftArrow:SetText(RSTATS:ColorText("<<"))
+
+        panel.rightArrow = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        panel.rightArrow:SetFont(GetUnicodeSafeFont(), 18, "OUTLINE")
+        panel.rightArrow:SetPoint("LEFT", panel.centerIcon, "RIGHT", 14, 6)
+        panel.rightArrow:SetText(RSTATS:ColorText(">>"))
+
+        panel.centerTierText = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        panel.centerTierText:SetFont(GetUnicodeSafeFont(), 13, "OUTLINE")
+        panel.centerTierText:SetPoint("TOP", panel.centerIcon, "BOTTOM", 0, -2)
+
+        panel.centerCRMMR = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        panel.centerCRMMR:SetFont(GetUnicodeSafeFont(), 12, "OUTLINE")
+        panel.centerCRMMR:SetPoint("TOP", panel.centerTierText, "BOTTOM", 0, -2)
+
+        panel.leftTierText = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        panel.leftTierText:SetFont(GetUnicodeSafeFont(), 12, "OUTLINE")
+        panel.leftTierText:SetJustifyH("RIGHT")
+        panel.leftTierText:SetPoint("TOPRIGHT", panel.leftIcon, "BOTTOMRIGHT", 0, -2)
+
+        panel.leftReqText = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        panel.leftReqText:SetFont(GetUnicodeSafeFont(), 11, "OUTLINE")
+        panel.leftReqText:SetJustifyH("RIGHT")
+        panel.leftReqText:SetPoint("TOPRIGHT", panel.leftTierText, "BOTTOMRIGHT", 0, -2)
+
+        panel.rightTierText = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        panel.rightTierText:SetFont(GetUnicodeSafeFont(), 12, "OUTLINE")
+        panel.rightTierText:SetJustifyH("LEFT")
+        panel.rightTierText:SetPoint("TOPLEFT", panel.rightIcon, "BOTTOMLEFT", 0, -2)
+
+        panel.rightReqText = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        panel.rightReqText:SetFont(GetUnicodeSafeFont(), 11, "OUTLINE")
+        panel.rightReqText:SetJustifyH("LEFT")
+        panel.rightReqText:SetPoint("TOPLEFT", panel.rightTierText, "BOTTOMLEFT", 0, -2)
+    end
+
+    -- Tier MUST come from API for THIS BRACKET (matches filters.lua behaviour)
+    local curTier, downTier, upTier = GetApiTierInfo(categoryID)
+
+    if curTier and curTier.tierIconID then
+        SetIcon(panel.centerIcon, curTier.tierIconID, nil)
+        panel.centerTierText:SetText(RSTATS:ColorText(curTier.name or ""))
+    else
+        SetIcon(panel.centerIcon, "Interface\\Icons\\INV_Misc_QuestionMark", nil)
+        panel.centerTierText:SetText("")
+    end
+
+    panel.centerCRMMR:SetText(
+        LabelNum("CR: ", currentCR) .. "   " .. LabelNum("MMR: ", currentMMR)
+    )
+
+    -- Left (down)
+    if downTier and downTier.tierIconID and curTier and curTier.descendRating and tonumber(curTier.descendRating) and tonumber(curTier.descendRating) > 0 then
+        panel.leftIcon:Show()
+        panel.leftArrow:Show()
+        panel.leftTierText:Show()
+        panel.leftReqText:Show()
+
+        SetIcon(panel.leftIcon, downTier.tierIconID, nil)
+        panel.leftTierText:SetText(RSTATS:ColorText(downTier.name or ""))
+
+        panel.leftReqText:SetText(DropCR(curTier.descendRating))
+    else
+        panel.leftIcon:Hide()
+        panel.leftArrow:Hide()
+        panel.leftTierText:Hide()
+        panel.leftReqText:Hide()
+    end
+
+    -- Right (up): bracket milestone first; otherwise next PvP tier
+    local isTopTier = (curTier and (not curTier.ascendTier or tonumber(curTier.ascendTier) == 0))
+    local canShowMilestone = isTopTier and (tonumber(currentCR) or 0) >= 2400
+    local milestone = canShowMilestone and GetMilestoneForBracket(categoryID, currentCR) or nil
+
+    if milestone and milestone.icon and milestone.name then
+        panel.rightIcon:Show()
+        panel.rightArrow:Show()
+        panel.rightTierText:Show()
+        panel.rightReqText:Show()
+
+        SetIcon(panel.rightIcon, milestone.icon, milestone.tint)
+        panel.rightTierText:SetText(RSTATS:ColorText(milestone.name))
+
+        local lines = {}
+
+        -- CR-gated milestones (Strategist/Legend/Glad/R1/3's Company)
+        if milestone.reqCR and tonumber(milestone.reqCR) and tonumber(milestone.reqCR) > 0 then
+            if milestone.reqWins and tonumber(milestone.reqWins) and tonumber(milestone.reqWins) > 0 then
+                local prog = CountWinsAboveCR(categoryID, milestone.reqCR, milestone.winsMode)
+                lines[#lines + 1] = ReachAndWins(milestone.reqCR, milestone.reqWins)
+                lines[#lines + 1] = ProgressLine(prog, milestone.reqWins)
+                if milestone.topText then
+                    lines[#lines + 1] = RSTATS:ColorText(milestone.topText)
+                end
+            else
+                lines[#lines + 1] = ReachCR(milestone.reqCR)
+            end
+
+        -- Percent/wins-only milestone (Hero)
+        elseif milestone.reqWins and tonumber(milestone.reqWins) and tonumber(milestone.reqWins) > 0 then
+            local prog = CountWinsAboveCR(categoryID, 0, milestone.winsMode)
+            lines[#lines + 1] = LabelNum("Wins: ", milestone.reqWins)
+            if milestone.topText then
+                lines[#lines + 1] = RSTATS:ColorText(milestone.topText)
+            end
+            lines[#lines + 1] = ProgressLine(prog, milestone.reqWins)
+        end
+
+        panel.rightReqText:SetText(table.concat(lines, "\n"))
+    elseif upTier and upTier.tierIconID and curTier and curTier.ascendRating and tonumber(curTier.ascendRating) and tonumber(curTier.ascendRating) > 0 then
+        panel.rightIcon:Show()
+        panel.rightArrow:Show()
+        panel.rightTierText:Show()
+        panel.rightReqText:Show()
+
+        SetIcon(panel.rightIcon, upTier.tierIconID, nil)
+        panel.rightTierText:SetText(RSTATS:ColorText(upTier.name or ""))
+
+        panel.rightReqText:SetText(ReachCR(curTier.ascendRating))
+    else
+        panel.rightIcon:Hide()
+        panel.rightArrow:Hide()
+        panel.rightTierText:Hide()
+        panel.rightReqText:Hide()
+    end
+
+    return panel
 end
 
 ----------------------------------
@@ -4236,6 +4707,9 @@ function Config:CreateMenu()
     local scrollContents = {}
     local contentFrames  = {}
     
+    -- forward declare so tab OnClick can force full mode for Summary
+    local ApplyCompactState
+
     local parentWidth  = UIParent:GetWidth()
     local parentHeight = UIParent:GetHeight()
 
@@ -4638,6 +5112,27 @@ function Config:CreateMenu()
 			if UIConfig.TeamLeftButton then UIConfig.TeamLeftButton:SetShown(UIConfig.isCompact and not isSummary) end
 			if UIConfig.TeamRightButton then UIConfig.TeamRightButton:SetShown(UIConfig.isCompact and not isSummary) end
 
+            -- Summary must always be full mode: force compact OFF when switching to Summary.
+            if isSummary and UIConfig.isCompact and ApplyCompactState then
+                ApplyCompactState(false)
+            end
+
+            -- Summary has no compact button: hide it and shift Settings right.
+            if isSummary then
+                if UIConfig.ToggleViewButton then UIConfig.ToggleViewButton:Hide() end
+                if UIConfig.SettingsButton then
+                    UIConfig.SettingsButton:ClearAllPoints()
+                    UIConfig.SettingsButton:SetPoint("RIGHT", UIConfig.CloseButton, "LEFT", 0, 0)
+                end
+            else
+                -- Match tabs: show compact button and keep Settings left of it.
+                if UIConfig.ToggleViewButton then UIConfig.ToggleViewButton:Show() end
+                if UIConfig.SettingsButton and UIConfig.ToggleViewButton then
+                    UIConfig.SettingsButton:ClearAllPoints()
+                    UIConfig.SettingsButton:SetPoint("RIGHT", UIConfig.ToggleViewButton, "LEFT", 0, 0)
+                end
+            end
+
 			-- always go back to page 1 on a brand-new tab
 			UIConfig.ActiveTeamView = 1
 			UpdateArrowState()
@@ -4795,8 +5290,9 @@ function Config:CreateMenu()
     end)
     UIConfig.ToggleViewButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    UIConfig.ToggleViewButton:SetScript("OnClick", function()
-        UIConfig.isCompact = not UIConfig.isCompact
+    -- Centralized compact apply so Summary can force full mode cleanly.
+    ApplyCompactState = function(enabled)
+        UIConfig.isCompact = enabled and true or false
         if UIConfig.isCompact then
             UIConfig:SetWidth(parentWidth * 0.5)
             UIConfig.ToggleViewButton:SetNormalAtlas("RedButton-Expand")
@@ -4874,6 +5370,13 @@ function Config:CreateMenu()
 		-- Refresh every nested table in the now-active scrollFrame
 		RefreshAllNestedTables(RSTATS.ScrollFrames[ACTIVE_TAB_ID])
 		UpdateCompactHeaders(ACTIVE_TAB_ID)
+    end
+
+    UIConfig.ToggleViewButton:SetScript("OnClick", function()
+        -- Compact is not allowed on Summary.
+        local tabID = PanelTemplates_GetSelectedTab(UIConfig) or ACTIVE_TAB_ID or 1
+        if tabID == 6 then return end
+        ApplyCompactState(not UIConfig.isCompact)
     end)
 	
     -- Small Arrow Buttons for Team View (like Spellbook arrows)
