@@ -5086,8 +5086,24 @@ function Config:CreateMenu()
 	function RSTATS:UpdateStatsView(filterType, tabID)
 		tabID = tabID or PanelTemplates_GetSelectedTab(RSTATS.UIConfig)
 
-        local allMatches = RSTATS:GetHistoryForTab(tabID) or {}
-	
+		-- Tab 6 is Summary (dashboard only). It has no match rows/stat bar filtering.
+		if tabID == 6 then
+			return
+		end
+
+        local allMatches
+		if self.GetHistoryForTab then
+			allMatches = self:GetHistoryForTab(tabID) or {}
+		else
+			-- Fallback (should only happen if spec-history helper was not loaded)
+			allMatches = ({
+				[1] = Database.SoloShuffleHistory,
+				[2] = Database.v2History,
+				[3] = Database.v3History,
+				[4] = Database.RBGHistory,
+				[5] = Database.SoloRBGHistory,
+			})[tabID] or {}
+		end
 		-- Apply current tab filters
 		local filtered = {}
 		for _, match in ipairs(allMatches) do
