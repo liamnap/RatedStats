@@ -3037,7 +3037,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 				if j == 5 and match.damp and (tabID == 1 or tabID == 2 or tabID == 3) then
 					fs:EnableMouse(true)
 					fs:SetScript("OnEnter", function()
-						GameTooltip:SetOwner(fs, "ANCHOR_RIGHT")
+						GameTooltip:SetOwner(fs, "ANCHOR_CURSOR")
 						GameTooltip:ClearLines()
 						GameTooltip:AddLine(string.format("%d%% Dampening", match.damp), 1, 1, 1)
 						GameTooltip:Show()
