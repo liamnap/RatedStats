@@ -4522,6 +4522,14 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
         local crLive, mmrLive = GetCRandMMR(categoryID)
         currentCR  = tonumber(crLive)  or 0
         currentMMR = tonumber(mmrLive) or 0
+
+        -- IMPORTANT:
+        -- For SS (7) + RBGB (9) we do NOT want to "lock in" the live/API MMR,
+        -- because it can be misleading. These brackets should prefer the last
+        -- stored post-match MMR from our history (playerStats / friendlyMMR).
+        if categoryID == 7 or categoryID == 9 then
+            currentMMR = 0
+        end
     end
 
     local categoryMappings = {
@@ -4574,7 +4582,12 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
                     local cr  = tonumber(stats.newrating)
                     -- Again: do not override a valid live CR/MMR.
                     if (not currentCR or currentCR == 0) and cr then currentCR = cr end
-                    if (not currentMMR or currentMMR <= 0) and mmr and mmr > 0 then currentMMR = mmr end
+                    -- For SS/RBGB: ALWAYS prefer playerStats.postmatchMMR when available.
+                    if (categoryID == 7 or categoryID == 9) and mmr and mmr > 0 then
+                        currentMMR = mmr
+                    elseif (not currentMMR or currentMMR <= 0) and mmr and mmr > 0 then
+                        currentMMR = mmr
+                    end
                     break
                 end
             end
