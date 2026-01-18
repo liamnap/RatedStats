@@ -312,9 +312,55 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
     ver:RegisterEvent("GROUP_ROSTER_UPDATE")
     ver:RegisterEvent("PLAYER_ENTERING_WORLD")
 
-    local lastSendAt = 0
     local announcedMainFor = nil
     local announcedAchFor  = nil
+
+    local function MaybeSendMyVersions(reason)
+        if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then return end
+
+        local db3 = GetPlayerDB()
+        if not db3 then return end
+        db3.settings = db3.settings or {}
+
+        local scope = GetSendScope()
+        if not scope then return end
+
+        local myMainVer = C_AddOns.GetAddOnMetadata("RatedStats", "Version") or ""
+        local myAchVer  = ""
+        if C_AddOns.GetAddOnEnableState("RatedStats_Achiev", nil) ~= 0 then
+            myAchVer = C_AddOns.GetAddOnMetadata("RatedStats_Achiev", "Version") or ""
+        end
+
+        -- Persisted "send once until state changes" guards
+        local newestMain = db3.settings.mainNewestSeenVersion or ""
+        local newestAch  = db3.settings.achievNewestSeenVersion or ""
+
+        local sentMainVer   = db3.settings.mainLastBroadcastVersion or ""
+        local sentMainSeen  = db3.settings.mainLastBroadcastNewestSeen or ""
+        local sentAchVer    = db3.settings.achievLastBroadcastVersion or ""
+        local sentAchSeen   = db3.settings.achievLastBroadcastNewestSeen or ""
+
+        -- MAIN
+        if myMainVer ~= "" and ParseTagVersion(myMainVer) then
+            -- Send once if:
+            --  - we haven't sent this installed version yet, OR
+            --  - the "newest seen" state has advanced since the last time we sent
+            if (sentMainVer ~= myMainVer) or (sentMainSeen ~= newestMain) then
+                C_ChatInfo.SendAddonMessage(UPDATECHECK_PREFIX_MAIN, myMainVer, scope)
+                db3.settings.mainLastBroadcastVersion = myMainVer
+                db3.settings.mainLastBroadcastNewestSeen = newestMain
+            end
+        end
+
+        -- ACHIEV
+        if myAchVer ~= "" and ParseTagVersion(myAchVer) then
+            if (sentAchVer ~= myAchVer) or (sentAchSeen ~= newestAch) then
+                C_ChatInfo.SendAddonMessage(UPDATECHECK_PREFIX_ACH, myAchVer, scope)
+                db3.settings.achievLastBroadcastVersion = myAchVer
+                db3.settings.achievLastBroadcastNewestSeen = newestAch
+            end
+        end
+    end
 
     local function SendMyVersions()
         if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then return end
@@ -363,6 +409,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 RSPrint(string.format("Rated Stats update available: you have %s, seen %s from %s.", myMainVer, msg, sender or "someone"))
                 announcedMainFor = msg
             end
+            MaybeSendMyVersions("main_newer_seen")
 
         elseif prefix == UPDATECHECK_PREFIX_ACH then
             if C_AddOns.GetAddOnEnableState("RatedStats_Achiev", nil) == 0 then return end
@@ -384,6 +431,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 RSPrint(string.format("Rated Stats - Achievements update available: you have %s, seen %s from %s.", myAchVer, msg, sender or "someone"))
                 announcedAchFor = msg
             end
+            MaybeSendMyVersions("ach_newer_seen")
         end
     end
 
@@ -395,8 +443,8 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             return
         end
 
-        -- group/zone changes: broadcast our version (throttled)
-        SendMyVersions()
+        -- group/zone changes: broadcast ONCE (persisted across reloads) unless state changed
+        MaybeSendMyVersions(event)
     end)
 
     if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
@@ -405,9 +453,9 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
     end
 
     if C_Timer and C_Timer.After then
-        C_Timer.After(2, SendMyVersions)
+        C_Timer.After(2, function() MaybeSendMyVersions("initial") end)
     else
-        SendMyVersions()
+        MaybeSendMyVersions("initial")
     end
 end)
 
