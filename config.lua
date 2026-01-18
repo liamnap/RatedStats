@@ -1291,9 +1291,10 @@ do
     specRefreshFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
     specRefreshFrame:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
     specRefreshFrame:SetScript("OnEvent", function(_, event, unit)
-        if event == "PLAYER_SPECIALIZATION_CHANGED" and unit ~= "player" then return end
+    if event == "PLAYER_SPECIALIZATION_CHANGED" and unit ~= "player" then return end
 
-        -- Only bother if the addon UI is actually up.
+    -- Run next frame so GetSpecialization()/GetSpecializationInfo() has updated.
+    C_Timer.After(0, function()
         if UIConfig and UIConfig.IsShown and UIConfig:IsShown() then
             UpdateSoloShuffleDisplay()
             Update2v2Display()
