@@ -1302,6 +1302,19 @@ do
             UpdateRBGDisplay()
             UpdateSoloRBGDisplay()
 
+            -- If we switched spec and SS/RBGB has no history for THIS spec, insert a new Initial entry.
+            -- (GetInitialCRandMMR already contains the per-spec "only insert when empty" guard.)
+            if EnsureSpecHistory and GetActiveSpecIDAndName then
+                local specID, specName = GetActiveSpecIDAndName()
+                if specID then
+                    local ss   = EnsureSpecHistory(7, specID, specName) -- Solo Shuffle
+                    local rbgb = EnsureSpecHistory(9, specID, specName) -- Solo RBG
+                    if (type(ss) == "table" and #ss == 0) or (type(rbgb) == "table" and #rbgb == 0) then
+                        GetInitialCRandMMR()
+                    end
+                end
+            end
+
             -- If we're currently viewing a spec-scoped ladder, rebuild the rows using the new spec table.
             if ACTIVE_TAB_ID == 1 or ACTIVE_TAB_ID == 5 then
                 local tabID = ACTIVE_TAB_ID
