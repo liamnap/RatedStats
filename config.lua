@@ -343,7 +343,7 @@ function LoadData()
 end
 
 -- Define a function to clear the database, only use to debug
-function ClearDatabase()
+function RSTATS:ClearDatabase()
     RSTATS_Database = {}
     RSTATS.Database[playerName] = {}
     Database = {}
