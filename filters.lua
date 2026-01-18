@@ -345,7 +345,12 @@ function ApplyFilters(match)
 			[4] = Database.RBGHistory,
 			[5] = Database.SoloRBGHistory,
 		}
+
 		local historyTable = tableByTab[tabID]
+		-- SS / Solo RBG are spec-based: count the active spec table, not the base table.
+		if (tabID == 1 or tabID == 5) and RSTATS and RSTATS.GetHistoryForTab then
+			historyTable = RSTATS:GetHistoryForTab(tabID) or historyTable
+		end
 		if historyTable and #historyTable > 2 then
 			return false
 		end
@@ -443,6 +448,11 @@ function FilterAndSearchMatches(query)
 	})[tabID]
 
 	if not data or not data.table then return end
+
+	-- SS / Solo RBG are spec-based: filter the active spec table, not the base table.
+	if (tabID == 1 or tabID == 5) and RSTATS and RSTATS.GetHistoryForTab then
+		data.table = RSTATS:GetHistoryForTab(tabID) or data.table
+	end
 
 	local prevCount = RSTATS.__LastHistoryCount[tabID] or 0
 	local currentCount = #data.table
