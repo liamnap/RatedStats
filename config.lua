@@ -4199,131 +4199,254 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
         Database.CurrentMMRforSoloRBG = currentMMR
     end
     
-	-- Remove the old CR/MMR labels + help text (replaced by the tier panel below)
+	-- Replace the legacy CR/MMR + helper text block with a tier badge panel.
+	-- (We still keep currentCR/currentMMR logic above, because last-match data is most reliable.)
+
+	-- Hide legacy UI (older builds may have created these already)
 	if contentFrame.crLabel then contentFrame.crLabel:Hide() end
 	if contentFrame.mmrLabel then contentFrame.mmrLabel:Hide() end
 	if contentFrame.instructionLabel then contentFrame.instructionLabel:Hide() end
 
-	-- Tier badge panel (center = current tier; left = descend; right = ascend)
-	local panel = contentFrame.rankPanel
-	if not panel then
-		panel = CreateFrame("Frame", nil, contentFrame)
-		panel:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 0, 0)
-		panel:SetPoint("TOPRIGHT", contentFrame, "TOPRIGHT", 0, 0)
-		panel:SetHeight(92)
+	local function ColorLabelNumber(label, value)
+		return RSTATS:ColorText(label) .. "|cffffffff" .. tostring(value or "-") .. "|r"
+	end
+
+	local function GetAllPvpTiers()
+		if RSTATS.__PvpTierList then
+			return RSTATS.__PvpTierList
+		end
+
+		local tiers = {}
+		for tierID = 1, 50 do
+			local t = C_PvP.GetPvpTierInfo(tierID)
+			if t and t.name and t.tierIconID then
+				local ascend = tonumber(t.ascendRating) or 0
+				local descend = tonumber(t.descendRating) or 0
+				table.insert(tiers, {
+					tierID = tierID,
+					name = t.name,
+					icon = t.tierIconID,
+					ascendRating = ascend,
+					descendRating = descend,
+				})
+			end
+		end
+
+		table.sort(tiers, function(a, b)
+			return (a.descendRating or 0) < (b.descendRating or 0)
+		end)
+
+		RSTATS.__PvpTierList = tiers
+		return tiers
+	end
+
+	local function GetTierForRating(rating)
+		rating = tonumber(rating) or 0
+		local tiers = GetAllPvpTiers()
+		local foundTier, foundIndex
+
+		for i, t in ipairs(tiers) do
+			local ascend = tonumber(t.ascendRating) or 0
+			if ascend == 0 then
+				ascend = math.huge
+			end
+			if rating >= (t.descendRating or 0) and rating < ascend then
+				foundTier = t
+				foundIndex = i
+				break
+			end
+		end
+
+		if not foundTier and #tiers > 0 then
+			if rating < (tiers[1].descendRating or 0) then
+				foundTier = tiers[1]
+				foundIndex = 1
+			else
+				foundTier = tiers[#tiers]
+				foundIndex = #tiers
+			end
+		end
+
+		local prevTier = (foundIndex and foundIndex > 1) and tiers[foundIndex - 1] or nil
+		local nextTier = (foundIndex and foundIndex < #tiers) and tiers[foundIndex + 1] or nil
+		return foundTier, prevTier, nextTier
+	end
+
+	-- Build the panel once
+	if not contentFrame.rankPanel then
+		local panel = CreateFrame("Frame", nil, contentFrame)
+		panel:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 0, -6)
+		panel:SetPoint("TOPRIGHT", contentFrame, "TOPRIGHT", 0, -6)
+		panel:SetHeight(100)
 		contentFrame.rankPanel = panel
 
-		panel.centerIcon = panel:CreateTexture(nil, "ARTWORK")
-		panel.centerIcon:SetSize(64, 64)
-		panel.centerIcon:SetPoint("TOP", panel, "TOP", 0, -6)
+		panel.centerIcon = panel:CreateTexture(nil, "OVERLAY")
+		panel.centerIcon:SetSize(56, 56)
+		panel.centerIcon:SetPoint("TOP", panel, "TOP", 0, -2)
 
-		panel.leftIcon = panel:CreateTexture(nil, "ARTWORK")
-		panel.leftIcon:SetSize(44, 44)
-		panel.leftIcon:SetPoint("RIGHT", panel.centerIcon, "LEFT", -60, 0)
+		panel.centerTierText = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		panel.centerTierText:SetFont(GetUnicodeSafeFont(), 14, "OUTLINE")
+		panel.centerTierText:SetPoint("TOP", panel.centerIcon, "BOTTOM", 0, -2)
 
-		panel.rightIcon = panel:CreateTexture(nil, "ARTWORK")
-		panel.rightIcon:SetSize(44, 44)
-		panel.rightIcon:SetPoint("LEFT", panel.centerIcon, "RIGHT", 60, 0)
+		panel.centerCRMMR = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		panel.centerCRMMR:SetFont(GetUnicodeSafeFont(), 12, "OUTLINE")
+		panel.centerCRMMR:SetPoint("TOP", panel.centerTierText, "BOTTOM", 0, -2)
 
+		-- Left (down) side
 		panel.leftArrow = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 		panel.leftArrow:SetFont(GetUnicodeSafeFont(), 18, "OUTLINE")
-		panel.leftArrow:SetPoint("RIGHT", panel.centerIcon, "LEFT", -18, 2)
-		panel.leftArrow:SetText("<<")
+		panel.leftArrow:SetPoint("RIGHT", panel.centerIcon, "LEFT", -8, 0)
+		panel.leftArrow:SetText(RSTATS:ColorText("<<"))
 
+		panel.leftTierText = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		panel.leftTierText:SetFont(GetUnicodeSafeFont(), 12, "OUTLINE")
+		panel.leftTierText:SetJustifyH("RIGHT")
+		panel.leftTierText:SetPoint("RIGHT", panel.leftArrow, "LEFT", -8, 10)
+
+		panel.leftReqText = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		panel.leftReqText:SetFont(GetUnicodeSafeFont(), 11, "OUTLINE")
+		panel.leftReqText:SetJustifyH("RIGHT")
+		panel.leftReqText:SetPoint("TOPRIGHT", panel.leftTierText, "BOTTOMRIGHT", 0, -2)
+
+		-- Right (up) side
 		panel.rightArrow = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 		panel.rightArrow:SetFont(GetUnicodeSafeFont(), 18, "OUTLINE")
-		panel.rightArrow:SetPoint("LEFT", panel.centerIcon, "RIGHT", 18, 2)
-		panel.rightArrow:SetText(">>")
+		panel.rightArrow:SetPoint("LEFT", panel.centerIcon, "RIGHT", 8, 0)
+		panel.rightArrow:SetText(RSTATS:ColorText(">>"))
 
-		panel.centerName = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-		panel.centerName:SetFont(GetUnicodeSafeFont(), 14, "OUTLINE")
-		panel.centerName:SetPoint("TOP", panel.centerIcon, "BOTTOM", 0, -2)
-		panel.centerName:SetJustifyH("CENTER")
+		panel.rightTierText = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		panel.rightTierText:SetFont(GetUnicodeSafeFont(), 12, "OUTLINE")
+		panel.rightTierText:SetJustifyH("LEFT")
+		panel.rightTierText:SetPoint("LEFT", panel.rightArrow, "RIGHT", 8, 10)
 
-		panel.centerValues = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-		panel.centerValues:SetFont(GetUnicodeSafeFont(), 12)
-		panel.centerValues:SetPoint("TOP", panel.centerName, "BOTTOM", 0, -2)
-		panel.centerValues:SetJustifyH("CENTER")
+		panel.rightReqText = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		panel.rightReqText:SetFont(GetUnicodeSafeFont(), 11, "OUTLINE")
+		panel.rightReqText:SetJustifyH("LEFT")
+		panel.rightReqText:SetPoint("TOPLEFT", panel.rightTierText, "BOTTOMLEFT", 0, -2)
 
-		panel.leftName = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-		panel.leftName:SetFont(GetUnicodeSafeFont(), 12, "OUTLINE")
-		panel.leftName:SetPoint("TOP", panel.leftIcon, "BOTTOM", 0, -2)
-		panel.leftName:SetJustifyH("CENTER")
-
-		panel.leftReq = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-		panel.leftReq:SetFont(GetUnicodeSafeFont(), 11)
-		panel.leftReq:SetPoint("TOP", panel.leftName, "BOTTOM", 0, -1)
-		panel.leftReq:SetJustifyH("CENTER")
-
-		panel.rightName = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-		panel.rightName:SetFont(GetUnicodeSafeFont(), 12, "OUTLINE")
-		panel.rightName:SetPoint("TOP", panel.rightIcon, "BOTTOM", 0, -2)
-		panel.rightName:SetJustifyH("CENTER")
-
-		panel.rightReq = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-		panel.rightReq:SetFont(GetUnicodeSafeFont(), 11)
-		panel.rightReq:SetPoint("TOP", panel.rightName, "BOTTOM", 0, -1)
-		panel.rightReq:SetJustifyH("CENTER")
+		-- Milestones row (icons w/ tooltips)
+		panel.milestones = CreateFrame("Frame", nil, panel)
+		panel.milestones:SetSize(260, 18)
+		panel.milestones:SetPoint("TOP", panel.centerCRMMR, "BOTTOM", 0, -6)
+		panel.milestones.icons = {}
 	end
 
-    local bracketIndex = categoryID
-    local currentTierInfo
-    if GetPersonalRatedInfo and C_PvP and C_PvP.GetPvpTierInfo then
-        local _, _, _, _, _, _, _, _, _, pvpTier = GetPersonalRatedInfo(bracketIndex)
-        currentTierInfo = pvpTier and C_PvP.GetPvpTierInfo(pvpTier) or nil
-    end
+	local panel = contentFrame.rankPanel
 
-	if not currentTierInfo then
-		panel.centerIcon:Hide()
-		panel.centerName:SetText("")
-		panel.centerValues:SetText(string.format("CR: %s\nMMR: %s", tostring(currentCR), tostring(currentMMR)))
-		panel.leftIcon:Hide(); panel.leftArrow:Hide(); panel.leftName:SetText(""); panel.leftReq:SetText("")
-		panel.rightIcon:Hide(); panel.rightArrow:Hide(); panel.rightName:SetText(""); panel.rightReq:SetText("")
-		return panel
+	-- Determine tier from *currentCR* (this fixes the "Elite in every bracket" issue).
+	local curTier, downTier, upTier = GetTierForRating(currentCR)
+
+	if curTier and curTier.icon then
+		panel.centerIcon:SetTexture(curTier.icon)
+		panel.centerIcon:Show()
+		panel.centerTierText:SetText(RSTATS:ColorText(curTier.name or ""))
+	else
+		panel.centerIcon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+		panel.centerTierText:SetText("")
 	end
 
-	panel.centerIcon:Show()
-	panel.centerIcon:SetTexture(currentTierInfo.tierIconID)
-	panel.centerName:SetText(currentTierInfo.name or "")
-	panel.centerValues:SetText(string.format("CR: %s\nMMR: %s", tostring(currentCR), tostring(currentMMR)))
+	panel.centerCRMMR:SetText(
+		ColorLabelNumber("CR: ", currentCR) .. "   " .. ColorLabelNumber("MMR: ", currentMMR)
+	)
 
-	-- Descend (left)
-	local descendInfo = currentTierInfo.descendTier and currentTierInfo.descendTier ~= 0 and C_PvP.GetPvpTierInfo(currentTierInfo.descendTier) or nil
-	if descendInfo and descendInfo.tierIconID then
-		panel.leftIcon:Show()
+	-- Left: tier you drop down to
+	if downTier and curTier and curTier.descendRating and tonumber(curTier.descendRating) and tonumber(curTier.descendRating) > 0 then
 		panel.leftArrow:Show()
-		panel.leftIcon:SetTexture(descendInfo.tierIconID)
-		panel.leftName:SetText(descendInfo.name or "")
-		local r = tonumber(currentTierInfo.descendRating) or 0
-		if r > 0 then
-            panel.leftReq:SetText(string.format("CR < %d", r))
-		else
-			panel.leftReq:SetText("")
-		end
+		panel.leftTierText:Show()
+		panel.leftReqText:Show()
+		panel.leftTierText:SetText(RSTATS:ColorText(downTier.name or ""))
+		panel.leftReqText:SetText(ColorLabelNumber("Drop below: ", curTier.descendRating))
 	else
-		panel.leftIcon:Hide(); panel.leftArrow:Hide(); panel.leftName:SetText(""); panel.leftReq:SetText("")
+		panel.leftArrow:Hide()
+		panel.leftTierText:Hide()
+		panel.leftReqText:Hide()
 	end
 
-	-- Ascend (right)
-	local ascendInfo = currentTierInfo.ascendTier and currentTierInfo.ascendTier ~= 0 and C_PvP.GetPvpTierInfo(currentTierInfo.ascendTier) or nil
-	if ascendInfo and ascendInfo.tierIconID then
-		panel.rightIcon:Show()
+	-- Right: tier you go up to
+	local ascend = curTier and tonumber(curTier.ascendRating) or 0
+	if upTier and curTier and ascend and ascend > 0 then
 		panel.rightArrow:Show()
-		panel.rightIcon:SetTexture(ascendInfo.tierIconID)
-		panel.rightName:SetText(ascendInfo.name or "")
-        -- Promotion threshold is on the CURRENT tier (same logic Blizzard uses in WeeklyRewards)
-        local r = tonumber(currentTierInfo.ascendRating) or 0
-		if r > 0 then
-            panel.rightReq:SetText(string.format("CR ≥ %d", r))
-		else
-			panel.rightReq:SetText("")
-		end
+		panel.rightTierText:Show()
+		panel.rightReqText:Show()
+		panel.rightTierText:SetText(RSTATS:ColorText(upTier.name or ""))
+		panel.rightReqText:SetText(ColorLabelNumber("Reach: ", ascend))
 	else
-		panel.rightIcon:Hide(); panel.rightArrow:Hide(); panel.rightName:SetText(""); panel.rightReq:SetText("")
+		panel.rightArrow:Hide()
+		panel.rightTierText:Hide()
+		panel.rightReqText:Hide()
 	end
 
-    -- Return the panel so DisplayHistory can anchor below it
-    return panel
+	-- Milestone icons per bracket (base game icons via achievements)
+	local faction = UnitFactionGroup("player")
+	local hotXAchID = (faction == "Alliance") and 6942 or 6941
+	local soloRbgR1AchID = (faction == "Alliance") and 41357 or 41356
+
+	local milestoneByCategory = {
+		[9] = { -- Solo RBG (Blitz)
+			{ name = "Strategist", achID = 41363, tint = {0.25, 1.00, 0.25}, desc = "2400+ 25 Wins" },
+			{ name = "R1",         achID = soloRbgR1AchID, tint = nil,                 desc = "50 Wins and Top 0.1% of Season" },
+		},
+		[7] = { -- Solo Shuffle
+			{ name = "Legend",     achID = 41358, tint = {1.00, 0.55, 0.10}, desc = "2400+ 100 Wins" },
+			{ name = "R1",         achID = 41355, tint = nil,                 desc = "50 Wins and Top 0.1% of Season" },
+		},
+		[2] = { -- 3v3
+			{ name = "Gladiator",  achID = 41032, tint = {1.00, 0.25, 0.85}, desc = "2400+ 50 Wins" },
+			{ name = "Three's Company", achID = 5267, tint = nil,            desc = "CR: 2700" },
+			{ name = "R1",         achID = 41354, tint = nil,                 desc = "50 Wins and Top 0.1% of Season" },
+		},
+		[4] = { -- RBG
+			{ name = "HotX",       achID = hotXAchID, tint = nil,             desc = "50 Wins and Top 0.5% of Season" },
+		},
+	}
+
+	local milestones = milestoneByCategory[categoryID] or {}
+
+	-- create / update milestone icon buttons
+	for i = 1, math.max(#milestones, #panel.milestones.icons) do
+		local btn = panel.milestones.icons[i]
+		local m = milestones[i]
+
+		if not btn then
+			btn = CreateFrame("Button", nil, panel.milestones)
+			btn:SetSize(18, 18)
+			btn.icon = btn:CreateTexture(nil, "OVERLAY")
+			btn.icon:SetAllPoints()
+			panel.milestones.icons[i] = btn
+		end
+
+		if m then
+			local _, _, _, _, _, _, _, _, _, icon = GetAchievementInfo(m.achID)
+			btn.icon:SetTexture(icon or "Interface\\Icons\\INV_Misc_QuestionMark")
+
+			if m.tint and type(m.tint) == "table" then
+				btn.icon:SetVertexColor(m.tint[1] or 1, m.tint[2] or 1, m.tint[3] or 1)
+			else
+				btn.icon:SetVertexColor(1, 1, 1)
+			end
+
+			btn:ClearAllPoints()
+			if i == 1 then
+				btn:SetPoint("LEFT", panel.milestones, "LEFT", 0, 0)
+			else
+				btn:SetPoint("LEFT", panel.milestones.icons[i - 1], "RIGHT", 6, 0)
+			end
+			btn:Show()
+
+			btn:SetScript("OnEnter", function(self)
+				GameTooltip:SetOwner(self, "ANCHOR_TOP")
+				GameTooltip:AddLine(RSTATS:ColorText(m.name), 1, 1, 1)
+				GameTooltip:AddLine(m.desc, 1, 1, 1, true)
+				GameTooltip:Show()
+			end)
+			btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+		else
+			btn:Hide()
+		end
+	end
+
+	-- Return the panel so DisplayHistory can anchor below it
+	return panel
 end
 
 ----------------------------------
