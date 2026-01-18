@@ -1473,8 +1473,8 @@ if not EnsureSpecHistory then
                         table.insert(bucket[specID], entry)
                     end
                 end
+                bucket._backfilled[specID] = true
             end
-            bucket._backfilled[specID] = true
         end
 
         return bucket[specID]
