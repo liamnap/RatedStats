@@ -4203,6 +4203,70 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
         return RSTATS:ColorText(label) .. "|cffffffff" .. tostring(num) .. "|r"
     end
 
+    local function ReachCR(cr)
+        return LabelNum("Reach: ", cr) .. " " .. RSTATS:ColorText("CR")
+    end
+
+    local function DropCR(cr)
+        return LabelNum("Drop below: ", cr) .. " " .. RSTATS:ColorText("CR")
+    end
+
+    local function ReachAndWins(crReq, winsReq)
+        -- Reach: 2400 CR and 25 Wins above 2400 CR
+        return LabelNum("Reach: ", crReq) .. " " .. RSTATS:ColorText("CR")
+            .. " " .. RSTATS:ColorText("and ")
+            .. "|cffffffff" .. tostring(winsReq) .. "|r"
+            .. " " .. RSTATS:ColorText("Wins above ")
+            .. "|cffffffff" .. tostring(crReq) .. "|r"
+            .. " " .. RSTATS:ColorText("CR")
+    end
+
+    local function ProgressLine(cur, max)
+        return RSTATS:ColorText("Progress: ")
+            .. "|cffffffff" .. tostring(cur) .. "|r"
+            .. RSTATS:ColorText(" / ")
+            .. "|cffffffff" .. tostring(max) .. "|r"
+    end
+
+    local function CountWinsAboveCR(bracketID, crReq, winsMode)
+        local key = categoryMappings[bracketID]
+        local tbl = key and Database[key]
+        if type(tbl) ~= "table" then return 0 end
+
+        crReq = tonumber(crReq) or 0
+        local total = 0
+
+        for _, e in ipairs(tbl) do
+            local ecr = tonumber(e and e.cr) or 0
+            if ecr >= crReq then
+                if winsMode == "ss_rounds" then
+                    -- Solo Shuffle: we store per-player rounds won as playerData.wins
+                    local added = 0
+                    if e.playerStats then
+                        for _, ps in ipairs(e.playerStats) do
+                            if ps and ps.name == playerName then
+                                added = tonumber(ps.wins) or 0
+                                break
+                            end
+                        end
+                    end
+                    if added <= 0 then
+                        added = tonumber(e.roundsWon) or 0
+                    end
+                    total = total + added
+                else
+                    -- Other brackets: count match wins from friendlyWinLoss
+                    local wl = e and e.friendlyWinLoss
+                    if type(wl) == "string" and wl:find("W", 1, true) then
+                        total = total + 1
+                    end
+                end
+            end
+        end
+
+        return total
+    end
+
     -- ------------------------------------------------------------------
     -- PvP Tier ladder (Combatant I -> Elite) using fixed CR thresholds.
     -- This matches your filter expectations and prevents "Elite everywhere".
@@ -4275,20 +4339,19 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
                     name = "Rank 1",
                     icon = ICON_R1,
                     tint = nil,
-                    lines = {
-                        LabelNum("Wins: ", 50),
-                        RSTATS:ColorText("Top 0.1% of Season"),
-                    }
+                    reqCR = 2400,
+                    reqWins = 50,
+                    topText = "Top 0.1% of Season",
+                    winsMode = "match_wins",
                 }
             end
             return {
                 name = "Strategist",
                 icon = ICON_R1,
                 tint = TINT_STRAT,
-                lines = {
-                    LabelNum("CR Reach: ", 2400),
-                    LabelNum("Wins: ", 25),
-                }
+                reqCR = 2400,
+                reqWins = 25,
+                winsMode = "match_wins",
             }
         end
 
@@ -4298,20 +4361,19 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
                     name = "Rank 1",
                     icon = ICON_R1,
                     tint = nil,
-                    lines = {
-                        LabelNum("Wins: ", 50),
-                        RSTATS:ColorText("Top 0.1% of Season"),
-                    }
+                    reqCR = 2400,
+                    reqWins = 50,
+                    topText = "Top 0.1% of Season",
+                    winsMode = "ss_rounds",
                 }
             end
             return {
                 name = "Legend",
                 icon = ICON_R1,
                 tint = TINT_LEG,
-                lines = {
-                    LabelNum("CR Reach: ", 2400),
-                    LabelNum("Wins: ", 100),
-                }
+                reqCR = 2400,
+                reqWins = 100,
+                winsMode = "ss_rounds",
             }
         end
 
@@ -4321,10 +4383,10 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
                     name = "Rank 1",
                     icon = ICON_R1,
                     tint = nil,
-                    lines = {
-                        LabelNum("Wins: ", 50),
-                        RSTATS:ColorText("Top 0.1% of Season"),
-                    }
+                    reqCR = 2700,
+                    reqWins = 50,
+                    topText = "Top 0.1% of Season",
+                    winsMode = "match_wins",
                 }
             end
             if cr >= 2400 then
@@ -4332,19 +4394,17 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
                     name = "Three's Company",
                     icon = ICON_3C,
                     tint = nil,
-                    lines = {
-                        LabelNum("CR Reach: ", 2700),
-                    }
+                    reqCR = 2700,
+
                 }
             end
             return {
                 name = "Gladiator",
                 icon = ICON_R1,
                 tint = TINT_GLAD,
-                lines = {
-                    LabelNum("CR Reach: ", 2400),
-                    LabelNum("Wins: ", 50),
-                }
+                reqCR = 2400,
+                reqWins = 50,
+                winsMode = "match_wins",
             }
         end
 
@@ -4355,10 +4415,9 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
                 name = "Hero",
                 icon = icon,
                 tint = nil,
-                lines = {
-                    LabelNum("Wins: ", 50),
-                    RSTATS:ColorText("Top 0.5% of Season"),
-                }
+                reqWins = 50,
+                topText = "Top 0.5% of Season",
+                winsMode = "match_wins",
             }
         end
 
@@ -4450,11 +4509,8 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
         SetIcon(panel.leftIcon, downTier.icon, nil)
         panel.leftTierText:SetText(RSTATS:ColorText(downTier.name))
 
-        local lines = { LabelNum("Drop below: ", curTier.dropBelow), "CR" }
-        if tonumber(currentMMR) and tonumber(currentMMR) > 0 then
-            lines[#lines + 1] = LabelNum("MMR Drop below: ", curTier.dropBelow)
-        end
-        panel.leftReqText:SetText(table.concat(lines, "\n"))
+        local lines = { LabelNum("Drop below: ", curTier.dropBelow), RSTATS:ColorText("CR") }
+        panel.leftReqText:SetText(DropCR(curTier.dropBelow))
     else
         panel.leftIcon:Hide()
         panel.leftArrow:Hide()
@@ -4472,7 +4528,33 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
 
         SetIcon(panel.rightIcon, milestone.icon, milestone.tint)
         panel.rightTierText:SetText(RSTATS:ColorText(milestone.name))
-        panel.rightReqText:SetText(table.concat(milestone.lines or {}, "\n"))
+
+        local lines = {}
+
+        -- CR-gated milestones (Strategist/Legend/Glad/R1/3's Company)
+        if milestone.reqCR and tonumber(milestone.reqCR) and tonumber(milestone.reqCR) > 0 then
+            if milestone.reqWins and tonumber(milestone.reqWins) and tonumber(milestone.reqWins) > 0 then
+                local prog = CountWinsAboveCR(categoryID, milestone.reqCR, milestone.winsMode)
+                lines[#lines + 1] = ReachAndWins(milestone.reqCR, milestone.reqWins)
+                lines[#lines + 1] = ProgressLine(prog, milestone.reqWins)
+                if milestone.topText then
+                    lines[#lines + 1] = RSTATS:ColorText(milestone.topText)
+                end
+            else
+                lines[#lines + 1] = ReachCR(milestone.reqCR)
+            end
+
+        -- Percent/wins-only milestone (Hero)
+        elseif milestone.reqWins and tonumber(milestone.reqWins) and tonumber(milestone.reqWins) > 0 then
+            local prog = CountWinsAboveCR(categoryID, 0, milestone.winsMode)
+            lines[#lines + 1] = LabelNum("Wins: ", milestone.reqWins)
+            if milestone.topText then
+                lines[#lines + 1] = RSTATS:ColorText(milestone.topText)
+            end
+            lines[#lines + 1] = ProgressLine(prog, milestone.reqWins)
+        end
+
+        panel.rightReqText:SetText(table.concat(lines, "\n"))
     elseif upTier and upTier.icon and curTier and curTier.reach and tonumber(curTier.reach) and tonumber(curTier.reach) > 0 then
         panel.rightIcon:Show()
         panel.rightArrow:Show()
@@ -4482,11 +4564,7 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
         SetIcon(panel.rightIcon, upTier.icon, nil)
         panel.rightTierText:SetText(RSTATS:ColorText(upTier.name))
 
-        local lines = { LabelNum("CR Reach: ", curTier.reach) }
-        if tonumber(currentMMR) and tonumber(currentMMR) > 0 then
-            lines[#lines + 1] = LabelNum("MMR Reach: ", curTier.reach)
-        end
-        panel.rightReqText:SetText(table.concat(lines, "\n"))
+        panel.rightReqText:SetText(ReachCR(curTier.reach))
     else
         panel.rightIcon:Hide()
         panel.rightArrow:Hide()
