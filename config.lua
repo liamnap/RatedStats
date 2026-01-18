@@ -2868,11 +2868,11 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 
         return {
             (match.friendlyWinLoss or "-"),
+            duoText,
             scoreText,
             (mapDisplay or "N/A"),
             date("%a %d %b %Y - %H:%M:%S", match.endTime) or "N/A",
             (match.duration or "N/A"),
-            duoText,
             "",
             (match.teamFaction or "N/A"),
             (match.friendlyRaidLeader or "N/A"),
