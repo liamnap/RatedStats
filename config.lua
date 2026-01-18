@@ -794,6 +794,31 @@ local function BuildObjectiveTextFromStats(stats)
     return (#parts > 0) and table.concat(parts, " / ") or "-"
 end
 
+-- RBGB: if queued as a 2-man home party, return the partner Name-Realm, otherwise nil.
+local function GetRBGBDuoPartnerNameRealm()
+    if not IsInGroup(LE_PARTY_CATEGORY_HOME) then return nil end
+    if IsInRaid(LE_PARTY_CATEGORY_HOME) then return nil end
+
+    local n = GetNumGroupMembers(LE_PARTY_CATEGORY_HOME) or 0
+    if n ~= 2 then return nil end
+
+    local myName = UnitName("player")
+    for i = 1, 4 do
+        local unit = "party" .. i
+        if UnitExists(unit) and UnitIsPlayer(unit) then
+            local name, realm = UnitFullName(unit)
+            if name and name ~= myName then
+                if not realm or realm == "" then
+                    realm = GetRealmName()
+                end
+                return name .. "-" .. realm
+            end
+        end
+    end
+
+    return nil
+end
+
 local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categoryName, categoryID, startTime)
     local mapID = GetCurrentMapID()
     local mapName = GetMapName(mapID) or "Unknown"
@@ -1400,6 +1425,11 @@ function GetInitialCRandMMR()
 		local playedField = "Playedfor" .. categoryName
 		Database[playedField] = played
 
+        local duoPartner = nil
+        if categoryID == 9 then -- Solo RBG (RBGB)
+            duoPartner = GetRBGBDuoPartnerNameRealm()
+        end
+
         -- Create an entry with the current timestamp
         local entry = {
 			matchID = 1,
@@ -1412,6 +1442,7 @@ function GetInitialCRandMMR()
             mapName = "N/A",
             endTime = GetTimestamp(),
             duration = "N/A",
+            duoPartner = duoPartner,
             teamFaction = UnitFactionGroup("player"),
             friendlyRaidLeader = playerFullName, -- Set to the player's full name
             friendlyAvgCR = cr,
@@ -2143,6 +2174,11 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 		friendlyWinLoss = "~   D"
 	end
 
+    local duoPartner = nil
+    if categoryID == 9 then -- Solo RBG (RBGB)
+        duoPartner = GetRBGBDuoPartnerNameRealm()
+    end
+
     local entry = {
         matchID = appendHistoryMatchID,
         isSoloShuffle = C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() or false,
@@ -2154,6 +2190,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
         mapName = mapName,
         endTime = endTime,
         duration = duration,
+        duoPartner = duoPartner,
 		damp = damp,
         teamFaction = teamFaction,
         myTeamIndex = myTeamIndex,
@@ -2766,8 +2803,10 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
     local scoreHeaderText = (tabID == 2 or tabID == 3) and "" or "Score"
 	local c = function(text) return RSTATS:ColorText(text) end
     local factionHeaderText = (tabID == 1 or tabID == 2 or tabID == 3) and "Team" or "Faction"
+    local duoHeaderText = (tabID == 5) and c("Duo") or ""
+
 	local headers = {
-		c("Win/Loss"), c(scoreHeaderText), c("Map"), c("Match End Time"), c("Duration"), "", "",
+		c("Win/Loss"), c(scoreHeaderText), c("Map"), c("Match End Time"), c("Duration"), duoHeaderText, "", "",
 		c(factionHeaderText), c("Raid Leader"), c("Avg CR"), c("MMR"), c("Damage"), c("Healing"), c("Avg Rat Chg"), "",
 		 "", c(factionHeaderText), c("Raid Leader"), c("Avg CR"), c("MMR"), c("Damage"), c("Healing"), c("Avg Rat Chg"), c("Note")
 	}
@@ -2822,13 +2861,18 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 		
 		local mapDisplay = mapShortName[match.mapName] or match.mapName or "N/A"
 
+        local duoText = ""
+        if tabID == 5 then
+            duoText = match.duoPartner or "Solo"
+        end
+
         return {
             (match.friendlyWinLoss or "-"),
             scoreText,
             (mapDisplay or "N/A"),
             date("%a %d %b %Y - %H:%M:%S", match.endTime) or "N/A",
             (match.duration or "N/A"),
-            "",
+            duoText,
             "",
             (match.teamFaction or "N/A"),
             (match.friendlyRaidLeader or "N/A"),
