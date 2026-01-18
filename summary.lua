@@ -2109,12 +2109,9 @@ function Summary:Refresh()
         if bracket.bracketID == 7 or bracket.bracketID == 9 then
             local sid = GetActiveSpecID()
             if sid then
-                local bySpecKey = (bracket.bracketID == 7) and "SoloShuffleHistoryBySpec" or "SoloRBGHistoryBySpec"
                 if RSTATS and RSTATS.GetHistoryForTab then
-                    -- Force-init the spec bucket (creates initial row) via core helper
-                    RSTATS:GetHistoryForTab(bracket.tabID)
+                    history = RSTATS:GetHistoryForTab(bracket.tabID) or {}
                 end
-                history = (perChar[bySpecKey] and perChar[bySpecKey][sid]) or {}
             end
         end
         local seasonMatches = {}
