@@ -4266,73 +4266,12 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
 		panel.rightReq:SetJustifyH("CENTER")
 	end
 
-	-- Use last-match values where possible (they're already merged into currentCR/currentMMR above)
-	local baseRating = tonumber(currentCR) or 0
-	if baseRating <= 0 then
-		baseRating = tonumber(currentMMR) or 0
-	end
-
-	local bracketIndex = categoryID
-
-	local function GetTierIDForRating(rating, bracket)
-		if not C_PvP or not C_PvP.GetPvpTierID or not C_PvP.GetPvpTierInfo then
-			return nil
-		end
-
-		rating = tonumber(rating) or 0
-		local tiersByID = {}
-		for tierEnum = 0, 60 do
-			local tierID = C_PvP.GetPvpTierID(tierEnum, bracket)
-			if tierID then
-				local info = C_PvP.GetPvpTierInfo(tierID)
-				if info then
-					tiersByID[tierID] = info
-				end
-			end
-		end
-
-		-- Find the lowest tier (no valid descendTier within the tier set)
-		local startID
-		for id, info in pairs(tiersByID) do
-			local prev = info.descendTier
-			if not prev or prev == 0 or not tiersByID[prev] then
-				startID = id
-				break
-			end
-		end
-		if not startID then
-			return nil
-		end
-
-		-- Walk upward via ascendTier to build an ordered chain
-		local ordered, seen = {}, {}
-		local cur = startID
-		while cur and cur ~= 0 and not seen[cur] do
-			seen[cur] = true
-			table.insert(ordered, cur)
-			local nextID = tiersByID[cur].ascendTier
-			if not nextID or nextID == 0 or not tiersByID[nextID] then
-				break
-			end
-			cur = nextID
-		end
-
-		local chosen = ordered[1]
-		for idx = 1, #ordered do
-			local info = tiersByID[ordered[idx]]
-			local nextInfo = tiersByID[ordered[idx + 1]]
-			local lower = tonumber(info and info.ascendRating) or 0
-			local upper = nextInfo and (tonumber(nextInfo.ascendRating) or 0) or math.huge
-			if upper == 0 then upper = math.huge end
-			if rating >= lower and rating < upper then
-				chosen = ordered[idx]
-			end
-		end
-		return chosen
-	end
-
-	local currentTierID = GetTierIDForRating(baseRating, bracketIndex)
-	local currentTierInfo = currentTierID and C_PvP.GetPvpTierInfo(currentTierID) or nil
+    local bracketIndex = categoryID
+    local currentTierInfo
+    if GetPersonalRatedInfo and C_PvP and C_PvP.GetPvpTierInfo then
+        local _, _, _, _, _, _, _, _, _, pvpTier = GetPersonalRatedInfo(bracketIndex)
+        currentTierInfo = pvpTier and C_PvP.GetPvpTierInfo(pvpTier) or nil
+    end
 
 	if not currentTierInfo then
 		panel.centerIcon:Hide()
@@ -4357,11 +4296,7 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
 		panel.leftName:SetText(descendInfo.name or "")
 		local r = tonumber(currentTierInfo.descendRating) or 0
 		if r > 0 then
-			if (tonumber(currentMMR) or 0) > 0 then
-				panel.leftReq:SetText(string.format("CR < %d\nMMR < %d", r, r))
-			else
-				panel.leftReq:SetText(string.format("CR < %d", r))
-			end
+            panel.leftReq:SetText(string.format("CR < %d", r))
 		else
 			panel.leftReq:SetText("")
 		end
@@ -4376,13 +4311,10 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
 		panel.rightArrow:Show()
 		panel.rightIcon:SetTexture(ascendInfo.tierIconID)
 		panel.rightName:SetText(ascendInfo.name or "")
-		local r = tonumber(ascendInfo.ascendRating) or 0
+        -- Promotion threshold is on the CURRENT tier (same logic Blizzard uses in WeeklyRewards)
+        local r = tonumber(currentTierInfo.ascendRating) or 0
 		if r > 0 then
-			if (tonumber(currentMMR) or 0) > 0 then
-				panel.rightReq:SetText(string.format("CR ≥ %d\nMMR ≥ %d", r, r))
-			else
-				panel.rightReq:SetText(string.format("CR ≥ %d", r))
-			end
+            panel.rightReq:SetText(string.format("CR ≥ %d", r))
 		else
 			panel.rightReq:SetText("")
 		end
