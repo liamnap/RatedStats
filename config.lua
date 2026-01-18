@@ -2232,10 +2232,21 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
         duoPartner = GetRBGBDuoPartnerNameRealm()
     end
 
+    -- Track the player's active spec for spec-based rated ladders (and spec-based UI display).
+    local mySpecID, mySpecName
+    do
+        local specIndex = GetSpecialization()
+        if specIndex then
+            mySpecID, mySpecName = GetSpecializationInfo(specIndex)
+        end
+    end
+
     local entry = {
         matchID = appendHistoryMatchID,
         isSoloShuffle = C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() or false,
         timestamp = endTime,
+        specID = mySpecID,
+        specName = mySpecName,
         cr = cr,
         mmr = mmr,
         isInitial = false,
@@ -4291,9 +4302,47 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
     -- categoryID here is the rated bracket index (1=2v2, 2=3v3, 4=RBG, 7=Solo Shuffle, 9=Blitz)
     -- We prefer the last match entry for CR/MMR display (most reliable), but tier icons are derived from the same bracket.
 
-    local currentCR  = "0"
-    local currentMMR = "0"
-	
+    local currentCR  = 0
+    local currentMMR = 0
+
+    local function GetActiveSpecID()
+        local specIndex = GetSpecialization()
+        if not specIndex then return nil end
+        return select(1, GetSpecializationInfo(specIndex))
+    end
+
+    local function ResolveEntrySpecID(entry)
+        if not entry or type(entry) ~= "table" then return nil end
+        if entry.specID then return entry.specID end
+        if type(entry.playerStats) ~= "table" then return nil end
+
+        for _, stats in ipairs(entry.playerStats) do
+            if stats and stats.name == playerName then
+                local classTag = stats.classToken
+                local specName = stats.spec
+                if classTag and specName and RSTATS and RSTATS.Roles
+                    and RSTATS.Roles[classTag] and RSTATS.Roles[classTag][specName]
+                    and RSTATS.Roles[classTag][specName].specID
+                then
+                    entry.specID = RSTATS.Roles[classTag][specName].specID
+                    return entry.specID
+                end
+                break
+            end
+        end
+
+        return nil
+    end
+
+    local activeSpecID = GetActiveSpecID()
+
+    -- Live rating: updates immediately when the player swaps spec.
+    do
+        local crLive, mmrLive = GetCRandMMR(categoryID)
+        currentCR  = tonumber(crLive)  or 0
+        currentMMR = tonumber(mmrLive) or 0
+    end
+
     local categoryMappings = {
         [1] = "v2History",
         [2] = "v3History",
@@ -4309,7 +4358,13 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
     -- 1) First, find the entry with the highest matchID
     if historyTable and #historyTable > 0 then
         for _, entry in ipairs(historyTable) do
-            if entry.matchID and (not highestMatchID or entry.matchID > highestMatchID) then
+            local ok = true
+            if activeSpecID then
+                local sid = ResolveEntrySpecID(entry)
+                ok = (sid == activeSpecID)
+            end
+
+            if ok and entry.matchID and (not highestMatchID or entry.matchID > highestMatchID) then
                 highestMatchID = entry.matchID
                 highestMatchEntry = entry
             end
@@ -4318,12 +4373,15 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
 
     -- 2) If we found an entry with the highest matchID, get the stats from that match
     if highestMatchEntry then
-        currentCR = tonumber(highestMatchEntry.cr) or currentCR
+        -- Only use history as a fallback. Live CR is the truth for spec-based ratings.
+        if not currentCR or currentCR == 0 then
+            currentCR = tonumber(highestMatchEntry.cr) or currentCR
+        end
         local teamMMR = tonumber(highestMatchEntry.friendlyMMR)
         if teamMMR and teamMMR > 0 then
-            currentMMR = teamMMR
+            if not currentMMR or currentMMR <= 0 then currentMMR = teamMMR end
         else
-            currentMMR = tonumber(highestMatchEntry.mmr) or currentMMR
+            if not currentMMR or currentMMR <= 0 then currentMMR = tonumber(highestMatchEntry.mmr) or currentMMR end
         end
 
         local isArena = (categoryID == 1 or categoryID == 2)
@@ -4333,8 +4391,9 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
                 if stats.name == playerName then
                     local mmr = tonumber(stats.postmatchMMR)
                     local cr  = tonumber(stats.newrating)
-                    if cr then currentCR = cr end
-                    if mmr and mmr > 0 then currentMMR = mmr end
+                    -- Again: do not override a valid live CR/MMR.
+                    if (not currentCR or currentCR == 0) and cr then currentCR = cr end
+                    if (not currentMMR or currentMMR <= 0) and mmr and mmr > 0 then currentMMR = mmr end
                     break
                 end
             end
