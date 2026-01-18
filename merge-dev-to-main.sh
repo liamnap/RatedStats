@@ -179,6 +179,10 @@ git checkout -q "${main_branch}"
 
 echo "[5b] Applying allowed files from ${remote}/${dev_branch}..."
 
+# Pre-calc the next main tag so we can stamp it into the TOC BEFORE committing.
+tag="$(next_main_tag)"
+echo "Next main tag (will be stamped into TOC + used as git tag): ${tag}"
+
 # We are NOT merging. We are copying the allowed paths from dev onto main.
 for p in "${allowed[@]}"; do
   if git cat-file -e "${remote}/${dev_branch}:${p}" >/dev/null 2>&1; then
@@ -194,6 +198,24 @@ for p in "${allowed[@]}"; do
   fi
 done
 
+# Stamp the release version into the root TOC and stage it (even if dev didn't touch it).
+# This makes in-game version comparisons possible (Details/BGE-style peer compare).
+if [[ -f "RatedStats.toc" ]]; then
+  if grep -qE '^##[[:space:]]*Version:' "RatedStats.toc"; then
+    if command -v perl >/dev/null 2>&1; then
+      perl -pi -e "s/^##\\s*Version:\\s*.*\$/## Version: ${tag}/m" "RatedStats.toc"
+    else
+      sed -i "s/^##[[:space:]]*Version:.*$/## Version: ${tag}/" "RatedStats.toc"
+    fi
+  else
+    # If Version line is missing, insert it at the top.
+    { echo "## Version: ${tag}"; cat "RatedStats.toc"; } > "RatedStats.toc.tmp" && mv "RatedStats.toc.tmp" "RatedStats.toc"
+  fi
+  git add -- "RatedStats.toc"
+else
+  echo "WARN: RatedStats.toc not found; skipping TOC version stamp."
+fi
+
 if git diff --cached --quiet; then
   echo "Nothing staged after promotion. Exiting."
   git checkout -q "${orig_branch}"
@@ -206,8 +228,7 @@ git commit -m "${merge_msg}"
 
 echo
 echo "[6/7] Tagging main with next version (based on latest main tag)..."
-tag="$(next_main_tag)"
-echo "Next main tag: ${tag}"
+echo "Tagging main: ${tag}"
 
 # RatedStats releases commonly use lightweight tags; keep that behavior.
 git tag "${tag}"
