@@ -4,9 +4,62 @@ local addonName, RSTATS = ...
 -- Uses Blizzard's Settings API (Dragonflight+).
 
 local CATEGORY_NAME = "Rated Stats"
+local RS_COLOR = "|cffb69e86"
+local function RSPrint(msg)
+    print(RS_COLOR .. msg .. "|r")
+end
 
 local function GetPlayerKey()
     return UnitName("player") .. "-" .. GetRealmName()
+end
+
+-- "Update available" detection (Details/BGE style):
+-- You cannot check CurseForge from inside WoW. You can only compare versions seen from other players via addon comms.
+local UPDATECHECK_PREFIX_MAIN = "RSTATS_VER"
+local UPDATECHECK_PREFIX_ACH  = "RSTATS_ACHV"
+
+local function ParseTagVersion(v)
+    if type(v) ~= "string" then return nil end
+    v = v:gsub("%s+", "")
+
+    -- Accept: v3.12 / v3.12-beta / 3.12
+    local major, build, suffix = v:match("^v?(%d+)%.(%d+)(.*)$")
+    if not major or not build then
+        return nil
+    end
+
+    major = tonumber(major)
+    build = tonumber(build)
+    if not major or not build then
+        return nil
+    end
+
+    local isBeta = false
+    if suffix and suffix ~= "" then
+        isBeta = (suffix:lower():find("beta", 1, true) ~= nil)
+    end
+
+    return major, build, isBeta
+end
+
+local function IsNewerVersion(theirV, myV)
+    local tMaj, tBuild, tBeta = ParseTagVersion(theirV)
+    local mMaj, mBuild, mBeta = ParseTagVersion(myV)
+    if not tMaj or not mMaj then return false end
+
+    if tMaj ~= mMaj then return tMaj > mMaj end
+    if tBuild ~= mBuild then return tBuild > mBuild end
+
+    -- Same numeric: release beats beta
+    if mBeta and not tBeta then return true end
+    return false
+end
+
+local function GetSendScope()
+    if IsInGroup(LE_PARTY_CATEGORY_INSTANCE) then return "INSTANCE_CHAT" end
+    if IsInRaid() then return "RAID" end
+    if IsInGroup() then return "PARTY" end
+    return nil
 end
 
 local function GetPlayerDB()
@@ -49,7 +102,7 @@ local function MaybeAnnounceVersion(db, enabledKey, lastSeenKey, addon, label)
         return
     end
 
-    print(string.format("|cffb69e86%s|r updated: %s", label, current))
+    RSPrint(string.format("%s updated: %s", label, current))
     db.settings[lastSeenKey] = current
 end
 
@@ -72,7 +125,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             "Tell me of new updates",
             true
         )
-        Settings.CreateCheckbox(category, setting, "Will announce on login if updates are available.")
+        Settings.CreateCheckbox(category, setting, "Will announce when a newer version is seen in your group (and when you have updated).")
     end
 
     Settings.RegisterAddOnCategory(category)
@@ -134,7 +187,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 "Tell me of new updates",
                 true
             )
-            Settings.CreateCheckbox(subcategory, setting, "Will announce on login if updates are available.")
+            Settings.CreateCheckbox(subcategory, setting, "Will announce when a newer version is seen in your group (and when you have updated).")
         end
 
         do
@@ -252,4 +305,109 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             MaybeAnnounceVersion(db2, "achievTellUpdates", "achievLastSeenVersion", "RatedStats_Achiev", "Rated Stats - Achievements")
         end
     end)
+
+    -- Comms-based "update available" checker
+    local ver = CreateFrame("Frame")
+    ver:RegisterEvent("CHAT_MSG_ADDON")
+    ver:RegisterEvent("GROUP_ROSTER_UPDATE")
+    ver:RegisterEvent("PLAYER_ENTERING_WORLD")
+
+    local lastSendAt = 0
+    local announcedMainFor = nil
+    local announcedAchFor  = nil
+
+    local function SendMyVersions()
+        if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then return end
+
+        local scope = GetSendScope()
+        if not scope then return end
+
+        local now = GetTime()
+        if (now - lastSendAt) < 15 then return end
+        lastSendAt = now
+
+        local myMainVer = C_AddOns.GetAddOnMetadata("RatedStats", "Version") or ""
+        if myMainVer ~= "" then
+            C_ChatInfo.SendAddonMessage(UPDATECHECK_PREFIX_MAIN, myMainVer, scope)
+        end
+
+        if C_AddOns.GetAddOnEnableState("RatedStats_Achiev", nil) ~= 0 then
+            local myAchVer = C_AddOns.GetAddOnMetadata("RatedStats_Achiev", "Version") or ""
+            if myAchVer ~= "" then
+                C_ChatInfo.SendAddonMessage(UPDATECHECK_PREFIX_ACH, myAchVer, scope)
+            end
+        end
+    end
+
+    local function HandleIncoming(prefix, msg, sender)
+        local db3 = GetPlayerDB()
+        if not db3 then return end
+        db3.settings = db3.settings or {}
+
+        if prefix == UPDATECHECK_PREFIX_MAIN then
+            if not db3.settings.mainTellUpdates then return end
+
+            local myMainVer = C_AddOns.GetAddOnMetadata("RatedStats", "Version") or ""
+            if not ParseTagVersion(myMainVer) then return end
+            if not ParseTagVersion(msg) then return end
+
+            if not IsNewerVersion(msg, myMainVer) then return end
+
+            local stored = db3.settings.mainNewestSeenVersion
+            if stored and ParseTagVersion(stored) and not IsNewerVersion(msg, stored) then
+                return
+            end
+            db3.settings.mainNewestSeenVersion = msg
+
+            if announcedMainFor ~= msg then
+                RSPrint(string.format("Rated Stats update available: you have %s, seen %s from %s.", myMainVer, msg, sender or "someone"))
+                announcedMainFor = msg
+            end
+
+        elseif prefix == UPDATECHECK_PREFIX_ACH then
+            if C_AddOns.GetAddOnEnableState("RatedStats_Achiev", nil) == 0 then return end
+            if not db3.settings.achievTellUpdates then return end
+
+            local myAchVer = C_AddOns.GetAddOnMetadata("RatedStats_Achiev", "Version") or ""
+            if not ParseTagVersion(myAchVer) then return end
+            if not ParseTagVersion(msg) then return end
+
+            if not IsNewerVersion(msg, myAchVer) then return end
+
+            local stored = db3.settings.achievNewestSeenVersion
+            if stored and ParseTagVersion(stored) and not IsNewerVersion(msg, stored) then
+                return
+            end
+            db3.settings.achievNewestSeenVersion = msg
+
+            if announcedAchFor ~= msg then
+                RSPrint(string.format("Rated Stats - Achievements update available: you have %s, seen %s from %s.", myAchVer, msg, sender or "someone"))
+                announcedAchFor = msg
+            end
+        end
+    end
+
+    ver:SetScript("OnEvent", function(_, event, prefix, msg, _, sender)
+        if event == "CHAT_MSG_ADDON" then
+            if prefix ~= UPDATECHECK_PREFIX_MAIN and prefix ~= UPDATECHECK_PREFIX_ACH then return end
+            if type(msg) ~= "string" or msg == "" then return end
+            HandleIncoming(prefix, msg, sender)
+            return
+        end
+
+        -- group/zone changes: broadcast our version (throttled)
+        SendMyVersions()
+    end)
+
+    if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
+        C_ChatInfo.RegisterAddonMessagePrefix(UPDATECHECK_PREFIX_MAIN)
+        C_ChatInfo.RegisterAddonMessagePrefix(UPDATECHECK_PREFIX_ACH)
+    end
+
+    if C_Timer and C_Timer.After then
+        C_Timer.After(2, SendMyVersions)
+    else
+        SendMyVersions()
+    end
 end)
+
