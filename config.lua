@@ -4268,42 +4268,24 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
     end
 
     -- ------------------------------------------------------------------
-    -- PvP Tier ladder (Combatant I -> Elite) using fixed CR thresholds.
-    -- This matches your filter expectations and prevents "Elite everywhere".
-    -- Icons/tints are the same base-game paths you already use in Achiev.
+    -- PvP Tier (Combatant -> Elite) MUST come from the API (same as filters).
+    -- We use pvpTier from GetPersonalRatedInfo, then GetPvpTierInfo for name/icon/thresholds.
     -- ------------------------------------------------------------------
-    local PVP_TIERS = {
-        { name = "Combatant I",  min = 1400, icon = "Interface\\PVPFrame\\Icons\\UI_RankedPvP_02_Small.blp", dropBelow = 1400, reach = 1500 },
-        { name = "Combatant II", min = 1500, icon = "Interface\\PVPFrame\\Icons\\UI_RankedPvP_02_Small.blp", dropBelow = 1500, reach = 1600 },
-        { name = "Challenger I", min = 1600, icon = "Interface\\PVPFrame\\Icons\\UI_RankedPvP_03_Small.blp", dropBelow = 1600, reach = 1700 },
-        { name = "Challenger II",min = 1700, icon = "Interface\\PVPFrame\\Icons\\UI_RankedPvP_03_Small.blp", dropBelow = 1700, reach = 1800 },
-        { name = "Rival I",      min = 1800, icon = "Interface\\PVPFrame\\Icons\\UI_RankedPvP_04_Small.blp", dropBelow = 1800, reach = 1950 },
-        { name = "Rival II",     min = 1950, icon = "Interface\\PVPFrame\\Icons\\UI_RankedPvP_04_Small.blp", dropBelow = 1950, reach = 2100 },
-        { name = "Duelist",      min = 2100, icon = "Interface\\PVPFrame\\Icons\\UI_RankedPvP_05_Small.blp", dropBelow = 2100, reach = 2400 },
-        { name = "Elite",        min = 2400, icon = "Interface\\PVPFrame\\Icons\\UI_RankedPvP_06_Small.blp", dropBelow = 2400, reach = nil },
-    }
+    local function GetApiTierInfo(bracketID)
+        if not (C_PvP and C_PvP.GetPvpTierInfo) then return nil, nil, nil end
+        local pvpTier = select(10, GetPersonalRatedInfo(bracketID))
+        pvpTier = tonumber(pvpTier) or 0
+        if pvpTier <= 0 then return nil, nil, nil end
 
-    local function GetPvpTierForCR(cr)
-        cr = tonumber(cr) or 0
-        local cur = nil
-        for i = 1, #PVP_TIERS do
-            if cr >= PVP_TIERS[i].min then
-                cur = PVP_TIERS[i]
-            end
-        end
-        if not cur then
-            return nil, nil, PVP_TIERS[1] -- below 1400: no tier, "up" is Combatant I
-        end
+        local cur = C_PvP.GetPvpTierInfo(pvpTier)
+        if not cur then return nil, nil, nil end
 
-        local down = nil
-        local up   = nil
-        for i = 1, #PVP_TIERS do
-            if PVP_TIERS[i] == cur then
-                down = (i > 1) and PVP_TIERS[i - 1] or nil
-                up   = (i < #PVP_TIERS) and PVP_TIERS[i + 1] or nil
-                break
-            end
-        end
+        local down = (cur.descendTier and tonumber(cur.descendTier) and tonumber(cur.descendTier) > 0)
+            and C_PvP.GetPvpTierInfo(cur.descendTier) or nil
+
+        local up = (cur.ascendTier and tonumber(cur.ascendTier) and tonumber(cur.ascendTier) > 0)
+            and C_PvP.GetPvpTierInfo(cur.ascendTier) or nil
+
         return cur, down, up
     end
 
@@ -4323,102 +4305,66 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
     local function GetMilestoneForBracket(bracketID, cr)
         cr = tonumber(cr) or 0
 
-        local ICON_R1   = "Interface\\PVPFrame\\Icons\\UI_RankedPvP_07_Small.blp"
-        local ICON_3C   = "Interface\\Icons\\Achievement_Arena_3v3_7"
-        local ICON_FACTION_HORDE    = "Interface\\PvPRankBadges\\PvPRankHorde.blp"
-        local ICON_FACTION_ALLIANCE = "Interface\\PvPRankBadges\\PvPRankAlliance.blp"
+        -- icon paths + tints copied from RatedStats_Achiev/achievements.lua
+        local ICON_ELITEPLUS = "Interface\\PVPFrame\\Icons\\UI_RankedPvP_07_Small.blp"
+        local ICON_3C        = "Interface\\Icons\\Achievement_Arena_3v3_7"
+        local ICON_HERO_H    = "Interface\\PvPRankBadges\\PvPRankHorde.blp"
+        local ICON_HERO_A    = "Interface\\PvPRankBadges\\PvPRankAlliance.blp"
 
         local TINT_STRAT = { 0.20, 1.00, 0.20 }
         local TINT_GLAD  = { 1.00, 0.35, 0.95 }
         local TINT_LEG   = { 1.00, 0.35, 0.20 }
 
-        -- 9 = Blitz (your SoloRBG/RBGB tab), 7 = Solo Shuffle, 2 = 3v3, 4 = RBG
+        -- Only meaningful once you're at/above Elite (2400+). Caller gates display.
+
         if bracketID == 9 then
-            if cr >= 2400 then
-                return {
-                    name = "Rank 1",
-                    icon = ICON_R1,
-                    tint = nil,
-                    reqCR = 2400,
-                    reqWins = 50,
-                    topText = "Top 0.1% of Season",
-                    winsMode = "match_wins",
-                }
+            local progStrat = CountWinsAboveCR(9, 2400, "match_wins")
+            if progStrat < 25 then
+                return { name="Strategist", icon=ICON_ELITEPLUS, tint=TINT_STRAT, reqCR=2400, reqWins=25, winsMode="match_wins" }
             end
-            return {
-                name = "Strategist",
-                icon = ICON_R1,
-                tint = TINT_STRAT,
-                reqCR = 2400,
-                reqWins = 25,
-                winsMode = "match_wins",
-            }
+            local progR1 = CountWinsAboveCR(9, 2400, "match_wins")
+            if progR1 < 50 then
+                return { name="Rank 1", icon=ICON_ELITEPLUS, tint=nil, reqCR=2400, reqWins=50, topText="Top 0.1% of Season", winsMode="match_wins" }
+            end
+            return nil
         end
 
         if bracketID == 7 then
-            if cr >= 2400 then
-                return {
-                    name = "Rank 1",
-                    icon = ICON_R1,
-                    tint = nil,
-                    reqCR = 2400,
-                    reqWins = 50,
-                    topText = "Top 0.1% of Season",
-                    winsMode = "ss_rounds",
-                }
+            local progLeg = CountWinsAboveCR(7, 2400, "ss_rounds")
+            if progLeg < 100 then
+                return { name="Legend", icon=ICON_ELITEPLUS, tint=TINT_LEG, reqCR=2400, reqWins=100, winsMode="ss_rounds" }
             end
-            return {
-                name = "Legend",
-                icon = ICON_R1,
-                tint = TINT_LEG,
-                reqCR = 2400,
-                reqWins = 100,
-                winsMode = "ss_rounds",
-            }
+            local progR1 = CountWinsAboveCR(7, 2400, "ss_rounds")
+            if progR1 < 50 then
+                return { name="Rank 1", icon=ICON_ELITEPLUS, tint=nil, reqCR=2400, reqWins=50, topText="Top 0.1% of Season", winsMode="ss_rounds" }
+            end
+            return nil
         end
 
         if bracketID == 2 then
-            if cr >= 2700 then
-                return {
-                    name = "Rank 1",
-                    icon = ICON_R1,
-                    tint = nil,
-                    reqCR = 2700,
-                    reqWins = 50,
-                    topText = "Top 0.1% of Season",
-                    winsMode = "match_wins",
-                }
+            local progGlad = CountWinsAboveCR(2, 2400, "match_wins")
+            if progGlad < 50 then
+                return { name="Gladiator", icon=ICON_ELITEPLUS, tint=TINT_GLAD, reqCR=2400, reqWins=50, winsMode="match_wins" }
             end
-            if cr >= 2400 then
-                return {
-                    name = "Three's Company",
-                    icon = ICON_3C,
-                    tint = nil,
-                    reqCR = 2700,
-
-                }
+            if cr < 2700 then
+                return { name="Three's Company", icon=ICON_3C, tint=nil, reqCR=2700 }
             end
-            return {
-                name = "Gladiator",
-                icon = ICON_R1,
-                tint = TINT_GLAD,
-                reqCR = 2400,
-                reqWins = 50,
-                winsMode = "match_wins",
-            }
+            local progR1 = CountWinsAboveCR(2, 2700, "match_wins")
+            if progR1 < 50 then
+                return { name="Rank 1", icon=ICON_ELITEPLUS, tint=nil, reqCR=2700, reqWins=50, topText="Top 0.1% of Season", winsMode="match_wins" }
+            end
+            return nil
         end
 
         if bracketID == 4 then
+            -- HotX: 2400 + X wins + Top 0.1%. Wins counted only at/above 2400.
             local faction = UnitFactionGroup("player")
-            local icon = (faction == "Horde") and ICON_FACTION_HORDE or ICON_FACTION_ALLIANCE
-            return {
-                name = "Hero",
-                icon = icon,
-                tint = nil,
-                reqWins = 50,
-                topText = "Top 0.5% of Season",
-                winsMode = "match_wins",
-            }
+            local icon = (faction == "Horde") and ICON_HERO_H or ICON_HERO_A
+            local prog = CountWinsAboveCR(4, 2400, "match_wins")
+            if prog < 50 then
+                return { name="HotX", icon=icon, tint=nil, reqCR=2400, reqWins=50, topText="Top 0.1% of Season", winsMode="match_wins" }
+            end
+            return nil
         end
 
         return nil
@@ -4484,12 +4430,12 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
         panel.rightReqText:SetPoint("TOPLEFT", panel.rightTierText, "BOTTOMLEFT", 0, -2)
     end
 
-    -- Tier choice is derived from THIS BRACKET ONLY (prevents mixing brackets across tabs)
-    local curTier, downTier, upTier = GetPvpTierForCR(currentCR)
+    -- Tier MUST come from API for THIS BRACKET (matches filters.lua behaviour)
+    local curTier, downTier, upTier = GetApiTierInfo(categoryID)
 
-    if curTier and curTier.icon then
-        SetIcon(panel.centerIcon, curTier.icon, nil)
-        panel.centerTierText:SetText(RSTATS:ColorText(curTier.name))
+    if curTier and curTier.tierIconID then
+        SetIcon(panel.centerIcon, curTier.tierIconID, nil)
+        panel.centerTierText:SetText(RSTATS:ColorText(curTier.name or ""))
     else
         SetIcon(panel.centerIcon, "Interface\\Icons\\INV_Misc_QuestionMark", nil)
         panel.centerTierText:SetText("")
@@ -4500,17 +4446,16 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
     )
 
     -- Left (down)
-    if downTier and downTier.icon and curTier and curTier.dropBelow and tonumber(curTier.dropBelow) and tonumber(curTier.dropBelow) > 0 then
+    if downTier and downTier.tierIconID and curTier and curTier.descendRating and tonumber(curTier.descendRating) and tonumber(curTier.descendRating) > 0 then
         panel.leftIcon:Show()
         panel.leftArrow:Show()
         panel.leftTierText:Show()
         panel.leftReqText:Show()
 
-        SetIcon(panel.leftIcon, downTier.icon, nil)
-        panel.leftTierText:SetText(RSTATS:ColorText(downTier.name))
+        SetIcon(panel.leftIcon, downTier.tierIconID, nil)
+        panel.leftTierText:SetText(RSTATS:ColorText(downTier.name or ""))
 
-        local lines = { LabelNum("Drop below: ", curTier.dropBelow), RSTATS:ColorText("CR") }
-        panel.leftReqText:SetText(DropCR(curTier.dropBelow))
+        panel.leftReqText:SetText(DropCR(curTier.descendRating))
     else
         panel.leftIcon:Hide()
         panel.leftArrow:Hide()
@@ -4519,7 +4464,10 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
     end
 
     -- Right (up): bracket milestone first; otherwise next PvP tier
-    local milestone = GetMilestoneForBracket(categoryID, currentCR)
+    local isTopTier = (curTier and (not curTier.ascendTier or tonumber(curTier.ascendTier) == 0))
+    local canShowMilestone = isTopTier and (tonumber(currentCR) or 0) >= 2400
+    local milestone = canShowMilestone and GetMilestoneForBracket(categoryID, currentCR) or nil
+
     if milestone and milestone.icon and milestone.name then
         panel.rightIcon:Show()
         panel.rightArrow:Show()
@@ -4555,16 +4503,16 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
         end
 
         panel.rightReqText:SetText(table.concat(lines, "\n"))
-    elseif upTier and upTier.icon and curTier and curTier.reach and tonumber(curTier.reach) and tonumber(curTier.reach) > 0 then
+    elseif upTier and upTier.tierIconID and curTier and curTier.ascendRating and tonumber(curTier.ascendRating) and tonumber(curTier.ascendRating) > 0 then
         panel.rightIcon:Show()
         panel.rightArrow:Show()
         panel.rightTierText:Show()
         panel.rightReqText:Show()
 
-        SetIcon(panel.rightIcon, upTier.icon, nil)
-        panel.rightTierText:SetText(RSTATS:ColorText(upTier.name))
+        SetIcon(panel.rightIcon, upTier.tierIconID, nil)
+        panel.rightTierText:SetText(RSTATS:ColorText(upTier.name or ""))
 
-        panel.rightReqText:SetText(ReachCR(curTier.reach))
+        panel.rightReqText:SetText(ReachCR(curTier.ascendRating))
     else
         panel.rightIcon:Hide()
         panel.rightArrow:Hide()
