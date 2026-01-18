@@ -2148,17 +2148,17 @@ function Summary:Refresh()
                 return tonumber(cr) or 0
             end)(),
             currentMMR = (function()
-                -- Prefer last stored post-match MMR from our match data (playerStats / friendlyMMR).
+                -- Always prefer last stored post-match MMR from our match history.
                 local last = GetLatestPostMMRFromHistory(history)
                 if last and tonumber(last) and tonumber(last) > 0 then
                     return tonumber(last)
                 end
 
-                -- Next fallback: DB cached MMR (written by DisplayCurrentCRMMR / end-of-match logic).
+                -- Next fallback: DB cached MMR (legacy/current fields).
                 local mmr = tonumber(perChar[bracket.mmrKey]) or 0
                 if mmr > 0 then return mmr end
 
-                -- Final fallback (initial seed only): live API.
+                -- Final fallback (initial seed only / no usable history yet): live API.
                 local live = select(10, GetPersonalRatedInfo(bracket.bracketID))
                 return tonumber(live) or 0
             end)(),
