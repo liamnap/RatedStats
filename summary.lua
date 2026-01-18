@@ -59,6 +59,12 @@ local function GetPlayerFullName()
     return UnitName("player") .. "-" .. GetRealmName()
 end
 
+local function GetActiveSpecID()
+    local specIndex = GetSpecialization()
+    if not specIndex then return nil end
+    return select(1, GetSpecializationInfo(specIndex))
+end
+
 local function SafeNumber(v)
     v = tonumber(v)
     if not v then return 0 end
@@ -2099,8 +2105,18 @@ function Summary:Refresh()
 
     end
 
-    for i, bracket in ipairs(BRACKETS) do
         local history = perChar[bracket.historyKey] or {}
+        if bracket.bracketID == 7 or bracket.bracketID == 9 then
+            local sid = GetActiveSpecID()
+            if sid then
+                local bySpecKey = (bracket.bracketID == 7) and "SoloShuffleHistoryBySpec" or "SoloRBGHistoryBySpec"
+                if RSTATS and RSTATS.GetHistoryForTab then
+                    -- Force-init the spec bucket (creates initial row) via core helper
+                    RSTATS:GetHistoryForTab(bracket.tabID)
+                end
+                history = (perChar[bySpecKey] and perChar[bySpecKey][sid]) or {}
+            end
+        end
         local seasonMatches = {}
 
         if seasonStart and seasonFinish then
@@ -2132,6 +2148,13 @@ function Summary:Refresh()
                 return tonumber(cr) or 0
             end)(),
             currentMMR = (function()
+                -- Spec-based ladders: MMR changes with spec, so read live MMR.
+                if bracket.bracketID == 7 or bracket.bracketID == 9 then
+                    local mmr = select(10, GetPersonalRatedInfo(bracket.bracketID))
+                    return tonumber(mmr) or 0
+                end
+
+                -- Other brackets: keep existing behavior (DB / history fallback).
                 local mmr = perChar[bracket.mmrKey] or 0
                 if bracket.tabID == 2 or bracket.tabID == 3 then
                     local last = GetLatestPostMMRFromHistory(history)
