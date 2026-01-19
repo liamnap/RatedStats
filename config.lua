@@ -1382,6 +1382,18 @@ do
                 lastSpecID = sid
                 specRefreshFrame._specTicker:Cancel()
                 specRefreshFrame._specTicker = nil
+
+                -- Spec changed: SS/RBGB filters are tab-scoped, not spec-scoped.
+                -- Clear them so the new spec's Initial row can't be hidden by old filters.
+                RatedStatsFilters = RatedStatsFilters or {}
+                RatedStatsFilters[1] = {}
+                RatedStatsFilters[5] = {}
+
+                -- Reset the per-tab growth counters so FilterAndSearchMatches reflows correctly on spec swap.
+                RSTATS.__LastHistoryCount = RSTATS.__LastHistoryCount or {}
+                RSTATS.__LastHistoryCount[1] = 0
+                RSTATS.__LastHistoryCount[5] = 0
+
                 DoFullRefresh()
                 return
             end
@@ -1557,13 +1569,11 @@ if RSTATS and not RSTATS.GetHistoryForTab then
         if tabID == 1 then
             local specID, specName = GetActiveSpecIDAndName()
             local t = specID and EnsureSpecHistory(7, specID, specName)
-            if type(t) == "table" and #t > 0 then return t end
-            return (Database.SoloShuffleHistory or {})
+            return (type(t) == "table" and t) or {}
         elseif tabID == 5 then
             local specID, specName = GetActiveSpecIDAndName()
             local t = specID and EnsureSpecHistory(9, specID, specName)
-            if type(t) == "table" and #t > 0 then return t end
-            return (Database.SoloRBGHistory or {})
+            return (type(t) == "table" and t) or {}
         end
 
         return ({
