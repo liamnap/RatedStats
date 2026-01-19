@@ -416,6 +416,43 @@ function GetCRandMMR(categoryID)
         mmr = select(10, GetPersonalRatedInfo(categoryID))
     end
 
+    -- Spec-based brackets: NEVER fall back to saved non-spec values.
+    -- If the API returns 0/nil for a spec you haven't played yet, keep it 0
+    -- unless we can recover from THIS spec's history bucket.
+    if categoryID == 7 or categoryID == 9 then
+        cr  = tonumber(cr)  or 0
+        mmr = tonumber(mmr) or 0
+
+        if (cr == 0 or mmr == 0) and EnsureSpecHistory and RSTATS.GetActiveSpecIDAndName then
+            local specID, specName = RSTATS.GetActiveSpecIDAndName()
+            if specID then
+                local t = EnsureSpecHistory(categoryID, specID, specName)
+                if type(t) == "table" and #t > 0 then
+                    -- Find the last non-initial row if possible
+                    for i = #t, 1, -1 do
+                        local e = t[i]
+                        if e and not e.isInitial then
+                            cr  = tonumber(e.friendlyCR)  or cr
+                            mmr = tonumber(e.friendlyMMR) or mmr
+                            break
+                        end
+                    end
+
+                    -- If we only have Initial, that is still spec-correct (usually 0/0)
+                    if cr == 0 or mmr == 0 then
+                        local e = t[#t]
+                        if e then
+                            cr  = tonumber(e.friendlyCR)  or cr
+                            mmr = tonumber(e.friendlyMMR) or mmr
+                        end
+                    end
+                end
+            end
+        end
+
+        return cr, mmr
+    end
+
     return cr, mmr
 end
 
@@ -1652,6 +1689,77 @@ end
 
 -- Function to get initial and current CR and MMR values
 function GetInitialCRandMMR()
+    local function EntryMatchesSpec(entry, specID, specName)
+        if not entry or not specID then return false end
+        if entry.specID and entry.specID == specID then
+            return true
+        end
+        if specName and entry.specName and entry.specName == specName then
+            return true
+        end
+        if specName and type(entry.playerStats) == "table" then
+            for _, ps in ipairs(entry.playerStats) do
+                if ps and ps.name == playerName and ps.spec == specName then
+                    return true
+                end
+            end
+        end
+        return false
+    end
+
+    local function SpecHasAnyHistory(categoryID, baseKey, specID, specName)
+        if EnsureSpecHistory then
+            local t = EnsureSpecHistory(categoryID, specID, specName)
+            if type(t) == "table" and #t > 0 then
+                return true
+            end
+        end
+        local base = Database and Database[baseKey]
+        if type(base) == "table" then
+            for _, entry in ipairs(base) do
+                if EntryMatchesSpec(entry, specID, specName) then
+                    return true
+                end
+            end
+        end
+        return false
+    end
+
+    local function SeedInitialForSpec(categoryID, baseKey, cr, mmr, specID, specName)
+        Database[baseKey] = Database[baseKey] or {}
+        table.insert(Database[baseKey], {
+            matchID     = 0,
+            endTime     = time(),
+            duration    = 0,
+            isInitial   = true,
+            friendlyCR  = cr or 0,
+            friendlyMMR = mmr or 0,
+            specID      = specID,
+            specName    = specName,
+            playerStats = {}, -- keep existing shape; your UI already handles empty
+        })
+    end
+
+    -- SS / Solo RBG are spec-scoped
+    if RSTATS.GetActiveSpecIDAndName then
+        local specID, specName = RSTATS.GetActiveSpecIDAndName()
+        if specID then
+            -- Solo Shuffle (category 7 -> Database.SoloShuffleHistory)
+            local ssHas = SpecHasAnyHistory(7, "SoloShuffleHistory", specID, specName)
+            if not ssHas then
+                local cr, mmr = GetCRandMMR(7)
+                SeedInitialForSpec(7, "SoloShuffleHistory", cr, mmr, specID, specName)
+            end
+
+            -- Solo RBG (category 9 -> Database.SoloRBGHistory)
+            local rbgbHas = SpecHasAnyHistory(9, "SoloRBGHistory", specID, specName)
+            if not rbgbHas then
+                local cr, mmr = GetCRandMMR(9)
+                SeedInitialForSpec(9, "SoloRBGHistory", cr, mmr, specID, specName)
+            end
+        end
+    end
+    
     -- Define category mappings with history table names and display names
     local categoryMappings = {
         SoloShuffle = { id = 7, historyTable = "SoloShuffleHistory", displayName = "SoloShuffle" },
