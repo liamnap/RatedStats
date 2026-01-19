@@ -1469,14 +1469,26 @@ if not EnsureSpecHistory then
             local base = baseKey and Database[baseKey]
             if type(base) == "table" then
                 for _, entry in ipairs(base) do
-                    if entry and entry.specID == specID then
-                        table.insert(bucket[specID], entry)
+                    if entry then
+                        local match = false
+                        if entry.specID and entry.specID == specID then
+                            match = true
+                        elseif specName and entry.specName and entry.specName == specName then
+                            match = true
+                        else
+                            local ps = entry.playerStats and entry.playerStats[1]
+                            if specName and ps and ps.spec and ps.spec == specName then
+                                match = true
+                            end
+                        end
+                        if match then
+                            table.insert(bucket[specID], entry)
+                        end
                     end
                 end
                 bucket._backfilled[specID] = true
             end
         end
-
         return bucket[specID]
     end
 end
@@ -1487,11 +1499,13 @@ if RSTATS and not RSTATS.GetHistoryForTab then
         if tabID == 1 then
             local specID, specName = GetActiveSpecIDAndName()
             local t = specID and EnsureSpecHistory(7, specID, specName)
-            return t or (Database.SoloShuffleHistory or {})
+            if type(t) == "table" and #t > 0 then return t end
+            return (Database.SoloShuffleHistory or {})
         elseif tabID == 5 then
             local specID, specName = GetActiveSpecIDAndName()
             local t = specID and EnsureSpecHistory(9, specID, specName)
-            return t or (Database.SoloRBGHistory or {})
+            if type(t) == "table" and #t > 0 then return t end
+            return (Database.SoloRBGHistory or {})
         end
 
         return ({
