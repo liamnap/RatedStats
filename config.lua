@@ -1373,184 +1373,115 @@ local function SpecDebug(...)
     print(string.format("|cffb69e86Rated Stats:|r [Spec] t=%.3f %s", GetTime(), msg))
 end
 
-    -- Refresh UI + seed spec-scoped Initials when the player changes spec/talents.
-    -- Must run even if the window is closed (talents UI closes Rated Stats).
-    do
-        local specRefreshFrame = CreateFrame("Frame")
-        specRefreshFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-        specRefreshFrame:RegisterEvent("PLAYER_TALENT_UPDATE")
-        specRefreshFrame:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
-        specRefreshFrame:RegisterEvent("TRAIT_CONFIG_UPDATED")
+-- Refresh UI + seed spec-scoped Initials when the player changes spec/talents.
+-- Must run even if the window is closed (talents UI closes Rated Stats).
+do
+    local specRefreshFrame = CreateFrame("Frame")
+    specRefreshFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+    specRefreshFrame:RegisterEvent("PLAYER_TALENT_UPDATE")
+    specRefreshFrame:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
+    specRefreshFrame:RegisterEvent("TRAIT_CONFIG_UPDATED")
 
-        local lastSpecID
+    local lastSpecID
 
-        local function GetAPISpecIDAndName()
-            local sidx = GetSpecialization and GetSpecialization() or nil
-            if not sidx or not GetSpecializationInfo then return nil end
-            local sid, name = GetSpecializationInfo(sidx)
-            return sid, name
-        end
+    local function GetAPISpecIDAndName()
+        local sidx = GetSpecialization and GetSpecialization() or nil
+        if not sidx or not GetSpecializationInfo then return nil end
+        local sid, name = GetSpecializationInfo(sidx)
+        return sid, name
+    end
 
-        local function DoFullRefresh()
-            -- Spec/talent changed: force rebuild next time the window opens.
-            RSTATS.__SpecDirty = true
+    local function DoFullRefresh()
+        -- Spec/talent changed: force rebuild next time the window opens.
+        RSTATS.__SpecDirty = true
 
-            -- Ensure active spec has an Initial entry for SS/RBGB when empty.
-            if EnsureSpecHistory and GetInitialCRandMMR then
-                local specID, specName = GetAPISpecIDAndName()
-                if specID then
-                    local ss   = EnsureSpecHistory(7, specID, specName) -- Solo Shuffle
-                    local rbgb = EnsureSpecHistory(9, specID, specName) -- Solo RBG
-                    if (type(ss) == "table" and #ss == 0) or (type(rbgb) == "table" and #rbgb == 0) then
-                        GetInitialCRandMMR()
-                    end
-                end
-            end
-
-            -- If the window is open right now, refresh displays immediately.
-            if UIConfig and UIConfig.IsShown and UIConfig:IsShown() then
-                UpdateSoloShuffleDisplay()
-                Update2v2Display()
-                Update3v3Display()
-                UpdateRBGDisplay()
-                UpdateSoloRBGDisplay()
-
-                local tabID = PanelTemplates_GetSelectedTab(RSTATS.UIConfig)
-                if tabID then
-                    local dropdown = RSTATS.Dropdowns and RSTATS.Dropdowns[tabID]
-                    local selected = dropdown and UIDropDownMenu_GetText(dropdown) or "Today"
-                    local filterKey = selected:lower():gsub(" ", "") or "today"
-
-                    local content = RSTATS.ScrollContents and RSTATS.ScrollContents[tabID]
-                    if content then
-                        ClearStaleMatchFrames(content)
-                    end
-
-                    FilterAndSearchMatches(RatedStatsSearchBox and RatedStatsSearchBox:GetText() or "")
-                    RSTATS:UpdateStatsView(filterKey, tabID)
-                    UpdateCompactHeaders(tabID)
-                end
-
-                if RSTATS.Summary and RSTATS.Summary.frame and RSTATS.Summary.frame:IsShown() then
-                    RSTATS.Summary:Refresh()
+        -- Ensure active spec has an Initial entry for SS/RBGB when empty.
+        if EnsureSpecHistory and GetInitialCRandMMR then
+            local specID, specName = GetAPISpecIDAndName()
+            if specID then
+                local ss   = EnsureSpecHistory(7, specID, specName) -- Solo Shuffle
+                local rbgb = EnsureSpecHistory(9, specID, specName) -- Solo RBG
+                if (type(ss) == "table" and #ss == 0) or (type(rbgb) == "table" and #rbgb == 0) then
+                    GetInitialCRandMMR()
                 end
             end
         end
 
-        local function InitLastSpec()
-            local sid = GetAPISpecIDAndName()
-            if sid then
-                lastSpecID = sid
+        -- If the window is open right now, refresh displays immediately.
+        if UIConfig and UIConfig.IsShown and UIConfig:IsShown() then
+            UpdateSoloShuffleDisplay()
+            Update2v2Display()
+            Update3v3Display()
+            UpdateRBGDisplay()
+            UpdateSoloRBGDisplay()
+
+            local tabID = PanelTemplates_GetSelectedTab(RSTATS.UIConfig)
+            if tabID then
+                local dropdown = RSTATS.Dropdowns and RSTATS.Dropdowns[tabID]
+                local selected = dropdown and UIDropDownMenu_GetText(dropdown) or "Today"
+                local filterKey = selected:lower():gsub(" ", "") or "today"
+
+                local content = RSTATS.ScrollContents and RSTATS.ScrollContents[tabID]
+                if content then
+                    ClearStaleMatchFrames(content)
+                end
+
+                FilterAndSearchMatches(RatedStatsSearchBox and RatedStatsSearchBox:GetText() or "")
+                RSTATS:UpdateStatsView(filterKey, tabID)
+                UpdateCompactHeaders(tabID)
+            end
+
+            if RSTATS.Summary and RSTATS.Summary.frame and RSTATS.Summary.frame:IsShown() then
+                RSTATS.Summary:Refresh()
             end
         end
+    end
 
-        specRefreshFrame:SetScript("OnEvent", function(_, event, unit)
-            if event == "PLAYER_ENTERING_WORLD" then
-                InitLastSpec()
-                -- Pre-backfill the current spec buckets so opening the window doesn't show "waiting".
-                local sid, sname = GetAPISpecIDAndName()
-                if sid and EnsureSpecHistory then
-                    EnsureSpecHistory(7, sid, sname)
-                    EnsureSpecHistory(9, sid, sname)
-                end
-                return
-            end
-
-            -- Burst events fire while Blizzard swaps spec; poll briefly until API spec id flips.
-            if specRefreshFrame._specTicker then
-                specRefreshFrame._specTicker:Cancel()
-                specRefreshFrame._specTicker = nil
-            end
-
-            local beforeID = lastSpecID
-            local tries = 0
-
-            specRefreshFrame._specTicker = C_Timer.NewTicker(0.05, function()
-                tries = tries + 1
-
-                local sid = select(1, GetAPISpecIDAndName())
-
-                -- If spec changed (or we never had one), refresh now.
-                if sid and (not beforeID or sid ~= beforeID) then
-                    lastSpecID = sid
-                    specRefreshFrame._specTicker:Cancel()
-                    specRefreshFrame._specTicker = nil
-
-                    -- Clear tab-scoped filters for SS/RBGB so the new spec's Initial can't be hidden.
-                    RatedStatsFilters = RatedStatsFilters or {}
-                    RatedStatsFilters[1] = {}
-                    RatedStatsFilters[5] = {}
-
-                    -- Reset growth counters so the next open/reflow isn't stuck.
-                    RSTATS.__LastHistoryCount = RSTATS.__LastHistoryCount or {}
-                    RSTATS.__LastHistoryCount[1] = 0
-                    RSTATS.__LastHistoryCount[5] = 0
-
-                    DoFullRefresh()
-                    return
-                end
-
-                -- Failsafe after ~0.5s: refresh anyway (covers talent-only edits).
-                if tries >= 10 then
-                    if sid then lastSpecID = sid end
-                    specRefreshFrame._specTicker:Cancel()
-                    specRefreshFrame._specTicker = nil
-                    DoFullRefresh()
-                end
-            end)
-        end)
+    local function InitLastSpec()
+        local sid = GetAPISpecIDAndName()
+        if sid then
+            lastSpecID = sid
+        end
     end
 
     specRefreshFrame:SetScript("OnEvent", function(_, event, unit)
-    SpecDebug("EVENT=%s unit=%s UIShown=%s", tostring(event), tostring(unit), tostring(UIConfig and UIConfig:IsShown()))
+        if event == "PLAYER_ENTERING_WORLD" then
+            InitLastSpec()
+            -- Pre-backfill the current spec buckets so opening the window doesn't show "waiting".
+            local sid, sname = GetAPISpecIDAndName()
+            if sid and EnsureSpecHistory then
+                EnsureSpecHistory(7, sid, sname)
+                EnsureSpecHistory(9, sid, sname)
+            end
+            return
+        end
 
-        -- Spec/talents changed while the UI may be closed. Mark dirty so next open forces a redraw.
-        RSTATS.__SpecDirty = true
-        -- Cancel any in-flight ticker so we don’t run multiple refreshes during the same event burst.
+        -- Burst events fire while Blizzard swaps spec; poll briefly until API spec id flips.
         if specRefreshFrame._specTicker then
             specRefreshFrame._specTicker:Cancel()
             specRefreshFrame._specTicker = nil
         end
 
-        -- Capture the spec *before* the burst using the real API (not our helper).
-        local beforeID
-        do
-            local sidx = GetSpecialization and GetSpecialization() or nil
-            if sidx and GetSpecializationInfo then
-                beforeID = select(1, GetSpecializationInfo(sidx))
-            end
-            if not beforeID then
-                beforeID = lastSpecID
-            end
-        end
-        SpecDebug("beforeSpecID=%s", tostring(beforeID))
-
+        local beforeID = lastSpecID
         local tries = 0
+
         specRefreshFrame._specTicker = C_Timer.NewTicker(0.05, function()
             tries = tries + 1
 
-            local sidx = GetSpecialization and GetSpecialization() or nil
-            local apiSpecID, apiSpecName
-            if sidx and GetSpecializationInfo then
-                apiSpecID, apiSpecName = GetSpecializationInfo(sidx)
-            end
-            SpecDebug("try=%d GetSpec=%s apiSpecID=%s apiName=%s",
-                tries, tostring(sidx), tostring(apiSpecID), tostring(apiSpecName))
+            local sid = select(1, GetAPISpecIDAndName())
 
             -- If spec changed (or we never had one), refresh now.
-            if apiSpecID and (not beforeID or apiSpecID ~= beforeID) then
-                lastSpecID = apiSpecID
+            if sid and (not beforeID or sid ~= beforeID) then
+                lastSpecID = sid
                 specRefreshFrame._specTicker:Cancel()
                 specRefreshFrame._specTicker = nil
-                SpecDebug("SPEC FLIPPED before=%s now=%s (%s) -> DoFullRefresh()", tostring(beforeID), tostring(apiSpecID), tostring(apiSpecName))
 
-                -- Spec changed: SS/RBGB filters are tab-scoped, not spec-scoped.
-                -- Clear them so the new spec's Initial row can't be hidden by old filters.
+                -- Clear tab-scoped filters for SS/RBGB so the new spec's Initial can't be hidden.
                 RatedStatsFilters = RatedStatsFilters or {}
                 RatedStatsFilters[1] = {}
                 RatedStatsFilters[5] = {}
 
-                -- Reset the per-tab growth counters so FilterAndSearchMatches reflows correctly on spec swap.
+                -- Reset growth counters so the next open/reflow isn't stuck.
                 RSTATS.__LastHistoryCount = RSTATS.__LastHistoryCount or {}
                 RSTATS.__LastHistoryCount[1] = 0
                 RSTATS.__LastHistoryCount[5] = 0
@@ -1559,12 +1490,11 @@ end
                 return
             end
 
-            -- Failsafe: after ~0.5s, refresh anyway (covers cases where the event wasn’t a spec swap).
+            -- Failsafe after ~0.5s: refresh anyway (covers talent-only edits).
             if tries >= 10 then
-                if apiSpecID then lastSpecID = apiSpecID end
+                if sid then lastSpecID = sid end
                 specRefreshFrame._specTicker:Cancel()
                 specRefreshFrame._specTicker = nil
-                SpecDebug("FAILSAFE tries=%d apiSpecID=%s -> DoFullRefresh()", tries, tostring(apiSpecID))
                 DoFullRefresh()
             end
         end)
