@@ -464,18 +464,13 @@ function FilterAndSearchMatches(query)
 
 	if not data or not data.table then return end
 
-	-- SS / Solo RBG are spec-based: filter the active spec table, not the base table.
-	if (tabID == 1 or tabID == 5) and RSTATS and RSTATS.GetHistoryForTab then
-		history.table = RSTATS:GetHistoryForTab(tabID) or {}
-	end
-
 	local prevCount = RSTATS.__LastHistoryCount[tabID] or 0
-	local currentCount = #history.table
+	local currentCount = #data.table
 	local forceRedraw = currentCount > prevCount
 	RSTATS.__LastHistoryCount[tabID] = currentCount
 
 	local filtered = {}
-	for _, match in ipairs(history.table) do
+	for _, match in ipairs(data.table) do
 		local matches = ApplyFilters(match)
 
 		if query ~= "" then
