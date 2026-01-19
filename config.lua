@@ -1386,25 +1386,13 @@ do
         -- Spec/talent changed: always mark dirty so the next open forces a redraw.
         RSTATS.__SpecDirty = true
 
-        -- Always ensure the active spec has an Initial entry for SS/RBGB when empty
-        -- (must run even if the window is closed).
-        if EnsureSpecHistory and RSTATS.GetActiveSpecIDAndName and GetInitialCRandMMR then
-            local specID, specName = RSTATS.GetActiveSpecIDAndName()
-            if specID then
-                local ss   = EnsureSpecHistory(7, specID, specName) -- Solo Shuffle
-                local rbgb = EnsureSpecHistory(9, specID, specName) -- Solo RBG
-            SpecDebug("DoFullRefresh specID=%s name=%s ssCount=%d rbgbCount=%d",
-                tostring(specID), tostring(specName), (type(ss)=="table" and #ss or -1), (type(rbgb)=="table" and #rbgb or -1))
-                if (type(ss) == "table" and #ss == 0) or (type(rbgb) == "table" and #rbgb == 0) then
-                    SpecDebug("Seeding Initial via GetInitialCRandMMR()")
-                    GetInitialCRandMMR()
-                    local ss2   = EnsureSpecHistory(7, specID, specName)
-                    local rbgb2 = EnsureSpecHistory(9, specID, specName)
-                    SpecDebug("After seed ssCount=%d rbgbCount=%d",
-                    (type(ss2)=="table" and #ss2 or -1), (type(rbgb2)=="table" and #rbgb2 or -1))
-                end
-            end
+        -- Always let GetInitialCRandMMR decide whether to insert per-spec Initial rows.
+        -- This must run even if the window is closed.
+        if GetInitialCRandMMR then
+            SpecDebug("DoFullRefresh -> GetInitialCRandMMR()")
+            GetInitialCRandMMR()
         end
+
         if UIConfig and UIConfig.IsShown and UIConfig:IsShown() then
                 UpdateSoloShuffleDisplay()
                 Update2v2Display()
@@ -1446,12 +1434,15 @@ do
             specRefreshFrame._specTicker = nil
         end
 
-        -- Capture the spec *before* the burst; we refresh only once we observe it change.
-        local beforeID = lastSpecID
+        -- Capture the spec *before* the burst using the real API (not our helper).
+        local beforeID
         do
-            if RSTATS.GetActiveSpecIDAndName then
-                local sid = RSTATS.GetActiveSpecIDAndName()
-                if sid then beforeID = sid end
+            local sidx = GetSpecialization and GetSpecialization() or nil
+            if sidx and GetSpecializationInfo then
+                beforeID = select(1, GetSpecializationInfo(sidx))
+            end
+            if not beforeID then
+                beforeID = lastSpecID
             end
         end
         SpecDebug("beforeSpecID=%s", tostring(beforeID))
@@ -1460,25 +1451,20 @@ do
         specRefreshFrame._specTicker = C_Timer.NewTicker(0.05, function()
             tries = tries + 1
 
-        local sidx = GetSpecialization and GetSpecialization() or nil
-        local apiSpecID, apiSpecName
-        if sidx and GetSpecializationInfo then
-            apiSpecID, apiSpecName = GetSpecializationInfo(sidx)
-        end
-
-        if RSTATS.GetActiveSpecIDAndName then
-            sid = RSTATS.GetActiveSpecIDAndName()
-        end
-
-        SpecDebug("try=%d GetSpec=%s apiSpecID=%s apiName=%s GetActiveSpecID=%s",
-            tries, tostring(sidx), tostring(apiSpecID), tostring(apiSpecName), tostring(sid))
+            local sidx = GetSpecialization and GetSpecialization() or nil
+            local apiSpecID, apiSpecName
+            if sidx and GetSpecializationInfo then
+                apiSpecID, apiSpecName = GetSpecializationInfo(sidx)
+            end
+            SpecDebug("try=%d GetSpec=%s apiSpecID=%s apiName=%s",
+                tries, tostring(sidx), tostring(apiSpecID), tostring(apiSpecName))
 
             -- If spec changed (or we never had one), refresh now.
-            if sid and (not beforeID or sid ~= beforeID) then
-                lastSpecID = sid
+            if apiSpecID and (not beforeID or apiSpecID ~= beforeID) then
+                lastSpecID = apiSpecID
                 specRefreshFrame._specTicker:Cancel()
                 specRefreshFrame._specTicker = nil
-                SpecDebug("SPEC FLIPPED before=%s now=%s -> DoFullRefresh()", tostring(beforeID), tostring(sid))
+                SpecDebug("SPEC FLIPPED before=%s now=%s (%s) -> DoFullRefresh()", tostring(beforeID), tostring(apiSpecID), tostring(apiSpecName))
 
                 -- Spec changed: SS/RBGB filters are tab-scoped, not spec-scoped.
                 -- Clear them so the new spec's Initial row can't be hidden by old filters.
@@ -1497,10 +1483,10 @@ do
 
             -- Failsafe: after ~0.5s, refresh anyway (covers cases where the event wasn’t a spec swap).
             if tries >= 10 then
-                if sid then lastSpecID = sid end
+                if apiSpecID then lastSpecID = apiSpecID end
                 specRefreshFrame._specTicker:Cancel()
                 specRefreshFrame._specTicker = nil
-                SpecDebug("FAILSAFE tries=%d sid=%s -> DoFullRefresh()", tries, tostring(sid))
+                SpecDebug("FAILSAFE tries=%d apiSpecID=%s -> DoFullRefresh()", tries, tostring(apiSpecID))
                 DoFullRefresh()
             end
         end)
