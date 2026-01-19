@@ -155,7 +155,7 @@ function Config:Toggle()
 
             -- For SS/RBGB, store count per spec so swapping spec doesn't reuse the old count.
             if tabID == 1 or tabID == 5 then
-                local specID = GetActiveSpecIDAndName and GetActiveSpecIDAndName() or nil
+                local specID = RSTATS.GetActiveSpecIDAndName and RSTATS.GetActiveSpecIDAndName() or nil
                 RSTATS.__LastHistoryCountBySpec = RSTATS.__LastHistoryCountBySpec or {}
                 RSTATS.__LastHistoryCountBySpec[tabID] = RSTATS.__LastHistoryCountBySpec[tabID] or {}
                 prev = (specID and RSTATS.__LastHistoryCountBySpec[tabID][specID]) or 0
@@ -1351,7 +1351,7 @@ do
 
         -- Always ensure the active spec has an Initial entry for SS/RBGB when empty
         -- (must run even if the window is closed).
-        if EnsureSpecHistory and GetActiveSpecIDAndName and GetInitialCRandMMR then
+        if EnsureSpecHistory and RSTATS.GetActiveSpecIDAndName and GetInitialCRandMMR then
             local specID, specName = GetActiveSpecIDAndName()
             if specID then
                 local ss   = EnsureSpecHistory(7, specID, specName) -- Solo Shuffle
@@ -1412,8 +1412,8 @@ do
         -- Capture the spec *before* the burst; we refresh only once we observe it change.
         local beforeID = lastSpecID
         do
-            if GetActiveSpecIDAndName then
-                local sid = GetActiveSpecIDAndName()
+            if RSTATS.GetActiveSpecIDAndName then
+                local sid = RSTATS.GetActiveSpecIDAndName()
                 if sid then beforeID = sid end
             end
         end
@@ -1429,8 +1429,8 @@ do
             apiSpecID, apiSpecName = GetSpecializationInfo(sidx)
         end
 
-        if GetActiveSpecIDAndName then
-            sid = GetActiveSpecIDAndName()
+        if RSTATS.GetActiveSpecIDAndName then
+            sid = RSTATS.GetActiveSpecIDAndName()
         end
 
         SpecDebug("try=%d GetSpec=%s apiSpecID=%s apiName=%s GetActiveSpecID=%s",
@@ -1561,7 +1561,7 @@ end
 -- ==========================================================
 -- Active spec helpers (used by initial entries + spec history)
 -- ==========================================================
-local function GetActiveSpecIDAndName()
+function RSTATS.GetActiveSpecIDAndName()
     local specIndex = GetSpecialization()
     if not specIndex then return nil, nil end
     local specID, specName = GetSpecializationInfo(specIndex)
@@ -1631,12 +1631,12 @@ end
 if RSTATS and not RSTATS.GetHistoryForTab then
     function RSTATS:GetHistoryForTab(tabID)
         if tabID == 1 then
-            local specID, specName = GetActiveSpecIDAndName()
+            local specID, specName = RSTATS.GetActiveSpecIDAndName()
             local t = specID and EnsureSpecHistory(7, specID, specName)
             if type(t) == "table" and #t > 0 then return t end
             return (Database.SoloShuffleHistory or {})
         elseif tabID == 5 then
-            local specID, specName = GetActiveSpecIDAndName()
+            local specID, specName = RSTATS.GetActiveSpecIDAndName()
             local t = specID and EnsureSpecHistory(9, specID, specName)
             if type(t) == "table" and #t > 0 then return t end
             return (Database.SoloRBGHistory or {})
@@ -1708,7 +1708,7 @@ function GetInitialCRandMMR()
             duoPartner = GetRBGBDuoPartnerNameRealm()
         end
 
-        local mySpecID, mySpecName = GetActiveSpecIDAndName()
+        local mySpecID, mySpecName = RSTATS.GetActiveSpecIDAndName()
 
         -- Only insert an initial entry if this bracket actually has no history.
         -- For spec-based ladders (SS/RBGB), only insert if THIS spec has no history.
@@ -1970,7 +1970,7 @@ function CheckForMissedGames()
 				currentMMR = prevMMR
 			end
 
-                local mySpecID, mySpecName = GetActiveSpecIDAndName()
+                local mySpecID, mySpecName = RSTATS.GetActiveSpecIDAndName()
 
                 for n = 1, gap do
 				local matchID = highestMatchID + n
