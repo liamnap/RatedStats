@@ -1381,8 +1381,11 @@ do
     specRefreshFrame:RegisterEvent("PLAYER_TALENT_UPDATE")
     specRefreshFrame:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
     specRefreshFrame:RegisterEvent("TRAIT_CONFIG_UPDATED")
+    specRefreshFrame:RegisterEvent("PVP_RATED_STATS_UPDATE")  -- Covers CR/MMR changes on spec switching
 
-    local lastSpecID
+    local lastspecID
+    local pendingSeedSpecID
+    local pendingSeedSpecName
 
     local function GetAPISpecIDAndName()
         local sidx = GetSpecialization and GetSpecialization() or nil
@@ -1391,21 +1394,28 @@ do
         return sid, name
     end
 
+    local function QueueInitialSeedIfNeeded()
+        if not (EnsureSpecHistory and GetInitialCRandMMR) then return end
+
+        local specID, specName = GetAPISpecIDAndName()
+        if not specID then return end
+
+        local ss   = EnsureSpecHistory(7, specID, specName) -- Solo Shuffle
+        local rbgb = EnsureSpecHistory(9, specID, specName) -- Solo RBG
+
+        if (type(ss) == "table" and #ss == 0) or (type(rbgb) == "table" and #rbgb == 0) then
+            pendingSeedSpecID = specID
+            pendingSeedSpecName = specName
+            RequestRatedInfo() -- triggers PVP_RATED_STATS_UPDATE when fresh
+        end
+    end
+
     local function DoFullRefresh()
         -- Spec/talent changed: force rebuild next time the window opens.
         RSTATS.__SpecDirty = true
 
-        -- Ensure active spec has an Initial entry for SS/RBGB when empty.
-        if EnsureSpecHistory and GetInitialCRandMMR then
-            local specID, specName = GetAPISpecIDAndName()
-            if specID then
-                local ss   = EnsureSpecHistory(7, specID, specName) -- Solo Shuffle
-                local rbgb = EnsureSpecHistory(9, specID, specName) -- Solo RBG
-                if (type(ss) == "table" and #ss == 0) or (type(rbgb) == "table" and #rbgb == 0) then
-                    GetInitialCRandMMR()
-                end
-            end
-        end
+        -- Queue seeding, but ONLY perform it after PVP_RATED_STATS_UPDATE so stats are fresh for the new spec.
+        QueueInitialSeedIfNeeded()
 
         -- If the window is open right now, refresh displays immediately.
         if UIConfig and UIConfig.IsShown and UIConfig:IsShown() then
@@ -1453,7 +1463,25 @@ do
                 EnsureSpecHistory(7, sid, sname)
                 EnsureSpecHistory(9, sid, sname)
             end
+            RequestRatedInfo()
             return
+        end
+
+        if event == "PVP_RATED_STATS_UPDATE" then
+            if pendingSeedSpecID and GetInitialCRandMMR then
+                local sid = select(1, GetAPISpecIDAndName())
+                if sid and sid == pendingSeedSpecID then
+                    pendingSeedSpecID = nil
+                    pendingSeedSpecName = nil
+                    GetInitialCRandMMR()
+                end
+            end
+            return
+        end
+
+        if event == "PLAYER_TALENT_UPDATE" then
+            -- Force the rated stats refresh for the new spec (Blizzard does this too).
+            RequestRatedInfo()
         end
 
         -- Burst events fire while Blizzard swaps spec; poll briefly until API spec id flips.
