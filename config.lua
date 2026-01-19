@@ -1328,6 +1328,14 @@ function UpdateSoloRBGDisplay()
     end
 end
 
+-- Debug toggle (off by default). Enable with: /run RSTATS_DEBUG_SPEC=true
+-- Disable with: /run RSTATS_DEBUG_SPEC=false
+local function SpecDebug(...)
+    if not _G.RSTATS_DEBUG_SPEC then return end
+    local msg = string.format(...)
+    print(string.format("|cffb69e86Rated Stats:|r [Spec] t=%.3f %s", GetTime(), msg))
+end
+
 -- Refresh visible UI when the player changes spec (rated ladders are spec-based).
 do
     local specRefreshFrame = CreateFrame("Frame")
@@ -1348,8 +1356,15 @@ do
             if specID then
                 local ss   = EnsureSpecHistory(7, specID, specName) -- Solo Shuffle
                 local rbgb = EnsureSpecHistory(9, specID, specName) -- Solo RBG
+            SpecDebug("DoFullRefresh specID=%s name=%s ssCount=%d rbgbCount=%d",
+                tostring(specID), tostring(specName), (type(ss)=="table" and #ss or -1), (type(rbgb)=="table" and #rbgb or -1))
                 if (type(ss) == "table" and #ss == 0) or (type(rbgb) == "table" and #rbgb == 0) then
+                    SpecDebug("Seeding Initial via GetInitialCRandMMR()")
                     GetInitialCRandMMR()
+                    local ss2   = EnsureSpecHistory(7, specID, specName)
+                    local rbgb2 = EnsureSpecHistory(9, specID, specName)
+                    SpecDebug("After seed ssCount=%d rbgbCount=%d",
+                    (type(ss2)=="table" and #ss2 or -1), (type(rbgb2)=="table" and #rbgb2 or -1))
                 end
             end
         end
@@ -1384,6 +1399,8 @@ do
     end
 
     specRefreshFrame:SetScript("OnEvent", function(_, event, unit)
+    SpecDebug("EVENT=%s unit=%s UIShown=%s", tostring(event), tostring(unit), tostring(UIConfig and UIConfig:IsShown()))
+
         -- Spec/talents changed while the UI may be closed. Mark dirty so next open forces a redraw.
         RSTATS.__SpecDirty = true
         -- Cancel any in-flight ticker so we don’t run multiple refreshes during the same event burst.
@@ -1400,21 +1417,31 @@ do
                 if sid then beforeID = sid end
             end
         end
+        SpecDebug("beforeSpecID=%s", tostring(beforeID))
 
         local tries = 0
         specRefreshFrame._specTicker = C_Timer.NewTicker(0.05, function()
             tries = tries + 1
 
-            local sid
-            if GetActiveSpecIDAndName then
-                sid = GetActiveSpecIDAndName()
-            end
+        local sidx = GetSpecialization and GetSpecialization() or nil
+        local apiSpecID, apiSpecName
+        if sidx and GetSpecializationInfo then
+            apiSpecID, apiSpecName = GetSpecializationInfo(sidx)
+        end
+
+        if GetActiveSpecIDAndName then
+            sid = GetActiveSpecIDAndName()
+        end
+
+        SpecDebug("try=%d GetSpec=%s apiSpecID=%s apiName=%s GetActiveSpecID=%s",
+            tries, tostring(sidx), tostring(apiSpecID), tostring(apiSpecName), tostring(sid))
 
             -- If spec changed (or we never had one), refresh now.
             if sid and (not beforeID or sid ~= beforeID) then
                 lastSpecID = sid
                 specRefreshFrame._specTicker:Cancel()
                 specRefreshFrame._specTicker = nil
+                SpecDebug("SPEC FLIPPED before=%s now=%s -> DoFullRefresh()", tostring(beforeID), tostring(sid))
 
                 -- Spec changed: SS/RBGB filters are tab-scoped, not spec-scoped.
                 -- Clear them so the new spec's Initial row can't be hidden by old filters.
@@ -1436,6 +1463,7 @@ do
                 if sid then lastSpecID = sid end
                 specRefreshFrame._specTicker:Cancel()
                 specRefreshFrame._specTicker = nil
+                SpecDebug("FAILSAFE tries=%d sid=%s -> DoFullRefresh()", tries, tostring(sid))
                 DoFullRefresh()
             end
         end)
