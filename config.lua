@@ -1578,22 +1578,9 @@ if not EnsureSpecHistory then
                             match = true
                         elseif specName and entry.specName and entry.specName == specName then
                             match = true
-                        else
-                            local ps = entry.playerStats and entry.playerStats[1]
-                            if specName and ps and ps.spec and ps.spec == specName then
-                                match = true
-                            end
-                        end
-                    if entry then
-                        local match = false
-
-                        if entry.specID and entry.specID == specID then
-                            match = true
-                        elseif specName and entry.specName and entry.specName == specName then
-                            match = true
                         elseif specName and type(entry.playerStats) == "table" then
                             for _, ps in ipairs(entry.playerStats) do
-                                if ps and ps.name == playerName and ps.spec == specName then
+                                if ps and ps.name == (_G.playerName or playerName) and ps.spec == specName then
                                     match = true
                                     break
                                 end
