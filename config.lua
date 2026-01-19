@@ -1712,11 +1712,31 @@ function GetInitialCRandMMR()
 
         -- Only insert an initial entry if this bracket actually has no history.
         -- For spec-based ladders (SS/RBGB), only insert if THIS spec has no history.
-        if categoryID == 7 or categoryID == 9 then
-            if EnsureSpecHistory and mySpecID then
-                local specTable = EnsureSpecHistory(categoryID, mySpecID, mySpecName)
-                if type(specTable) == "table" and #specTable > 0 then
-                    return
+         if categoryID == 7 or categoryID == 9 then
+            if mySpecID and mySpecName then
+                -- 1) Prefer the spec bucket (new storage)
+                if EnsureSpecHistory then
+                    local specTable = EnsureSpecHistory(categoryID, mySpecID, mySpecName)
+                    if type(specTable) == "table" and #specTable > 0 then
+                        return
+                    end
+                end
+
+                -- 2) Legacy safety net: if the main table already contains rows for this spec,
+                --    do NOT create a new Initial (backfill may fail on old name formats).
+                for _, entry in ipairs(historyTable) do
+                    if entry then
+                        if entry.specID and entry.specID == mySpecID then
+                            return
+                        end
+                        if entry.specName and entry.specName == mySpecName then
+                            return
+                        end
+                        local ps1 = entry.playerStats and entry.playerStats[1]
+                        if ps1 and ps1.spec == mySpecName then
+                            return
+                        end
+                    end
                 end
             else
                 -- No spec info available: fall back to main table.
