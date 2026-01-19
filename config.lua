@@ -1602,11 +1602,13 @@ if RSTATS and not RSTATS.GetHistoryForTab then
         if tabID == 1 then
             local specID, specName = GetActiveSpecIDAndName()
             local t = specID and EnsureSpecHistory(7, specID, specName)
-            return (type(t) == "table" and t) or {}
+            if type(t) == "table" and #t > 0 then return t end
+            return (Database.SoloShuffleHistory or {})
         elseif tabID == 5 then
             local specID, specName = GetActiveSpecIDAndName()
             local t = specID and EnsureSpecHistory(9, specID, specName)
-            return (type(t) == "table" and t) or {}
+            if type(t) == "table" and #t > 0 then return t end
+            return (Database.SoloRBGHistory or {})
         end
 
         return ({
