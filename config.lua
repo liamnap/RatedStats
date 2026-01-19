@@ -5646,7 +5646,7 @@ function Config:CreateMenu()
 		if root then walk(root) end
 	end
 
-	local function UpdateCompactHeaders(tabID)
+	function UpdateCompactHeaders(tabID)
 	local content     = RSTATS.ScrollContents[tabID]
 	if not content or not content.headerFrame then return end
 	
