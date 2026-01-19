@@ -332,28 +332,14 @@ function FilterMatchesByTimeRange(matches, filterType)
 	return filtered
 end
 
-function ApplyFilters(match)
+function ApplyFilters(match, tabID, historyTable)
 	local f = GetCurrentFilters()
 
 	-- 🧹 Auto-hide 'Initial' games if history has > 2 matches
 	if match.friendlyWinLoss == "I" then
-		local tabID = PanelTemplates_GetSelectedTab(RSTATS.UIConfig)
-		local historyTable
-
-		-- SS / RBGB are spec-scoped, so count the *active* spec table (not the base DB table)
-		if (tabID == 1 or tabID == 5) and RSTATS and RSTATS.GetHistoryForTab then
-			historyTable = RSTATS:GetHistoryForTab(tabID) or {}
-		else
-			local tableByTab = {
-				[1] = Database.SoloShuffleHistory,
-				[2] = Database.v2History,
-				[3] = Database.v3History,
-				[4] = Database.RBGHistory,
-				[5] = Database.SoloRBGHistory,
-			}
-			historyTable = tableByTab[tabID]
-		end
-
+        -- Use the resolved table from FilterAndSearchMatches().
+        -- For SS/RBGB this is the active spec bucket.
+        -- For other tabs it's the base DB table.
 		if historyTable and #historyTable > 2 then
 			return false
 		end
@@ -469,10 +455,11 @@ function FilterAndSearchMatches(query)
 	local forceRedraw = currentCount > prevCount
 	RSTATS.__LastHistoryCount[tabID] = currentCount
 
-	local filtered = {}
-	for _, match in ipairs(data.table) do
-		local matches = ApplyFilters(match)
+    local historyTable = data.table
 
+    local filtered = {}
+    for _, match in ipairs(historyTable) do
+        local matches = ApplyFilters(match, tabID, historyTable)
 		if query ~= "" then
 			local found = (match.mapName and match.mapName:lower():find(query))
 			if not found then
