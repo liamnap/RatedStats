@@ -1584,6 +1584,22 @@ if not EnsureSpecHistory then
                                 match = true
                             end
                         end
+                    if entry then
+                        local match = false
+
+                        if entry.specID and entry.specID == specID then
+                            match = true
+                        elseif specName and entry.specName and entry.specName == specName then
+                            match = true
+                        elseif specName and type(entry.playerStats) == "table" then
+                            for _, ps in ipairs(entry.playerStats) do
+                                if ps and ps.name == playerName and ps.spec == specName then
+                                    match = true
+                                    break
+                                end
+                            end
+                        end
+
                         if match then
                             table.insert(bucket[specID], entry)
                         end
