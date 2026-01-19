@@ -1292,9 +1292,8 @@ do
     specRefreshFrame:RegisterEvent("PLAYER_TALENT_UPDATE")
     specRefreshFrame:RegisterEvent("TRAIT_CONFIG_UPDATED")
 
-    specRefreshFrame:SetScript("OnEvent", function(_, event, unit)
-        -- Run next frame so spec/talent state is actually updated.
-        C_Timer.After(0, function()
+    local lastSpecID
+    local function DoFullRefresh()
             if UIConfig and UIConfig.IsShown and UIConfig:IsShown() then
                 UpdateSoloShuffleDisplay()
                 Update2v2Display()
@@ -1334,6 +1333,51 @@ do
 
             if RSTATS and RSTATS.Summary and RSTATS.Summary.frame and RSTATS.Summary.frame:IsShown() then
                 RSTATS.Summary:Refresh()
+            end
+    end
+
+    specRefreshFrame:SetScript("OnEvent", function(_, event, unit)
+        if event == "PLAYER_SPECIALIZATION_CHANGED" and unit ~= "player" then return end
+
+        -- Cancel any in-flight ticker so we don’t run multiple refreshes during the same event burst.
+        if specRefreshFrame._specTicker then
+            specRefreshFrame._specTicker:Cancel()
+            specRefreshFrame._specTicker = nil
+        end
+
+        -- Capture the spec *before* the burst; we refresh only once we observe it change.
+        local beforeID = lastSpecID
+        do
+            if GetActiveSpecIDAndName then
+                local sid = GetActiveSpecIDAndName()
+                if sid then beforeID = sid end
+            end
+        end
+
+        local tries = 0
+        specRefreshFrame._specTicker = C_Timer.NewTicker(0.05, function()
+            tries = tries + 1
+
+            local sid
+            if GetActiveSpecIDAndName then
+                sid = GetActiveSpecIDAndName()
+            end
+
+            -- If spec changed (or we never had one), refresh now.
+            if sid and (not beforeID or sid ~= beforeID) then
+                lastSpecID = sid
+                specRefreshFrame._specTicker:Cancel()
+                specRefreshFrame._specTicker = nil
+                DoFullRefresh()
+                return
+            end
+
+            -- Failsafe: after ~0.5s, refresh anyway (covers cases where the event wasn’t a spec swap).
+            if tries >= 10 then
+                if sid then lastSpecID = sid end
+                specRefreshFrame._specTicker:Cancel()
+                specRefreshFrame._specTicker = nil
+                DoFullRefresh()
             end
         end)
     end)
