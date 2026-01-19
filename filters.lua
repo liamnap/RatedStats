@@ -311,7 +311,7 @@ function FilterMatchesByTimeRange(matches, filterType)
 	end
 
 	for _, match in ipairs(matches) do
-		local ts = match.timestamp
+		local ts = match.timestamp or match.endTime
 		if ts then
 			local include = false
 
@@ -449,13 +449,18 @@ function FilterAndSearchMatches(query)
 	-- 🧠 Detect table growth per tab
 	RSTATS.__LastHistoryCount = RSTATS.__LastHistoryCount or {}
 
-	local data = ({
-		[1] = { id = 7, table = Database.SoloShuffleHistory },
-		[2] = { id = 1, table = Database.v2History },
-		[3] = { id = 2, table = Database.v3History },
-		[4] = { id = 4, table = Database.RBGHistory },
-		[5] = { id = 9, table = Database.SoloRBGHistory },
-	})[tabID]
+	local data
+	if (tabID == 1 or tabID == 5) and RSTATS and RSTATS.GetHistoryForTab then
+		data = { id = (tabID == 1 and 7 or 9), table = RSTATS:GetHistoryForTab(tabID) or {} }
+	else
+		data = ({
+			[1] = { id = 7, table = Database.SoloShuffleHistory },
+			[2] = { id = 1, table = Database.v2History },
+			[3] = { id = 2, table = Database.v3History },
+			[4] = { id = 4, table = Database.RBGHistory },
+			[5] = { id = 9, table = Database.SoloRBGHistory },
+		})[tabID]
+	end
 
 	if not data or not data.table then return end
 
