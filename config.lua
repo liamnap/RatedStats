@@ -1639,8 +1639,13 @@ if not EnsureSpecHistory then
                        or nil
         if not bySpecKey then return nil end
 
-        Database[bySpecKey] = Database[bySpecKey] or {}
-        local bucket = Database[bySpecKey]
+        -- IMPORTANT: keep spec buckets runtime-only so SavedVariables don't duplicate full match tables.
+        -- Canonical storage remains Database.SoloShuffleHistory / Database.SoloRBGHistory.
+        RSTATS.__SpecHistoryCache = RSTATS.__SpecHistoryCache or {}
+        local cache = RSTATS.__SpecHistoryCache
+
+        cache[bySpecKey] = cache[bySpecKey] or {}
+        local bucket = cache[bySpecKey]
 
         bucket._specNames = bucket._specNames or {}
         if specName and specName ~= "" then
@@ -2790,10 +2795,16 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
         -- Skip table insert for now, let the 20second delay handle it
     else
         table.insert(historyTable, 1, entry)
-        if categoryID == 7 or categoryID == 9 then
-            local specTable = EnsureSpecHistory(categoryID, mySpecID, mySpecName)
-            if specTable then
-                table.insert(specTable, 1, entry)
+        -- Spec view is runtime-cached. Bust cache so switching spec shows this row immediately.
+        if (categoryID == 7 or categoryID == 9) and RSTATS.__SpecHistoryCache then
+            local key = (categoryID == 7 and "SoloShuffleHistoryBySpec") or "SoloRBGHistoryBySpec"
+            local bucket = RSTATS.__SpecHistoryCache[key]
+            if bucket then
+                bucket._backfilled = bucket._backfilled or {}
+                if mySpecID then
+                    bucket._backfilled[mySpecID] = nil
+                    bucket[mySpecID] = nil
+                end
             end
         end
         SaveData()
@@ -2930,10 +2941,15 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             }
 
             table.insert(historyTable, 1, ssRoundData)
-            do
-                local specTable = EnsureSpecHistory(7, mySpecID, mySpecName)
-                if specTable then
-                    table.insert(specTable, 1, ssRoundData)
+            -- Bust runtime spec cache for SS so the new round appears under the right spec immediately.
+            if RSTATS.__SpecHistoryCache then
+                local bucket = RSTATS.__SpecHistoryCache["SoloShuffleHistoryBySpec"]
+                if bucket then
+                    bucket._backfilled = bucket._backfilled or {}
+                    if mySpecID then
+                        bucket._backfilled[mySpecID] = nil
+                        bucket[mySpecID] = nil
+                    end
                 end
             end
 			SaveData()
