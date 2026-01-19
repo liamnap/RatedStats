@@ -106,7 +106,18 @@ function Config:Toggle()
                 if openTabID == 6 and RSTATS.Summary and RSTATS.Summary.Refresh then
                     RSTATS.Summary:Refresh()
                 else
+                    local dropdown = RSTATS.Dropdowns and RSTATS.Dropdowns[openTabID]
+                    local selected = dropdown and UIDropDownMenu_GetText(dropdown) or "Today"
+                    local filterKey = selected:lower():gsub(" ", "") or "today"
+
+                    local content = RSTATS.ScrollContents and RSTATS.ScrollContents[openTabID]
+                    if content then
+                        ClearStaleMatchFrames(content)
+                    end
+
                     FilterAndSearchMatches(RatedStatsSearchBox and RatedStatsSearchBox:GetText() or "")
+                    RSTATS:UpdateStatsView(filterKey, openTabID)
+                    UpdateCompactHeaders(openTabID)
                 end
             end)
         end
@@ -121,25 +132,46 @@ function Config:Toggle()
             end)
         end
 
-        local data = ({
-            [1] = Database.SoloShuffleHistory,
-            [2] = Database.v2History,
-            [3] = Database.v3History,
-            [4] = Database.RBGHistory,
-            [5] = Database.SoloRBGHistory,
-        })[tabID]
+        -- Growth detection must be spec-aware for SS/RBGB.
+        local data
+        if (tabID == 1 or tabID == 5) and RSTATS and RSTATS.GetHistoryForTab then
+            data = RSTATS:GetHistoryForTab(tabID)
+        else
+            data = ({
+                [1] = Database.SoloShuffleHistory,
+                [2] = Database.v2History,
+                [3] = Database.v3History,
+                [4] = Database.RBGHistory,
+                [5] = Database.SoloRBGHistory,
+            })[tabID]
+        end
 
         if data then
+            RatedStatsFilters = RatedStatsFilters or {}
             RSTATS.__LastHistoryCount = RSTATS.__LastHistoryCount or {}
-            local prev = RSTATS.__LastHistoryCount[tabID] or 0
+
             local current = #data
+            local prev
+
+            -- For SS/RBGB, store count per spec so swapping spec doesn't reuse the old count.
+            if tabID == 1 or tabID == 5 then
+                local specID = GetActiveSpecIDAndName and GetActiveSpecIDAndName() or nil
+                RSTATS.__LastHistoryCountBySpec = RSTATS.__LastHistoryCountBySpec or {}
+                RSTATS.__LastHistoryCountBySpec[tabID] = RSTATS.__LastHistoryCountBySpec[tabID] or {}
+                prev = (specID and RSTATS.__LastHistoryCountBySpec[tabID][specID]) or 0
+                if specID then
+                    RSTATS.__LastHistoryCountBySpec[tabID][specID] = current
+                end
+            else
+                prev = RSTATS.__LastHistoryCount[tabID] or 0
+                RSTATS.__LastHistoryCount[tabID] = current
+            end
 
             if current > prev then
                 -- ✅ History grew, reset filters and re-run display
                 RatedStatsFilters[tabID] = {}
-                RSTATS.__LastHistoryCount[tabID] = current
                 C_Timer.After(0.1, function()
-                    FilterAndSearchMatches(RatedStatsSearchBox:GetText())
+                    FilterAndSearchMatches(RatedStatsSearchBox and RatedStatsSearchBox:GetText() or "")
                 end)
             end
         end
@@ -1139,10 +1171,7 @@ function RefreshDataEvent(self, event, ...)
             local isValidData = IsDataValid()
 
 			if not dataExists or not isValidData then
-				if not InitialCRMMRExists() then
-					GetInitialCRandMMR()
-				else
-				end
+				GetInitialCRandMMR()
 			else
 				CheckForMissedGames()
 			end
@@ -1309,7 +1338,11 @@ do
     local lastSpecID
     local function DoFullRefresh()
 
-        -- Always run this even if the window is closed: ensure the active spec has an Initial entry when empty.
+        -- Spec/talent changed: always mark dirty so the next open forces a redraw.
+        RSTATS.__SpecDirty = true
+
+        -- Always ensure the active spec has an Initial entry for SS/RBGB when empty
+        -- (must run even if the window is closed).
         if EnsureSpecHistory and GetActiveSpecIDAndName and GetInitialCRandMMR then
             local specID, specName = GetActiveSpecIDAndName()
             if specID then
