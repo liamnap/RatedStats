@@ -457,7 +457,7 @@ function FilterAndSearchMatches(query)
 
 	-- SS / Solo RBG are spec-based: filter the active spec table, not the base table.
 	if (tabID == 1 or tabID == 5) and RSTATS and RSTATS.GetHistoryForTab then
-		data.table = RSTATS:GetHistoryForTab(tabID) or data.table
+		data.table = RSTATS:GetHistoryForTab(tabID) or {}
 	end
 
 	local prevCount = RSTATS.__LastHistoryCount[tabID] or 0
