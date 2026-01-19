@@ -342,7 +342,7 @@ function ApplyFilters(match)
 
 		-- SS / RBGB are spec-scoped, so count the *active* spec table (not the base DB table)
 		if (tabID == 1 or tabID == 5) and RSTATS and RSTATS.GetHistoryForTab then
-			historyTable = RSTATS:GetHistoryForTab(tabID)
+			historyTable = RSTATS:GetHistoryForTab(tabID) or {}
 		else
 			local tableByTab = {
 				[1] = Database.SoloShuffleHistory,
@@ -353,10 +353,7 @@ function ApplyFilters(match)
 			}
 			historyTable = tableByTab[tabID]
 		end
-		-- SS / Solo RBG are spec-based: count the active spec table, not the base table.
-		if (tabID == 1 or tabID == 5) and RSTATS and RSTATS.GetHistoryForTab then
-			historyTable = RSTATS:GetHistoryForTab(tabID) or historyTable
-		end
+
 		if historyTable and #historyTable > 2 then
 			return false
 		end
@@ -430,9 +427,16 @@ function ApplyFilters(match)
 	end
 
 	-- 📅 Season
-	if f["DF S4"] or f["TWW S1"] or f["TWW S2"] then
-		local season = GetSeasonLabel(match.timestamp)
-		if not f[season] then return false end
+	do
+		local anySeason = false
+		for _, s in ipairs(Seasons or {}) do
+			if f[s.label] then anySeason = true break end
+		end
+		if anySeason then
+			local ts = match.endTime or match.timestamp
+			local season = GetSeasonLabel(ts)
+			if not f[season] then return false end
+		end
 	end
 
 	return true
@@ -494,7 +498,15 @@ function FilterAndSearchMatches(query)
 	if scrollContent and contentFrame and scrollFrame then
 		local mmrLabel = DisplayCurrentCRMMR(contentFrame, data.id)
 		contentFrame:Show()
-		local headerTexts, matchFrames = RSTATS:DisplayHistory(scrollContent, filtered, mmrLabel, tabID, true)
+		local hasFilters = false
+		local f = RatedStatsFilters and RatedStatsFilters[tabID]
+		if f then
+			for _, v in pairs(f) do
+				if v then hasFilters = true break end
+			end
+		end
+		local isFiltered = (query ~= "") or hasFilters
+		local headerTexts, matchFrames = RSTATS:DisplayHistory(scrollContent, filtered, mmrLabel, tabID, isFiltered)
 
 		local headerAnchor = scrollContent.headerFrame
 		if headerAnchor then
