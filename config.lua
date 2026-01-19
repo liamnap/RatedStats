@@ -97,6 +97,20 @@ function Config:Toggle()
     if wasHidden then
         local tabID = PanelTemplates_GetSelectedTab(RSTATS.UIConfig)
 
+        -- If spec/talents changed while the window was closed, force a rebuild on open.
+        if RSTATS.__SpecDirty then
+            RSTATS.__SpecDirty = nil
+            C_Timer.After(0, function()
+                if not menu:IsShown() then return end
+                local openTabID = PanelTemplates_GetSelectedTab(RSTATS.UIConfig)
+                if openTabID == 6 and RSTATS.Summary and RSTATS.Summary.Refresh then
+                    RSTATS.Summary:Refresh()
+                else
+                    FilterAndSearchMatches(RatedStatsSearchBox and RatedStatsSearchBox:GetText() or "")
+                end
+            end)
+        end
+
         -- ✅ Summary: refresh after the frame is actually shown + laid out.
         -- Without this, Summary can open "blank" until you tab away/back.
         if tabID == 6 and RSTATS.Summary and RSTATS.Summary.Refresh then
@@ -1294,24 +1308,24 @@ do
 
     local lastSpecID
     local function DoFullRefresh()
-            if UIConfig and UIConfig.IsShown and UIConfig:IsShown() then
+
+        -- Always run this even if the window is closed: ensure the active spec has an Initial entry when empty.
+        if EnsureSpecHistory and GetActiveSpecIDAndName and GetInitialCRandMMR then
+            local specID, specName = GetActiveSpecIDAndName()
+            if specID then
+                local ss   = EnsureSpecHistory(7, specID, specName) -- Solo Shuffle
+                local rbgb = EnsureSpecHistory(9, specID, specName) -- Solo RBG
+                if (type(ss) == "table" and #ss == 0) or (type(rbgb) == "table" and #rbgb == 0) then
+                    GetInitialCRandMMR()
+                end
+            end
+        end
+        if UIConfig and UIConfig.IsShown and UIConfig:IsShown() then
                 UpdateSoloShuffleDisplay()
                 Update2v2Display()
                 Update3v3Display()
                 UpdateRBGDisplay()
                 UpdateSoloRBGDisplay()
-
-                -- If we switched into a spec with no SS/RBGB rows, insert a new Initial entry (your existing logic).
-                if EnsureSpecHistory and GetActiveSpecIDAndName and GetInitialCRandMMR then
-                    local specID, specName = GetActiveSpecIDAndName()
-                    if specID then
-                        local ss   = EnsureSpecHistory(7, specID, specName) -- Solo Shuffle
-                        local rbgb = EnsureSpecHistory(9, specID, specName) -- Solo RBG
-                        if (type(ss) == "table" and #ss == 0) or (type(rbgb) == "table" and #rbgb == 0) then
-                            GetInitialCRandMMR()
-                        end
-                    end
-                end
 
                 -- Rebuild the currently selected tab (ACTIVE_TAB_ID can be stale).
                 local tabID = PanelTemplates_GetSelectedTab(RSTATS.UIConfig)
@@ -1337,8 +1351,8 @@ do
     end
 
     specRefreshFrame:SetScript("OnEvent", function(_, event, unit)
-        if event == "PLAYER_SPECIALIZATION_CHANGED" and unit ~= "player" then return end
-
+        -- Spec/talents changed while the UI may be closed. Mark dirty so next open forces a redraw.
+        RSTATS.__SpecDirty = true
         -- Cancel any in-flight ticker so we don’t run multiple refreshes during the same event burst.
         if specRefreshFrame._specTicker then
             specRefreshFrame._specTicker:Cancel()
