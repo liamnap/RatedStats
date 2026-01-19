@@ -3204,6 +3204,13 @@ end
 function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltered)
     ClearStaleMatchFrames(content)		-- needed for rows to not overlap
 
+    -- If a placeholder was previously shown (e.g. during initial menu build),
+    -- always remove it before rebuilding rows.
+    if content.placeholder then
+        content.placeholder:Hide()
+        content.placeholder = nil
+    end
+
     -- 1) Sort history by matchID ascending
     table.sort(historyTable, function(a, b)
         return (a.matchID or 0) < (b.matchID or 0)
