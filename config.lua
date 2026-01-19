@@ -1729,41 +1729,6 @@ function GetInitialCRandMMR()
         return false
     end
 
-    local function SeedInitialForSpec(categoryID, baseKey, cr, mmr, specID, specName)
-        Database[baseKey] = Database[baseKey] or {}
-        table.insert(Database[baseKey], {
-            matchID     = 0,
-            endTime     = time(),
-            duration    = 0,
-            isInitial   = true,
-            friendlyCR  = cr or 0,
-            friendlyMMR = mmr or 0,
-            specID      = specID,
-            specName    = specName,
-            playerStats = {}, -- keep existing shape; your UI already handles empty
-        })
-    end
-
-    -- SS / Solo RBG are spec-scoped
-    if RSTATS.GetActiveSpecIDAndName then
-        local specID, specName = RSTATS.GetActiveSpecIDAndName()
-        if specID then
-            -- Solo Shuffle (category 7 -> Database.SoloShuffleHistory)
-            local ssHas = SpecHasAnyHistory(7, "SoloShuffleHistory", specID, specName)
-            if not ssHas then
-                local cr, mmr = GetCRandMMR(7)
-                SeedInitialForSpec(7, "SoloShuffleHistory", cr, mmr, specID, specName)
-            end
-
-            -- Solo RBG (category 9 -> Database.SoloRBGHistory)
-            local rbgbHas = SpecHasAnyHistory(9, "SoloRBGHistory", specID, specName)
-            if not rbgbHas then
-                local cr, mmr = GetCRandMMR(9)
-                SeedInitialForSpec(9, "SoloRBGHistory", cr, mmr, specID, specName)
-            end
-        end
-    end
-    
     -- Define category mappings with history table names and display names
     local categoryMappings = {
         SoloShuffle = { id = 7, historyTable = "SoloShuffleHistory", displayName = "SoloShuffle" },
@@ -1844,9 +1809,12 @@ function GetInitialCRandMMR()
                         if entry.specName and entry.specName == mySpecName then
                             return
                         end
-                        local ps1 = entry.playerStats and entry.playerStats[1]
-                        if ps1 and ps1.spec == mySpecName then
-                            return
+                        if mySpecName and type(entry.playerStats) == "table" then
+                            for _, ps in ipairs(entry.playerStats) do
+                                if ps and ps.name == playerName and ps.spec == mySpecName then
+                                    return
+                                end
+                            end
                         end
                     end
                 end
