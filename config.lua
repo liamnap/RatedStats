@@ -1352,7 +1352,7 @@ do
         -- Always ensure the active spec has an Initial entry for SS/RBGB when empty
         -- (must run even if the window is closed).
         if EnsureSpecHistory and RSTATS.GetActiveSpecIDAndName and GetInitialCRandMMR then
-            local specID, specName = GetActiveSpecIDAndName()
+            local specID, specName = RSTATS.GetActiveSpecIDAndName()
             if specID then
                 local ss   = EnsureSpecHistory(7, specID, specName) -- Solo Shuffle
                 local rbgb = EnsureSpecHistory(9, specID, specName) -- Solo RBG
