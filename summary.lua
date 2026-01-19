@@ -51,12 +51,26 @@ local BRACKETS = {
     },
 }
 
+local function GetHistoryForBracket(perChar, bracket)
+    -- SS (7) and Solo RBG (9) are spec-based in RatedStats, so use core helper if available.
+    if (bracket.bracketID == 7 or bracket.bracketID == 9) and _G.RSTATS and _G.RSTATS.GetHistoryForTab then
+        return _G.RSTATS:GetHistoryForTab(bracket.tabID) or {}
+    end
+    return (perChar and perChar[bracket.historyKey]) or {}
+end
+
 local function GetDB()
     return _G.RSTATS_Database or RSTATS.Database
 end
 
 local function GetPlayerFullName()
     return UnitName("player") .. "-" .. GetRealmName()
+end
+
+local function GetActiveSpecID()
+    local specIndex = GetSpecialization()
+    if not specIndex then return nil end
+    return select(1, GetSpecializationInfo(specIndex))
 end
 
 local function SafeNumber(v)
@@ -329,7 +343,7 @@ local function BuildTopAllBracketRecords(perChar, valueKey, limit, seasonStart, 
     local tmp = {}
 
     for _, bracket in ipairs(BRACKETS) do
-        local history = perChar[bracket.historyKey] or {}
+        local history = GetHistoryForBracket(perChar, bracket)
         for _, match in ipairs(history) do
             local t = match.endTime or match.timestamp
             if t and t >= seasonStart and t < seasonFinish then
@@ -488,7 +502,7 @@ local function BuildBestWinStreakByBracket(perChar, seasonStart, seasonFinish)
     local out = {}
 
     for _, bracket in ipairs(BRACKETS) do
-        local history = perChar[bracket.historyKey] or {}
+        local history = GetHistoryForBracket(perChar, bracket)
         table.sort(history, SortByEndTime)
 
         local bestLen = 0
@@ -550,7 +564,7 @@ local function BuildFastestWinByBracket(perChar, seasonStart, seasonFinish)
     local out = {}
 
     for _, bracket in ipairs(BRACKETS) do
-        local history = perChar[bracket.historyKey] or {}
+        local history = GetHistoryForBracket(perChar, bracket)
         local bestDur, bestT
 
         for _, match in ipairs(history) do
@@ -586,7 +600,7 @@ local function BuildMostWinsFriendly(perChar, seasonStart, seasonFinish)
     local byName = {}
 
     for _, bracket in ipairs(BRACKETS) do
-        local history = perChar[bracket.historyKey] or {}
+        local history = GetHistoryForBracket(perChar, bracket)
         for _, match in ipairs(history) do
             local t = match.endTime or match.timestamp
             if t and t >= seasonStart and t < seasonFinish then
@@ -2096,11 +2110,18 @@ function Summary:Refresh()
                 end
             end)
         end
-
     end
 
     for i, bracket in ipairs(BRACKETS) do
         local history = perChar[bracket.historyKey] or {}
+        if bracket.bracketID == 7 or bracket.bracketID == 9 then
+            local sid = GetActiveSpecID()
+            if sid then
+                if RSTATS and RSTATS.GetHistoryForTab then
+                    history = RSTATS:GetHistoryForTab(bracket.tabID) or {}
+                end
+            end
+        end
         local seasonMatches = {}
 
         if seasonStart and seasonFinish then
@@ -2127,14 +2148,24 @@ function Summary:Refresh()
 
         local cardData = {
             name = bracket.name,
-            currentCR = perChar[bracket.crKey] or 0,
+            currentCR = (function()
+                local cr = select(1, GetPersonalRatedInfo(bracket.bracketID))
+                return tonumber(cr) or 0
+            end)(),
             currentMMR = (function()
-                local mmr = perChar[bracket.mmrKey] or 0
-                if bracket.tabID == 2 or bracket.tabID == 3 then
-                    local last = GetLatestPostMMRFromHistory(history)
-                    if last then mmr = last end
+                -- Always prefer last stored post-match MMR from our match history.
+                local last = GetLatestPostMMRFromHistory(history)
+                if last and tonumber(last) and tonumber(last) > 0 then
+                    return tonumber(last)
                 end
-                return mmr
+
+                -- Next fallback: DB cached MMR (legacy/current fields).
+                local mmr = tonumber(perChar[bracket.mmrKey]) or 0
+                if mmr > 0 then return mmr end
+
+                -- Final fallback (initial seed only / no usable history yet): live API.
+                local live = select(10, GetPersonalRatedInfo(bracket.bracketID))
+                return tonumber(live) or 0
             end)(),
 
             win = summary.win or 0,

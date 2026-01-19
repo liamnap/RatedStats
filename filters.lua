@@ -311,7 +311,7 @@ function FilterMatchesByTimeRange(matches, filterType)
 	end
 
 	for _, match in ipairs(matches) do
-		local ts = match.timestamp
+		local ts = match.timestamp or match.endTime
 		if ts then
 			local include = false
 
@@ -332,20 +332,14 @@ function FilterMatchesByTimeRange(matches, filterType)
 	return filtered
 end
 
-function ApplyFilters(match)
+function ApplyFilters(match, tabID, historyTable)
 	local f = GetCurrentFilters()
 
 	-- 🧹 Auto-hide 'Initial' games if history has > 2 matches
 	if match.friendlyWinLoss == "I" then
-		local tabID = PanelTemplates_GetSelectedTab(RSTATS.UIConfig)
-		local tableByTab = {
-			[1] = Database.SoloShuffleHistory,
-			[2] = Database.v2History,
-			[3] = Database.v3History,
-			[4] = Database.RBGHistory,
-			[5] = Database.SoloRBGHistory,
-		}
-		local historyTable = tableByTab[tabID]
+        -- Use the resolved table from FilterAndSearchMatches().
+        -- For SS/RBGB this is the active spec bucket.
+        -- For other tabs it's the base DB table.
 		if historyTable and #historyTable > 2 then
 			return false
 		end
@@ -419,9 +413,16 @@ function ApplyFilters(match)
 	end
 
 	-- 📅 Season
-	if f["DF S4"] or f["TWW S1"] or f["TWW S2"] then
-		local season = GetSeasonLabel(match.timestamp)
-		if not f[season] then return false end
+	do
+		local anySeason = false
+		for _, s in ipairs(Seasons or {}) do
+			if f[s.label] then anySeason = true break end
+		end
+		if anySeason then
+			local ts = match.endTime or match.timestamp
+			local season = GetSeasonLabel(ts)
+			if not f[season] then return false end
+		end
 	end
 
 	return true
@@ -434,13 +435,18 @@ function FilterAndSearchMatches(query)
 	-- 🧠 Detect table growth per tab
 	RSTATS.__LastHistoryCount = RSTATS.__LastHistoryCount or {}
 
-	local data = ({
-		[1] = { id = 7, table = Database.SoloShuffleHistory },
-		[2] = { id = 1, table = Database.v2History },
-		[3] = { id = 2, table = Database.v3History },
-		[4] = { id = 4, table = Database.RBGHistory },
-		[5] = { id = 9, table = Database.SoloRBGHistory },
-	})[tabID]
+	local data
+	if (tabID == 1 or tabID == 5) and RSTATS and RSTATS.GetHistoryForTab then
+		data = { id = (tabID == 1 and 7 or 9), table = RSTATS:GetHistoryForTab(tabID) or {} }
+	else
+		data = ({
+			[1] = { id = 7, table = Database.SoloShuffleHistory },
+			[2] = { id = 1, table = Database.v2History },
+			[3] = { id = 2, table = Database.v3History },
+			[4] = { id = 4, table = Database.RBGHistory },
+			[5] = { id = 9, table = Database.SoloRBGHistory },
+		})[tabID]
+	end
 
 	if not data or not data.table then return end
 
@@ -449,10 +455,11 @@ function FilterAndSearchMatches(query)
 	local forceRedraw = currentCount > prevCount
 	RSTATS.__LastHistoryCount[tabID] = currentCount
 
-	local filtered = {}
-	for _, match in ipairs(data.table) do
-		local matches = ApplyFilters(match)
+    local historyTable = data.table
 
+    local filtered = {}
+    for _, match in ipairs(historyTable) do
+        local matches = ApplyFilters(match, tabID, historyTable)
 		if query ~= "" then
 			local found = (match.mapName and match.mapName:lower():find(query))
 			if not found then
@@ -478,7 +485,15 @@ function FilterAndSearchMatches(query)
 	if scrollContent and contentFrame and scrollFrame then
 		local mmrLabel = DisplayCurrentCRMMR(contentFrame, data.id)
 		contentFrame:Show()
-		local headerTexts, matchFrames = RSTATS:DisplayHistory(scrollContent, filtered, mmrLabel, tabID, true)
+		local hasFilters = false
+		local f = RatedStatsFilters and RatedStatsFilters[tabID]
+		if f then
+			for _, v in pairs(f) do
+				if v then hasFilters = true break end
+			end
+		end
+		local isFiltered = (query ~= "") or hasFilters
+		local headerTexts, matchFrames = RSTATS:DisplayHistory(scrollContent, filtered, mmrLabel, tabID, isFiltered)
 
 		local headerAnchor = scrollContent.headerFrame
 		if headerAnchor then

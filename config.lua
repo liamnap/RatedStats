@@ -97,6 +97,31 @@ function Config:Toggle()
     if wasHidden then
         local tabID = PanelTemplates_GetSelectedTab(RSTATS.UIConfig)
 
+        -- If spec/talents changed while the window was closed, force a rebuild on open.
+        if RSTATS.__SpecDirty then
+            RSTATS.__SpecDirty = nil
+            C_Timer.After(0, function()
+                if not menu:IsShown() then return end
+                local openTabID = PanelTemplates_GetSelectedTab(RSTATS.UIConfig)
+                if openTabID == 6 and RSTATS.Summary and RSTATS.Summary.Refresh then
+                    RSTATS.Summary:Refresh()
+                else
+                    local dropdown = RSTATS.Dropdowns and RSTATS.Dropdowns[openTabID]
+                    local selected = dropdown and UIDropDownMenu_GetText(dropdown) or "Today"
+                    local filterKey = selected:lower():gsub(" ", "") or "today"
+
+                    local content = RSTATS.ScrollContents and RSTATS.ScrollContents[openTabID]
+                    if content then
+                        ClearStaleMatchFrames(content)
+                    end
+
+                    FilterAndSearchMatches(RatedStatsSearchBox and RatedStatsSearchBox:GetText() or "")
+                    RSTATS:UpdateStatsView(filterKey, openTabID)
+                    UpdateCompactHeaders(openTabID)
+                end
+            end)
+        end
+
         -- ✅ Summary: refresh after the frame is actually shown + laid out.
         -- Without this, Summary can open "blank" until you tab away/back.
         if tabID == 6 and RSTATS.Summary and RSTATS.Summary.Refresh then
@@ -107,25 +132,46 @@ function Config:Toggle()
             end)
         end
 
-        local data = ({
-            [1] = Database.SoloShuffleHistory,
-            [2] = Database.v2History,
-            [3] = Database.v3History,
-            [4] = Database.RBGHistory,
-            [5] = Database.SoloRBGHistory,
-        })[tabID]
+        -- Growth detection must be spec-aware for SS/RBGB.
+        local data
+        if (tabID == 1 or tabID == 5) and RSTATS and RSTATS.GetHistoryForTab then
+            data = RSTATS:GetHistoryForTab(tabID)
+        else
+            data = ({
+                [1] = Database.SoloShuffleHistory,
+                [2] = Database.v2History,
+                [3] = Database.v3History,
+                [4] = Database.RBGHistory,
+                [5] = Database.SoloRBGHistory,
+            })[tabID]
+        end
 
         if data then
+            RatedStatsFilters = RatedStatsFilters or {}
             RSTATS.__LastHistoryCount = RSTATS.__LastHistoryCount or {}
-            local prev = RSTATS.__LastHistoryCount[tabID] or 0
+
             local current = #data
+            local prev
+
+            -- For SS/RBGB, store count per spec so swapping spec doesn't reuse the old count.
+            if tabID == 1 or tabID == 5 then
+                local specID = RSTATS.GetActiveSpecIDAndName and RSTATS.GetActiveSpecIDAndName() or nil
+                RSTATS.__LastHistoryCountBySpec = RSTATS.__LastHistoryCountBySpec or {}
+                RSTATS.__LastHistoryCountBySpec[tabID] = RSTATS.__LastHistoryCountBySpec[tabID] or {}
+                prev = (specID and RSTATS.__LastHistoryCountBySpec[tabID][specID]) or 0
+                if specID then
+                    RSTATS.__LastHistoryCountBySpec[tabID][specID] = current
+                end
+            else
+                prev = RSTATS.__LastHistoryCount[tabID] or 0
+                RSTATS.__LastHistoryCount[tabID] = current
+            end
 
             if current > prev then
                 -- ✅ History grew, reset filters and re-run display
                 RatedStatsFilters[tabID] = {}
-                RSTATS.__LastHistoryCount[tabID] = current
                 C_Timer.After(0.1, function()
-                    FilterAndSearchMatches(RatedStatsSearchBox:GetText())
+                    FilterAndSearchMatches(RatedStatsSearchBox and RatedStatsSearchBox:GetText() or "")
                 end)
             end
         end
@@ -343,7 +389,7 @@ function LoadData()
 end
 
 -- Define a function to clear the database, only use to debug
-function ClearDatabase()
+function RSTATS:ClearDatabase()
     RSTATS_Database = {}
     RSTATS.Database[playerName] = {}
     Database = {}
@@ -368,6 +414,43 @@ function GetCRandMMR(categoryID)
     -- Legacy fallback (harmless if nil)
     if mmr == nil then
         mmr = select(10, GetPersonalRatedInfo(categoryID))
+    end
+
+    -- Spec-based brackets: NEVER fall back to saved non-spec values.
+    -- If the API returns 0/nil for a spec you haven't played yet, keep it 0
+    -- unless we can recover from THIS spec's history bucket.
+    if categoryID == 7 or categoryID == 9 then
+        cr  = tonumber(cr)  or 0
+        mmr = tonumber(mmr) or 0
+
+        if (cr == 0 or mmr == 0) and EnsureSpecHistory and RSTATS.GetActiveSpecIDAndName then
+            local specID, specName = RSTATS.GetActiveSpecIDAndName()
+            if specID then
+                local t = EnsureSpecHistory(categoryID, specID, specName)
+                if type(t) == "table" and #t > 0 then
+                    -- Find the last non-initial row if possible
+                    for i = #t, 1, -1 do
+                        local e = t[i]
+                        if e and not e.isInitial then
+                            cr  = tonumber(e.friendlyCR)  or cr
+                            mmr = tonumber(e.friendlyMMR) or mmr
+                            break
+                        end
+                    end
+
+                    -- If we only have Initial, that is still spec-correct (usually 0/0)
+                    if cr == 0 or mmr == 0 then
+                        local e = t[#t]
+                        if e then
+                            cr  = tonumber(e.friendlyCR)  or cr
+                            mmr = tonumber(e.friendlyMMR) or mmr
+                        end
+                    end
+                end
+            end
+        end
+
+        return cr, mmr
     end
 
     return cr, mmr
@@ -1125,10 +1208,7 @@ function RefreshDataEvent(self, event, ...)
             local isValidData = IsDataValid()
 
 			if not dataExists or not isValidData then
-				if not InitialCRMMRExists() then
-					GetInitialCRandMMR()
-				else
-				end
+				GetInitialCRandMMR()
 			else
 				CheckForMissedGames()
 			end
@@ -1285,6 +1365,170 @@ function UpdateSoloRBGDisplay()
     end
 end
 
+-- Debug toggle (off by default). Enable with: /run RSTATS_DEBUG_SPEC=true
+-- Disable with: /run RSTATS_DEBUG_SPEC=false
+local function SpecDebug(...)
+    if not _G.RSTATS_DEBUG_SPEC then return end
+    local msg = string.format(...)
+    print(string.format("|cffb69e86Rated Stats:|r [Spec] t=%.3f %s", GetTime(), msg))
+end
+
+-- Refresh UI + seed spec-scoped Initials when the player changes spec/talents.
+-- Must run even if the window is closed (talents UI closes Rated Stats).
+do
+    local specRefreshFrame = CreateFrame("Frame")
+    specRefreshFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+    specRefreshFrame:RegisterEvent("PLAYER_TALENT_UPDATE")
+    specRefreshFrame:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
+    specRefreshFrame:RegisterEvent("TRAIT_CONFIG_UPDATED")
+    specRefreshFrame:RegisterEvent("PVP_RATED_STATS_UPDATE")  -- Covers CR/MMR changes on spec switching
+
+    local lastspecID
+    local pendingSeedSpecID
+    local pendingSeedSpecName
+
+    local function GetAPISpecIDAndName()
+        local sidx = GetSpecialization and GetSpecialization() or nil
+        if not sidx or not GetSpecializationInfo then return nil end
+        local sid, name = GetSpecializationInfo(sidx)
+        return sid, name
+    end
+
+    local function QueueInitialSeedIfNeeded()
+        if not (EnsureSpecHistory and GetInitialCRandMMR) then return end
+
+        local specID, specName = GetAPISpecIDAndName()
+        if not specID then return end
+
+        local ss   = EnsureSpecHistory(7, specID, specName) -- Solo Shuffle
+        local rbgb = EnsureSpecHistory(9, specID, specName) -- Solo RBG
+
+        if (type(ss) == "table" and #ss == 0) or (type(rbgb) == "table" and #rbgb == 0) then
+            pendingSeedSpecID = specID
+            pendingSeedSpecName = specName
+            RequestRatedInfo() -- triggers PVP_RATED_STATS_UPDATE when fresh
+        end
+    end
+
+    local function DoFullRefresh()
+        -- Spec/talent changed: force rebuild next time the window opens.
+        RSTATS.__SpecDirty = true
+
+        -- Queue seeding, but ONLY perform it after PVP_RATED_STATS_UPDATE so stats are fresh for the new spec.
+        QueueInitialSeedIfNeeded()
+
+        -- If the window is open right now, refresh displays immediately.
+        if UIConfig and UIConfig.IsShown and UIConfig:IsShown() then
+            UpdateSoloShuffleDisplay()
+            Update2v2Display()
+            Update3v3Display()
+            UpdateRBGDisplay()
+            UpdateSoloRBGDisplay()
+
+            local tabID = PanelTemplates_GetSelectedTab(RSTATS.UIConfig)
+            if tabID then
+                local dropdown = RSTATS.Dropdowns and RSTATS.Dropdowns[tabID]
+                local selected = dropdown and UIDropDownMenu_GetText(dropdown) or "Today"
+                local filterKey = selected:lower():gsub(" ", "") or "today"
+
+                local content = RSTATS.ScrollContents and RSTATS.ScrollContents[tabID]
+                if content then
+                    ClearStaleMatchFrames(content)
+                end
+
+                FilterAndSearchMatches(RatedStatsSearchBox and RatedStatsSearchBox:GetText() or "")
+                RSTATS:UpdateStatsView(filterKey, tabID)
+                UpdateCompactHeaders(tabID)
+            end
+
+            if RSTATS.Summary and RSTATS.Summary.frame and RSTATS.Summary.frame:IsShown() then
+                RSTATS.Summary:Refresh()
+            end
+        end
+    end
+
+    local function InitLastSpec()
+        local sid = GetAPISpecIDAndName()
+        if sid then
+            lastSpecID = sid
+        end
+    end
+
+    specRefreshFrame:SetScript("OnEvent", function(_, event, unit)
+        if event == "PLAYER_ENTERING_WORLD" then
+            InitLastSpec()
+            -- Pre-backfill the current spec buckets so opening the window doesn't show "waiting".
+            local sid, sname = GetAPISpecIDAndName()
+            if sid and EnsureSpecHistory then
+                EnsureSpecHistory(7, sid, sname)
+                EnsureSpecHistory(9, sid, sname)
+            end
+            RequestRatedInfo()
+            return
+        end
+
+        if event == "PVP_RATED_STATS_UPDATE" then
+            if pendingSeedSpecID and GetInitialCRandMMR then
+                local sid = select(1, GetAPISpecIDAndName())
+                if sid and sid == pendingSeedSpecID then
+                    pendingSeedSpecID = nil
+                    pendingSeedSpecName = nil
+                    GetInitialCRandMMR()
+                end
+            end
+            return
+        end
+
+        if event == "PLAYER_TALENT_UPDATE" then
+            -- Force the rated stats refresh for the new spec (Blizzard does this too).
+            RequestRatedInfo()
+        end
+
+        -- Burst events fire while Blizzard swaps spec; poll briefly until API spec id flips.
+        if specRefreshFrame._specTicker then
+            specRefreshFrame._specTicker:Cancel()
+            specRefreshFrame._specTicker = nil
+        end
+
+        local beforeID = lastSpecID
+        local tries = 0
+
+        specRefreshFrame._specTicker = C_Timer.NewTicker(0.05, function()
+            tries = tries + 1
+
+            local sid = select(1, GetAPISpecIDAndName())
+
+            -- If spec changed (or we never had one), refresh now.
+            if sid and (not beforeID or sid ~= beforeID) then
+                lastSpecID = sid
+                specRefreshFrame._specTicker:Cancel()
+                specRefreshFrame._specTicker = nil
+
+                -- Clear tab-scoped filters for SS/RBGB so the new spec's Initial can't be hidden.
+                RatedStatsFilters = RatedStatsFilters or {}
+                RatedStatsFilters[1] = {}
+                RatedStatsFilters[5] = {}
+
+                -- Reset growth counters so the next open/reflow isn't stuck.
+                RSTATS.__LastHistoryCount = RSTATS.__LastHistoryCount or {}
+                RSTATS.__LastHistoryCount[1] = 0
+                RSTATS.__LastHistoryCount[5] = 0
+
+                DoFullRefresh()
+                return
+            end
+
+            -- Failsafe after ~0.5s: refresh anyway (covers talent-only edits).
+            if tries >= 10 then
+                if sid then lastSpecID = sid end
+                specRefreshFrame._specTicker:Cancel()
+                specRefreshFrame._specTicker = nil
+                DoFullRefresh()
+            end
+        end)
+    end)
+end
+
 local function GetPlayerRole()
     local role = UnitGroupRolesAssigned("player")
     
@@ -1321,7 +1565,7 @@ local function GetPlayerRole()
             -- Evoker
             [1467] = 8,      -- Devastation Evoker (DPS)
             [1468] = 4,      -- Preservation Evoker (HEALER)
-            [1473] = 2,      -- Augmentation Evoker (TANK)
+            [1473] = 8,      -- Augmentation Evoker (DPS)
         
             -- Hunter
             [253] = 8,       -- Beast Mastery Hunter (DPS)
@@ -1373,8 +1617,145 @@ local function GetPlayerRole()
     end
 end
 
+-- ==========================================================
+-- Active spec helpers (used by initial entries + spec history)
+-- ==========================================================
+function RSTATS.GetActiveSpecIDAndName()
+    local specIndex = GetSpecialization()
+    if not specIndex then return nil, nil end
+    local specID, specName = GetSpecializationInfo(specIndex)
+    return specID, specName
+end
+
+-- ==========================================================
+-- Spec-scoped history helpers (SS / Solo RBG)
+-- ==========================================================
+if not EnsureSpecHistory then
+    function EnsureSpecHistory(categoryID, specID, specName)
+        if not Database or not categoryID or not specID then return nil end
+
+        local bySpecKey = (categoryID == 7 and "SoloShuffleHistoryBySpec")
+                       or (categoryID == 9 and "SoloRBGHistoryBySpec")
+                       or nil
+        if not bySpecKey then return nil end
+
+        -- IMPORTANT: keep spec buckets runtime-only so SavedVariables don't duplicate full match tables.
+        -- Canonical storage remains Database.SoloShuffleHistory / Database.SoloRBGHistory.
+        RSTATS.__SpecHistoryCache = RSTATS.__SpecHistoryCache or {}
+        local cache = RSTATS.__SpecHistoryCache
+
+        cache[bySpecKey] = cache[bySpecKey] or {}
+        local bucket = cache[bySpecKey]
+
+        bucket._specNames = bucket._specNames or {}
+        if specName and specName ~= "" then
+            bucket._specNames[specID] = specName
+        end
+
+        if type(bucket[specID]) ~= "table" then
+            bucket[specID] = {}
+        end
+
+        -- One-time backfill from the main history table so spec switching shows existing rows.
+        bucket._backfilled = bucket._backfilled or {}
+        if not bucket._backfilled[specID] and #bucket[specID] == 0 then
+            local baseKey = (categoryID == 7 and "SoloShuffleHistory")
+                        or (categoryID == 9 and "SoloRBGHistory")
+                        or nil
+            local base = baseKey and Database[baseKey]
+            if type(base) == "table" then
+                for _, entry in ipairs(base) do
+                    if entry then
+                        local match = false
+                        if entry.specID and entry.specID == specID then
+                            match = true
+                        elseif specName and entry.specName and entry.specName == specName then
+                            match = true
+                        elseif specName and type(entry.playerStats) == "table" then
+                            for _, ps in ipairs(entry.playerStats) do
+                                if ps and ps.name == (_G.playerName or playerName) and ps.spec == specName then
+                                    match = true
+                                    break
+                                end
+                            end
+                        end
+                        if match then
+                            table.insert(bucket[specID], entry)
+                        end
+                    end
+                end
+            end
+            bucket._backfilled[specID] = true
+        end
+        return bucket[specID]
+    end
+end
+
+-- If another file already defines this, don't override it.
+if RSTATS and not RSTATS.GetHistoryForTab then
+    function RSTATS:GetHistoryForTab(tabID)
+        if tabID == 1 then
+            local specID, specName = RSTATS.GetActiveSpecIDAndName()
+            local t = specID and EnsureSpecHistory(7, specID, specName)
+            if specID then
+                return EnsureSpecHistory(7, specID, specName) or {}
+            end
+            return (Database.SoloShuffleHistory or {})
+        elseif tabID == 5 then
+            local specID, specName = RSTATS.GetActiveSpecIDAndName()
+            local t = specID and EnsureSpecHistory(9, specID, specName)
+            if specID then
+                return EnsureSpecHistory(9, specID, specName) or {}
+            end
+            return (Database.SoloRBGHistory or {})
+        end
+
+        return ({
+            [2] = Database.v2History,
+            [3] = Database.v3History,
+            [4] = Database.RBGHistory,
+        })[tabID] or {}
+    end
+end
+
 -- Function to get initial and current CR and MMR values
 function GetInitialCRandMMR()
+    local function EntryMatchesSpec(entry, specID, specName)
+        if not entry or not specID then return false end
+        if entry.specID and entry.specID == specID then
+            return true
+        end
+        if specName and entry.specName and entry.specName == specName then
+            return true
+        end
+        if specName and type(entry.playerStats) == "table" then
+            for _, ps in ipairs(entry.playerStats) do
+                if ps and ps.name == playerName and ps.spec == specName then
+                    return true
+                end
+            end
+        end
+        return false
+    end
+
+    local function SpecHasAnyHistory(categoryID, baseKey, specID, specName)
+        if EnsureSpecHistory then
+            local t = EnsureSpecHistory(categoryID, specID, specName)
+            if type(t) == "table" and #t > 0 then
+                return true
+            end
+        end
+        local base = Database and Database[baseKey]
+        if type(base) == "table" then
+            for _, entry in ipairs(base) do
+                if EntryMatchesSpec(entry, specID, specName) then
+                    return true
+                end
+            end
+        end
+        return false
+    end
+
     -- Define category mappings with history table names and display names
     local categoryMappings = {
         SoloShuffle = { id = 7, historyTable = "SoloShuffleHistory", displayName = "SoloShuffle" },
@@ -1415,6 +1796,7 @@ function GetInitialCRandMMR()
         if not Database[historyTableName] then
             Database[historyTableName] = {}
         end
+        local historyTable = Database[historyTableName]
 
         -- Get initial CR, MMR, and played games
         local cr = GetInitialCR(categoryID)
@@ -1430,10 +1812,57 @@ function GetInitialCRandMMR()
             duoPartner = GetRBGBDuoPartnerNameRealm()
         end
 
+        local mySpecID, mySpecName = RSTATS.GetActiveSpecIDAndName()
+
+        -- Only insert an initial entry if this bracket actually has no history.
+        -- For spec-based ladders (SS/RBGB), only insert if THIS spec has no history.
+         if categoryID == 7 or categoryID == 9 then
+            if mySpecID and mySpecName then
+                -- 1) Prefer the spec bucket (new storage)
+                if EnsureSpecHistory then
+                    local specTable = EnsureSpecHistory(categoryID, mySpecID, mySpecName)
+                    if type(specTable) == "table" and #specTable > 0 then
+                        return
+                    end
+                end
+
+                -- 2) Legacy safety net: if the main table already contains rows for this spec,
+                --    do NOT create a new Initial (backfill may fail on old name formats).
+                for _, entry in ipairs(historyTable) do
+                    if entry then
+                        if entry.specID and entry.specID == mySpecID then
+                            return
+                        end
+                        if entry.specName and entry.specName == mySpecName then
+                            return
+                        end
+                        if mySpecName and type(entry.playerStats) == "table" then
+                            for _, ps in ipairs(entry.playerStats) do
+                                if ps and ps.name == playerName and ps.spec == mySpecName then
+                                    return
+                                end
+                            end
+                        end
+                    end
+                end
+            else
+                -- No spec info available: fall back to main table.
+                if #historyTable > 0 then
+                    return
+                end
+            end
+        else
+            if #historyTable > 0 then
+                return
+            end
+        end
+
         -- Create an entry with the current timestamp
         local entry = {
 			matchID = 1,
             timestamp = GetTimestamp(),
+            specID = mySpecID,
+            specName = mySpecName,
             cr = cr,
             mmr = "-",
             isInitial = true,
@@ -1495,8 +1924,22 @@ function GetInitialCRandMMR()
 			})
 		end
 
-        -- Insert the entry into the history table
-        table.insert(Database[historyTableName], 1, entry)
+        -- Insert the entry:
+        -- - Non-spec brackets: main table only
+        -- - SS/RBGB: insert into spec table; only insert into main if it's completely empty (keeps main clean)
+        if categoryID == 7 or categoryID == 9 then
+            if EnsureSpecHistory and mySpecID then
+                local specTable = EnsureSpecHistory(categoryID, mySpecID, mySpecName)
+                if type(specTable) == "table" then
+                    table.insert(specTable, 1, entry)
+                end
+            end
+            if #historyTable == 0 then
+                table.insert(historyTable, 1, entry)
+            end
+        else
+            table.insert(historyTable, 1, entry)
+        end
 
     end
 
@@ -1508,12 +1951,18 @@ function GetInitialCRandMMR()
     SaveData()
 end
 
+-- ==========================================================
+-- Spec-based rated ladders (SS / Solo RBG) need spec-scoped history
+-- ==========================================================
 -- Helper function to get player full name
 function GetPlayerFullName()
     local name = UnitName("player")
     local realm = GetRealmName()
     return name .. "-" .. realm
 end
+
+-- Prevent overlapping login retries from creating duplicate "missed game" inserts.
+local _missedGamesRunToken = 0
 
 function CheckForMissedGames()
 ---    local function Log(msg)
@@ -1522,6 +1971,8 @@ function CheckForMissedGames()
 ---    end
 
 ---    Log("CheckForMissedGames triggered.")
+    _missedGamesRunToken = _missedGamesRunToken + 1
+    local runToken = _missedGamesRunToken
 
     local categoryMappings = {
         SoloShuffle = { id = 7, historyTable = "SoloShuffleHistory", displayName = "SoloShuffle" },
@@ -1532,6 +1983,11 @@ function CheckForMissedGames()
     }
 
 	local function StoreMissedGame(categoryName, category, attempts)
+        -- If a newer CheckForMissedGames() call started, abandon this chain.
+        if runToken ~= _missedGamesRunToken then
+            return
+        end
+
 		local _, _, _, totalGames = GetPersonalRatedInfo(category.id)
 		attempts = attempts or 0
 		
@@ -1539,6 +1995,7 @@ function CheckForMissedGames()
 			if attempts < 10 then
 ---			Log("Skipped category ID " .. category.id .. " — totalGames is nil.")
 				C_Timer.After(3, function()
+                    if runToken ~= _missedGamesRunToken then return end
 					StoreMissedGame(categoryName, category, attempts + 1)
 				end)
 			end
@@ -1546,6 +2003,14 @@ function CheckForMissedGames()
 		end
 	
 		local playedField = "Playedfor" .. categoryName
+		-- If this bracket has never been initialised for THIS character,
+		-- do NOT backfill their entire lifetime as "missed games".
+		-- Just sync the counter and move on.
+		if Database[playedField] == nil then
+			Database[playedField] = totalGames
+			return
+		end
+
 		local lastRecorded = tonumber(Database[playedField]) or 0
 		local historyTable = Database[category.historyTable]
 		if type(historyTable) ~= "table" then
@@ -1553,6 +2018,27 @@ function CheckForMissedGames()
 			Database[category.historyTable] = historyTable
 		end
 	
+        -- If we already have history rows but Playedfor* is missing/stale, do NOT backfill.
+        -- Just sync Playedfor* to the API value.
+        if lastRecorded == 0 and #historyTable > 0 then
+            Database[playedField] = totalGames
+            return
+        end
+
+        local gap = totalGames - lastRecorded
+        -- Sanity guard: a disconnect should not create dozens of missed games.
+        -- If this ever happens, it’s a DB mismatch, so just sync and do nothing.
+        if gap > 3 then
+            Database[playedField] = totalGames
+            return
+        end
+
+		-- Same deal: empty history means no baseline; sync count and stop.
+		if #historyTable == 0 then
+			Database[playedField] = totalGames
+			return
+		end
+
 ---		Log(string.format("Checking category ID %d | Last Recorded: %d | Total Games: %d", category.id, lastRecorded, totalGames))
 	
 		if totalGames > lastRecorded then
@@ -1611,8 +2097,9 @@ function CheckForMissedGames()
 				currentMMR = prevMMR
 			end
 
-			local gap = totalGames - lastRecorded
-			for n = 1, gap do
+                local mySpecID, mySpecName = RSTATS.GetActiveSpecIDAndName()
+
+                for n = 1, gap do
 				local matchID = highestMatchID + n
 				local crChange = (n == gap) and (currentCR - previousCR) or 0
 
@@ -1622,6 +2109,8 @@ function CheckForMissedGames()
 					winLoss = "Missed Game",
 					friendlyWinLoss = "Missed Game",
 					timestamp = GetTimestamp(),
+                    specID = mySpecID,
+                    specName = mySpecName,
 					-- keep both naming styles so the rest of the addon stays happy
 					cr = currentCR,
 					mmr = currentMMR,
@@ -1655,7 +2144,7 @@ function CheckForMissedGames()
 						faction = UnitFactionGroup("player"),
 						race = UnitRace("player"),
 						class = UnitClass("player"),
-						spec = GetSpecialization() and select(2, GetSpecializationInfo(GetSpecialization())) or "N/A",
+                        spec = mySpecName or (GetSpecialization() and select(2, GetSpecializationInfo(GetSpecialization())) or "N/A"),
 						role = GetPlayerRole(),
 						newrating = currentCR,
                         postmatchMMR = currentMMR,
@@ -1687,6 +2176,12 @@ function CheckForMissedGames()
 				})
 
 				table.insert(historyTable, 1, entry)
+                if (category.id == 7 or category.id == 9) and mySpecID then
+                    local specTable = EnsureSpecHistory(category.id, mySpecID, mySpecName)
+                    if specTable then
+                        table.insert(specTable, 1, entry)
+                    end
+                end
 			end
 ---			Log("Inserted missed match entry for category ID " .. category.id)
 		else
@@ -2232,10 +2727,21 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
         duoPartner = GetRBGBDuoPartnerNameRealm()
     end
 
+    -- Track the player's active spec for spec-based rated ladders (and spec-based UI display).
+    local mySpecID, mySpecName
+    do
+        local specIndex = GetSpecialization()
+        if specIndex then
+            mySpecID, mySpecName = GetSpecializationInfo(specIndex)
+        end
+    end
+
     local entry = {
         matchID = appendHistoryMatchID,
         isSoloShuffle = C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() or false,
         timestamp = endTime,
+        specID = mySpecID,
+        specName = mySpecName,
         cr = cr,
         mmr = mmr,
         isInitial = false,
@@ -2289,6 +2795,18 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
         -- Skip table insert for now, let the 20second delay handle it
     else
         table.insert(historyTable, 1, entry)
+        -- Spec view is runtime-cached. Bust cache so switching spec shows this row immediately.
+        if (categoryID == 7 or categoryID == 9) and RSTATS.__SpecHistoryCache then
+            local key = (categoryID == 7 and "SoloShuffleHistoryBySpec") or "SoloRBGHistoryBySpec"
+            local bucket = RSTATS.__SpecHistoryCache[key]
+            if bucket then
+                bucket._backfilled = bucket._backfilled or {}
+                if mySpecID then
+                    bucket._backfilled[mySpecID] = nil
+                    bucket[mySpecID] = nil
+                end
+            end
+        end
         SaveData()
     end
 
@@ -2391,6 +2909,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                 matchID = appendHistoryMatchID,
                 isSoloShuffle = true,
                 timestamp = endTime,
+                specID = mySpecID,
+                specName = mySpecName,
                 cr = cr,
                 mmr = mmr,
                 isInitial = false,
@@ -2421,6 +2941,17 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             }
 
             table.insert(historyTable, 1, ssRoundData)
+            -- Bust runtime spec cache for SS so the new round appears under the right spec immediately.
+            if RSTATS.__SpecHistoryCache then
+                local bucket = RSTATS.__SpecHistoryCache["SoloShuffleHistoryBySpec"]
+                if bucket then
+                    bucket._backfilled = bucket._backfilled or {}
+                    if mySpecID then
+                        bucket._backfilled[mySpecID] = nil
+                        bucket[mySpecID] = nil
+                    end
+                end
+            end
 			SaveData()
             playerDeathSeen = false
 		end)
@@ -2843,6 +3374,13 @@ end
 ------------------------------------------------------------------------------
 function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltered)
     ClearStaleMatchFrames(content)		-- needed for rows to not overlap
+
+    -- If a placeholder was previously shown (e.g. during initial menu build),
+    -- always remove it before rebuilding rows.
+    if content.placeholder then
+        content.placeholder:Hide()
+        content.placeholder = nil
+    end
 
     -- 1) Sort history by matchID ascending
     table.sort(historyTable, function(a, b)
@@ -4291,9 +4829,59 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
     -- categoryID here is the rated bracket index (1=2v2, 2=3v3, 4=RBG, 7=Solo Shuffle, 9=Blitz)
     -- We prefer the last match entry for CR/MMR display (most reliable), but tier icons are derived from the same bracket.
 
-    local currentCR  = "0"
-    local currentMMR = "0"
-	
+    local currentCR  = 0
+    local currentMMR = 0
+    local useSpec = (categoryID == 7 or categoryID == 9)
+    local _, playerClassTag = UnitClass("player")
+
+    local function GetActiveSpecID()
+        local specIndex = GetSpecialization()
+        if not specIndex then return nil end
+        return select(1, GetSpecializationInfo(specIndex))
+    end
+
+    local function ResolveEntrySpecID(entry)
+        if not entry or type(entry) ~= "table" then return nil end
+        if entry.specID then return entry.specID end
+        local specName = entry.specName
+        if (not specName or specName == "") and type(entry.playerStats) == "table" then
+            for _, stats in ipairs(entry.playerStats) do
+                if stats and stats.name == playerName then
+                    specName = stats.spec
+                    break
+                end
+            end
+        end
+
+        if specName and playerClassTag and RSTATS and RSTATS.Roles
+            and RSTATS.Roles[playerClassTag]
+            and RSTATS.Roles[playerClassTag][specName]
+            and RSTATS.Roles[playerClassTag][specName].specID
+        then
+            entry.specID = RSTATS.Roles[playerClassTag][specName].specID
+            return entry.specID
+        end
+
+        return nil
+    end
+
+    local activeSpecID = useSpec and GetActiveSpecID() or nil
+
+    -- Live rating: updates immediately when the player swaps spec.
+    do
+        local crLive, mmrLive = GetCRandMMR(categoryID)
+        currentCR  = tonumber(crLive)  or 0
+        currentMMR = tonumber(mmrLive) or 0
+
+        -- IMPORTANT:
+        -- For SS (7) + RBGB (9) we do NOT want to "lock in" the live/API MMR,
+        -- because it can be misleading. These brackets should prefer the last
+        -- stored post-match MMR from our history (playerStats / friendlyMMR).
+        if categoryID == 7 or categoryID == 9 then
+            currentMMR = 0
+        end
+    end
+
     local categoryMappings = {
         [1] = "v2History",
         [2] = "v3History",
@@ -4308,8 +4896,22 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
 
     -- 1) First, find the entry with the highest matchID
     if historyTable and #historyTable > 0 then
+        local useSpec = (categoryID == 7 or categoryID == 9)
         for _, entry in ipairs(historyTable) do
-            if entry.matchID and (not highestMatchID or entry.matchID > highestMatchID) then
+            local ok = true
+            if useSpec then
+                -- SS/RBGB are spec-scoped. If we cannot resolve active spec, do NOT pick a row.
+                if not activeSpecID then
+                    ok = false
+                else
+                    local sid = ResolveEntrySpecID(entry)
+                    ok = (sid == activeSpecID)
+                end
+            end
+
+            -- Never let placeholder "Missed Game" rows drive Current CR/MMR display.
+            local isMissed = entry and (entry.isMissedGame or entry.winLoss == "Missed Game" or entry.friendlyWinLoss == "Missed Game")
+            if ok and (not isMissed) and entry.matchID and (not highestMatchID or entry.matchID > highestMatchID) then
                 highestMatchID = entry.matchID
                 highestMatchEntry = entry
             end
@@ -4318,12 +4920,15 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
 
     -- 2) If we found an entry with the highest matchID, get the stats from that match
     if highestMatchEntry then
-        currentCR = tonumber(highestMatchEntry.cr) or currentCR
+        -- Only use history as a fallback. Live CR is the truth for spec-based ratings.
+        if (categoryID ~= 7 and categoryID ~= 9) and (not currentCR or currentCR == 0) then
+            currentCR = tonumber(highestMatchEntry.cr) or currentCR
+        end
         local teamMMR = tonumber(highestMatchEntry.friendlyMMR)
         if teamMMR and teamMMR > 0 then
-            currentMMR = teamMMR
+            if not currentMMR or currentMMR <= 0 then currentMMR = teamMMR end
         else
-            currentMMR = tonumber(highestMatchEntry.mmr) or currentMMR
+            if not currentMMR or currentMMR <= 0 then currentMMR = tonumber(highestMatchEntry.mmr) or currentMMR end
         end
 
         local isArena = (categoryID == 1 or categoryID == 2)
@@ -4333,8 +4938,14 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
                 if stats.name == playerName then
                     local mmr = tonumber(stats.postmatchMMR)
                     local cr  = tonumber(stats.newrating)
-                    if cr then currentCR = cr end
-                    if mmr and mmr > 0 then currentMMR = mmr end
+                    -- Again: do not override a valid live CR/MMR.
+                    if (not currentCR or currentCR == 0) and cr then currentCR = cr end
+                    -- For SS/RBGB: ALWAYS prefer playerStats.postmatchMMR when available.
+                    if (categoryID == 7 or categoryID == 9) and mmr and mmr > 0 then
+                        currentMMR = mmr
+                    elseif (not currentMMR or currentMMR <= 0) and mmr and mmr > 0 then
+                        currentMMR = mmr
+                    end
                     break
                 end
             end
@@ -4921,14 +5532,24 @@ function Config:CreateMenu()
 	function RSTATS:UpdateStatsView(filterType, tabID)
 		tabID = tabID or PanelTemplates_GetSelectedTab(RSTATS.UIConfig)
 
-		local allMatches = ({
-			[1] = Database.SoloShuffleHistory,
-			[2] = Database.v2History,
-			[3] = Database.v3History,
-			[4] = Database.RBGHistory,
-			[5] = Database.SoloRBGHistory,
-		})[tabID] or {}
-	
+		-- Tab 6 is Summary (dashboard only). It has no match rows/stat bar filtering.
+		if tabID == 6 then
+			return
+		end
+
+        local allMatches
+		if self.GetHistoryForTab then
+			allMatches = self:GetHistoryForTab(tabID) or {}
+		else
+			-- Fallback (should only happen if spec-history helper was not loaded)
+			allMatches = ({
+				[1] = Database.SoloShuffleHistory,
+				[2] = Database.v2History,
+				[3] = Database.v3History,
+				[4] = Database.RBGHistory,
+				[5] = Database.SoloRBGHistory,
+			})[tabID] or {}
+		end
 		-- Apply current tab filters
 		local filtered = {}
 		for _, match in ipairs(allMatches) do
@@ -5041,7 +5662,7 @@ function Config:CreateMenu()
 		if root then walk(root) end
 	end
 
-	local function UpdateCompactHeaders(tabID)
+	function UpdateCompactHeaders(tabID)
 	local content     = RSTATS.ScrollContents[tabID]
 	if not content or not content.headerFrame then return end
 	
@@ -5197,7 +5818,7 @@ function Config:CreateMenu()
     local function RefreshDisplay()
         -- For each bracket
         local mmrLabel1 = DisplayCurrentCRMMR(contentFrames[1],7)
-        local headers1, frames1 = RSTATS:DisplayHistory(scrollContents[1], Database.SoloShuffleHistory, mmrLabel1, 1)
+        local headers1, frames1 = RSTATS:DisplayHistory(scrollContents[1], RSTATS:GetHistoryForTab(1), mmrLabel1, 1)
         AdjustContentHeight(scrollContents[1])   -- simplified call
 
         local mmrLabel2 = DisplayCurrentCRMMR(contentFrames[2],1)
@@ -5213,7 +5834,7 @@ function Config:CreateMenu()
         AdjustContentHeight(scrollContents[4])
 
         local mmrLabel5 = DisplayCurrentCRMMR(contentFrames[5],9)
-        local headers5, frames5 = RSTATS:DisplayHistory(scrollContents[5], Database.SoloRBGHistory, mmrLabel5, 5)
+        local headers5, frames5 = RSTATS:DisplayHistory(scrollContents[5], RSTATS:GetHistoryForTab(5), mmrLabel5, 5)
         AdjustContentHeight(scrollContents[5])
 
     end
