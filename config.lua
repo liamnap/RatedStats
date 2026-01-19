@@ -1670,12 +1670,16 @@ if RSTATS and not RSTATS.GetHistoryForTab then
         if tabID == 1 then
             local specID, specName = RSTATS.GetActiveSpecIDAndName()
             local t = specID and EnsureSpecHistory(7, specID, specName)
-            if type(t) == "table" and #t > 0 then return t end
+            if specID then
+                return EnsureSpecHistory(7, specID, specName) or {}
+            end
             return (Database.SoloShuffleHistory or {})
         elseif tabID == 5 then
             local specID, specName = RSTATS.GetActiveSpecIDAndName()
             local t = specID and EnsureSpecHistory(9, specID, specName)
-            if type(t) == "table" and #t > 0 then return t end
+            if specID then
+                return EnsureSpecHistory(9, specID, specName) or {}
+            end
             return (Database.SoloRBGHistory or {})
         end
 
@@ -4886,11 +4890,17 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
 
     -- 1) First, find the entry with the highest matchID
     if historyTable and #historyTable > 0 then
+        local useSpec = (categoryID == 7 or categoryID == 9)
         for _, entry in ipairs(historyTable) do
             local ok = true
-            if useSpec and activeSpecID then
-                local sid = ResolveEntrySpecID(entry)
-                ok = (sid == activeSpecID)
+            if useSpec then
+                -- SS/RBGB are spec-scoped. If we cannot resolve active spec, do NOT pick a row.
+                if not activeSpecID then
+                    ok = false
+                else
+                    local sid = ResolveEntrySpecID(entry)
+                    ok = (sid == activeSpecID)
+                end
             end
 
             -- Never let placeholder "Missed Game" rows drive Current CR/MMR display.
@@ -4905,7 +4915,7 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
     -- 2) If we found an entry with the highest matchID, get the stats from that match
     if highestMatchEntry then
         -- Only use history as a fallback. Live CR is the truth for spec-based ratings.
-        if not currentCR or currentCR == 0 then
+        if (categoryID ~= 7 and categoryID ~= 9) and (not currentCR or currentCR == 0) then
             currentCR = tonumber(highestMatchEntry.cr) or currentCR
         end
         local teamMMR = tonumber(highestMatchEntry.friendlyMMR)
