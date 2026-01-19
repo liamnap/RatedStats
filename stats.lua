@@ -68,11 +68,14 @@ function Stats.CalculateSummary(filteredMatches, fullMatchHistory, bracketID)
 
     for _, match in ipairs(filteredMatches) do
         -- Win/Loss/Draw
-        if match.friendlyWinLoss:find("W") then
-            win = win + 1
-        elseif match.friendlyWinLoss:find("L") then
+        local wl = match and match.friendlyWinLoss
+        if type(wl) ~= "string" then
+            -- Skip malformed rows (prevents Summary hard-crash)
+        elseif wl:find("W") then
+                win = win + 1
+        elseif wl:find("L") then
             loss = loss + 1
-        elseif match.friendlyWinLoss:find("D") then
+        elseif wl:find("D") then
             draw = draw + 1
         end
 		
