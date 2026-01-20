@@ -35,13 +35,93 @@ local MapListsByTab = {
 	}
 }
 
-RatedStatsSeasons = {
-    { label = "DF S4", start = time({ year = 2024, month = 4, day = 23 }), finish = time({ year = 2024, month = 7, day = 22 }) },
-    { label = "TWW S1", start = time({ year = 2024, month = 9, day = 10 }), finish = time({ year = 2025, month = 2, day = 25 }) },
-    { label = "TWW S2", start = time({ year = 2025, month = 3, day = 4 }), finish = time({ year = 2025, month = 8, day = 5 }) },
-    { label = "TWW S3", start = time({ year = 2025, month = 8, day = 12 }), finish = time({ year = 2026, month = 1, day = 20 }) },
-    { label = "Midnight S1", start = time({ year = 2026, month = 3, day = 4 }), finish = time({ year = 2026, month = 8, day = 5 }) },
-}
+-- Build epoch timestamps from UTC calendar fields (so DST/local-machine timezone doesn't corrupt season boundaries).
+local function UtcTime(y, mo, d, h, mi, s)
+    local localGuess = time({
+        year = y, month = mo, day = d,
+        hour = h or 0, min = mi or 0, sec = s or 0,
+    })
+    local utcTable = date("!*t", localGuess)
+    local offset = localGuess - time(utcTable) -- local - utc at that moment (includes DST)
+    return localGuess + offset
+end
+
+local REGION = (GetCurrentRegion and GetCurrentRegion()) or 3 -- default EU if unknown
+
+-- Weekly reset anchors (UTC):
+-- NA: Tuesday 15:00 UTC
+-- EU: Wednesday 04:00 UTC
+-- KR: Thursday 08:00 KST
+-- TW: Thursday 07:00 CST
+
+-- NOTE: For KR/TW, we express the weekly reset moment as 23:00 UTC on the previous day.
+local function KR_TW_ResetUTC(y, mo, d)
+    return UtcTime(y, mo, d, 0, 0, 0) - 3600 -- 23:00 UTC the previous day
+end
+
+local function BuildSeasons_US()
+    return {
+        -- Start aligned to weekly reset (maintenance start). Finish aligned to Blizzard "ratings lock" time when known.
+        -- DF S4: NA July 22 10:00pm PDT => July 23 05:00 UTC
+        { label = "DF S4",  start = UtcTime(2024, 4, 23, 15, 0, 0), finish = UtcTime(2024, 7, 23, 5, 0, 0) },
+        -- TWW S1: ratings lock 10:00pm local night before Feb 25 update (NA)
+        { label = "TWW S1", start = UtcTime(2024, 9, 10, 15, 0, 0), finish = UtcTime(2025, 2, 25, 6, 0, 0) },
+        -- TWW S2: ratings lock 10:00pm local night before Aug 5 update (NA)
+        { label = "TWW S2", start = UtcTime(2025, 3, 4, 15, 0, 0),  finish = UtcTime(2025, 8, 5, 5, 0, 0) },
+        -- TWW S3: NA Jan 19 10:00pm PST => Jan 20 06:00 UTC
+        { label = "TWW S3", start = UtcTime(2025, 8, 12, 15, 0, 0), finish = UtcTime(2026, 1, 20, 6, 0, 0) },
+        -- Midnight S1 (your planned dates): align start to reset; finish left as "night before maintenance" pattern.
+        { label = "MN S1", start = UtcTime(2026, 3, 4, 15, 0, 0), finish = UtcTime(2026, 8, 5, 5, 0, 0) },
+    }
+end
+
+local function BuildSeasons_EU()
+    return {
+        -- DF S4: EU July 23 22:00 CEST => July 23 20:00 UTC
+        { label = "DF S4",  start = UtcTime(2024, 4, 24, 4, 0, 0),  finish = UtcTime(2024, 7, 23, 20, 0, 0) },
+        -- TWW S1: ratings lock 22:00 local night before Feb 26 update (EU) => Feb 25 21:00 UTC
+        { label = "TWW S1", start = UtcTime(2024, 9, 11, 4, 0, 0),  finish = UtcTime(2025, 2, 25, 21, 0, 0) },
+        -- TWW S2: EU forums: Season 2 PvP ends 22:00 CEST on Aug 5 => 20:00 UTC
+        { label = "TWW S2", start = UtcTime(2025, 3, 5, 4, 0, 0),   finish = UtcTime(2025, 8, 5, 20, 0, 0) },
+        -- TWW S3: EU Jan 20 22:00 CET => 21:00 UTC
+        { label = "TWW S3", start = UtcTime(2025, 8, 13, 4, 0, 0),  finish = UtcTime(2026, 1, 20, 21, 0, 0) },
+        { label = "MN S1", start = UtcTime(2026, 3, 5, 4, 0, 0), finish = UtcTime(2026, 8, 5, 20, 0, 0) },
+    }
+end
+
+local function BuildSeasons_KR()
+    return {
+        -- Starts aligned to KR weekly reset moment (Thu 08:00 KST == Wed 23:00 UTC).
+        -- DF S4: ends July 24 22:00 KR.
+        { label = "DF S4",  start = KR_TW_ResetUTC(2024, 4, 25), finish = UtcTime(2024, 7, 24, 13, 0, 0) },
+        { label = "TWW S1", start = KR_TW_ResetUTC(2024, 9, 12), finish = UtcTime(2025, 2, 26, 13, 0, 0) },
+        { label = "TWW S2", start = KR_TW_ResetUTC(2025, 3, 6),  finish = UtcTime(2025, 8, 6, 13, 0, 0) },
+        { label = "TWW S3", start = KR_TW_ResetUTC(2025, 8, 14), finish = UtcTime(2026, 1, 21, 13, 0, 0) },
+        { label = "MN S1", start = KR_TW_ResetUTC(2026, 3, 6), finish = UtcTime(2026, 8, 6, 13, 0, 0) },
+    }
+end
+
+local function BuildSeasons_TW()
+    return {
+        -- Starts aligned to TW weekly reset moment (Thu 07:00 CST == Wed 23:00 UTC).
+        -- DF S4: ends July 24 22:00 TW. :contentReference[oaicite:18]{index=18}
+        { label = "DF S4",  start = KR_TW_ResetUTC(2024, 4, 25), finish = UtcTime(2024, 7, 24, 14, 0, 0) },
+        { label = "TWW S1", start = KR_TW_ResetUTC(2024, 9, 12), finish = UtcTime(2025, 2, 26, 14, 0, 0) },
+        { label = "TWW S2", start = KR_TW_ResetUTC(2025, 3, 6),  finish = UtcTime(2025, 8, 6, 14, 0, 0) },
+        { label = "TWW S3", start = KR_TW_ResetUTC(2025, 8, 14), finish = UtcTime(2026, 1, 21, 14, 0, 0) },
+        { label = "MN S1", start = KR_TW_ResetUTC(2026, 3, 6), finish = UtcTime(2026, 8, 6, 14, 0, 0) },
+    }
+end
+
+if REGION == 1 then
+    RatedStatsSeasons = BuildSeasons_US()
+elseif REGION == 2 then
+    RatedStatsSeasons = BuildSeasons_KR()
+elseif REGION == 4 then
+    RatedStatsSeasons = BuildSeasons_TW()
+else
+    RatedStatsSeasons = BuildSeasons_EU()
+end
 
 function RSTATS:GetCurrentSeasonStart()
 	local now = time()
