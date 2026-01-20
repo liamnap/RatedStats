@@ -36,6 +36,12 @@ local function GetMostRecentEnemyMMR(matches)
     local seasonStart  = RSTATS:GetCurrentSeasonStart()
     local seasonFinish = RSTATS:GetCurrentSeasonFinish()
 
+    -- After season cutoff, these can legitimately be nil (off-season).
+    -- Never hard-crash Summary over it.
+    if not seasonStart or not seasonFinish then
+        return nil
+    end
+
     -- Walk the list _backwards_ so you pick the newest match first
     for i = #matches, 1, -1 do
         local match = matches[i]
