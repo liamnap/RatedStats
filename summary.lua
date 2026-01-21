@@ -92,25 +92,52 @@ local function ColorText(text)
     return string.format("|cff%s%s|r", tostring(hex):upper(), text)
 end
 
-local function GetCurrentSeasonLabel()
-    -- If you later add RSTATS:GetCurrentSeasonLabel() in filters.lua, this will use it.
-    if RSTATS and RSTATS.GetCurrentSeasonLabel then
-        return RSTATS:GetCurrentSeasonLabel()
-    end
-
-    -- Otherwise, derive from the season table you already keep in filters.lua
+local function GetActiveOrPreviousSeason()
     local seasons = _G.RatedStatsSeasons
-    if type(seasons) ~= "table" then return "" end
+    if type(seasons) ~= "table" then return nil end
 
     local now = time()
+
+    -- Prefer the active season
     for _, s in ipairs(seasons) do
         local st = tonumber(s.start)
         local en = tonumber(s.finish)
-        if st and en and now >= st and now < en then
-            return tostring(s.label or "")
+        if st and en and now >= st and now <= en then
+            return s
         end
     end
-    return ""
+
+    -- Off-season: fall back to the most recent season that already ended
+    local best, bestFinish
+    for _, s in ipairs(seasons) do
+        local en = tonumber(s.finish)
+        if en and en < now and (not bestFinish or en > bestFinish) then
+            bestFinish = en
+            best = s
+        end
+    end
+
+    return best
+end
+
+local function GetSummarySeasonRange()
+    local s = GetActiveOrPreviousSeason()
+    if not s then return nil, nil, "" end
+    return tonumber(s.start), tonumber(s.finish), tostring(s.label or "")
+end
+
+local function GetCurrentSeasonLabel()
+    -- If you later add RSTATS:GetCurrentSeasonLabel() in filters.lua, this will use it.
+    if RSTATS and RSTATS.GetCurrentSeasonLabel then
+        local label = RSTATS:GetCurrentSeasonLabel()
+        if label and label ~= "" then
+            return label
+        end
+    end
+
+    -- Otherwise derive label from our season table (active OR previous season when off-season)
+    local _, _, label = GetSummarySeasonRange()
+    return label or ""
 end
 
 local function GetLatestPostMMRFromHistory(history)
@@ -338,15 +365,21 @@ end
 
 local function BuildTopAllBracketRecords(perChar, valueKey, limit, seasonStart, seasonFinish)
     if type(perChar) ~= "table" then return {} end
-    if not seasonStart or not seasonFinish then return {} end
 
     local tmp = {}
 
     for _, bracket in ipairs(BRACKETS) do
-        local history = GetHistoryForBracket(perChar, bracket)
+        local history
+        if bracket.bracketID == 7 or bracket.bracketID == 9 then
+            -- All-brackets records should consider ALL stored history rows (all specs),
+            -- not just the active spec cache used for SS/SRBG display tabs.
+            history = (perChar and perChar[bracket.historyKey]) or {}
+        else
+            history = GetHistoryForBracket(perChar, bracket)
+        end
         for _, match in ipairs(history) do
             local t = match.endTime or match.timestamp
-            if t and t >= seasonStart and t < seasonFinish then
+            if t and (not seasonStart or t >= seasonStart) and (not seasonFinish or t < seasonFinish) then
                 for _, ps in ipairs(match.playerStats or {}) do
                     local v = tonumber(ps[valueKey])
                     if v and v > 0 and ps.name then
@@ -496,13 +529,17 @@ end
 
 local function BuildBestWinStreakByBracket(perChar, seasonStart, seasonFinish)
     if type(perChar) ~= "table" then return {} end
-    if not seasonStart or not seasonFinish then return {} end
 
     local me = GetPlayerFullName()
     local out = {}
 
     for _, bracket in ipairs(BRACKETS) do
-        local history = GetHistoryForBracket(perChar, bracket)
+        local history
+        if bracket.bracketID == 7 or bracket.bracketID == 9 then
+            history = (perChar and perChar[bracket.historyKey]) or {}
+        else
+            history = GetHistoryForBracket(perChar, bracket)
+        end
         table.sort(history, SortByEndTime)
 
         local bestLen = 0
@@ -515,7 +552,7 @@ local function BuildBestWinStreakByBracket(perChar, seasonStart, seasonFinish)
 
         for _, match in ipairs(history) do
             local t = match.endTime or match.timestamp
-            if t and t >= seasonStart and t < seasonFinish then
+            if t and (not seasonStart or t >= seasonStart) and (not seasonFinish or t < seasonFinish) then
                 local o = NormalizeOutcome(match.friendlyWinLoss)
                 if o == "W" then
                     if curLen == 0 then
@@ -559,17 +596,21 @@ end
 
 local function BuildFastestWinByBracket(perChar, seasonStart, seasonFinish)
     if type(perChar) ~= "table" then return {} end
-    if not seasonStart or not seasonFinish then return {} end
 
     local out = {}
 
     for _, bracket in ipairs(BRACKETS) do
-        local history = GetHistoryForBracket(perChar, bracket)
+        local history
+        if bracket.bracketID == 7 or bracket.bracketID == 9 then
+            history = (perChar and perChar[bracket.historyKey]) or {}
+        else
+            history = GetHistoryForBracket(perChar, bracket)
+        end
         local bestDur, bestT
 
         for _, match in ipairs(history) do
             local t = match.endTime or match.timestamp
-            if t and t >= seasonStart and t < seasonFinish then
+            if t and (not seasonStart or t >= seasonStart) and (not seasonFinish or t < seasonFinish) then
                 if NormalizeOutcome(match.friendlyWinLoss) == "W" then
                     local dur = GetMatchDurationSeconds(match)
                     if dur and dur > 0 and (not bestDur or dur < bestDur) then
@@ -594,16 +635,20 @@ end
 -- Most Wins (friendly players) across all brackets in current season range
 local function BuildMostWinsFriendly(perChar, seasonStart, seasonFinish)
     if type(perChar) ~= "table" then return {} end
-    if not seasonStart or not seasonFinish then return {} end
 
     local me = GetPlayerFullName()
     local byName = {}
 
     for _, bracket in ipairs(BRACKETS) do
-        local history = GetHistoryForBracket(perChar, bracket)
+        local history
+        if bracket.bracketID == 7 or bracket.bracketID == 9 then
+            history = (perChar and perChar[bracket.historyKey]) or {}
+        else
+            history = GetHistoryForBracket(perChar, bracket)
+        end
         for _, match in ipairs(history) do
             local t = match.endTime or match.timestamp
-            if t and t >= seasonStart and t < seasonFinish then
+            if t and (not seasonStart or t >= seasonStart) and (not seasonFinish or t < seasonFinish) then
                 local outcome = NormalizeOutcome(match.friendlyWinLoss)
                 if outcome then
                     local myTeamIndex
@@ -681,7 +726,6 @@ end
 -- Same spec as YOU in that match: counts "With X" (friendly wins together) and "Beat X" (enemy beat you)
 local function BuildSameSpecWithOrVs(perChar, seasonStart, seasonFinish)
     if type(perChar) ~= "table" then return {} end
-    if not seasonStart or not seasonFinish then return {} end
 
     local me = GetPlayerFullName()
     local byName = {}
@@ -690,7 +734,7 @@ local function BuildSameSpecWithOrVs(perChar, seasonStart, seasonFinish)
         local history = perChar[bracket.historyKey] or {}
         for _, match in ipairs(history) do
             local t = match.endTime or match.timestamp
-            if t and t >= seasonStart and t < seasonFinish then
+            if t and (not seasonStart or t >= seasonStart) and (not seasonFinish or t < seasonFinish) then
                 local outcome = NormalizeOutcome(match.friendlyWinLoss)
                 if not outcome then
                     -- still allow counting appearances, but "with/beat" needs outcome
@@ -827,13 +871,11 @@ end
 -- 2) cr: cumulative CR delta across weeks
 -- 3) mmr: cumulative MMR delta across weeks
 --
-local function BuildSeasonMatchSeries(history)
+local function BuildSeasonMatchSeries(history, seasonStart, seasonFinish)
     if not history or #history == 0 then
         return {}, {}, {}, {}
     end
 
-    local seasonStart = RSTATS:GetCurrentSeasonStart()
-    local seasonFinish = RSTATS:GetCurrentSeasonFinish()
     if not seasonStart or not seasonFinish then
         return {}, {}, {}, {}
     end
@@ -929,8 +971,14 @@ function Summary:_RenderCardGraph(card)
         series, times = Downsample(data.seriesMMR or {}, data.seriesTimes or {}, maxPoints)
     end
 
-    local seasonStart = RSTATS and RSTATS.GetCurrentSeasonStart and RSTATS:GetCurrentSeasonStart() or nil
-    local seasonFinish = RSTATS and RSTATS.GetCurrentSeasonFinish and RSTATS:GetCurrentSeasonFinish() or nil
+    local seasonStart = data and data.seasonStart or nil
+    local seasonFinish = data and data.seasonFinish or nil
+
+    -- Fallback (older card data) to core helpers if available
+    if (not seasonStart or not seasonFinish) and RSTATS and RSTATS.GetCurrentSeasonStart and RSTATS.GetCurrentSeasonFinish then
+        seasonStart = seasonStart or RSTATS:GetCurrentSeasonStart()
+        seasonFinish = seasonFinish or RSTATS:GetCurrentSeasonFinish()
+    end
 
     local yMin, yMax = DrawSpark(
         card.spark,
@@ -2072,13 +2120,12 @@ function Summary:Refresh()
     local totalKBs = 0
     local longestStreak = 0
     local currentStreak = 0
-    local seasonStart = RSTATS:GetCurrentSeasonStart()
-    local seasonFinish = RSTATS:GetCurrentSeasonFinish()
+    local seasonStart, seasonFinish, seasonLabel = GetSummarySeasonRange()
     local me = GetPlayerFullName()
 
     -- Header season info
     if self.frame and self.frame.header then
-        local label = GetCurrentSeasonLabel()
+        local label = (seasonLabel and seasonLabel ~= "" and seasonLabel) or GetCurrentSeasonLabel()
         if label ~= "" then
             self.frame.header:SetText("PvP Summary - " .. label)
         else
@@ -2093,13 +2140,29 @@ function Summary:Refresh()
             end
         end
 
-        if self.frame.seasonNote3 then
-            if seasonFinish then
-                self.frame.seasonNote3:SetText(ColorText("Season End: ") .. date("%d %b %Y", seasonFinish))
-            else
-                self.frame.seasonNote3:SetText(ColorText("Season End: ") .. "?")
+        -- If we have a future season entry in RatedStatsSeasons, show its start under Season End.
+        local nextSeasonStart
+        if seasonFinish and RatedStatsSeasons and type(RatedStatsSeasons) == "table" then
+            for _, s in ipairs(RatedStatsSeasons) do
+                if s and s.start and s.start > seasonFinish then
+                    nextSeasonStart = s.start
+                    break
+                end
             end
         end
+
+        local txt
+        if seasonFinish then
+            txt = ColorText("Season End: ") .. date("%d %b %Y", seasonFinish)
+        else
+            txt = ColorText("Season End: ") .. "?"
+        end
+
+        if nextSeasonStart then
+            txt = txt .. "\n" .. ColorText("New Season Start: ") .. date("%d %b %Y", nextSeasonStart)
+        end
+
+        self.frame.seasonNote3:SetText(txt)
 
         -- IMPORTANT: first open can overlap because LayoutCards() ran before these strings
         -- had final rendered heights. Re-layout on next frame after text updates.
@@ -2113,13 +2176,15 @@ function Summary:Refresh()
     end
 
     for i, bracket in ipairs(BRACKETS) do
-        local history = perChar[bracket.historyKey] or {}
+        -- For SS/SRBG: cards are spec-scoped (active spec cache), but all-brackets aggregates should
+        -- consider ALL stored history rows (all specs) from the canonical tables.
+        local historyAll = perChar[bracket.historyKey] or {}
+        local history = historyAll
+
         if bracket.bracketID == 7 or bracket.bracketID == 9 then
             local sid = GetActiveSpecID()
-            if sid then
-                if RSTATS and RSTATS.GetHistoryForTab then
-                    history = RSTATS:GetHistoryForTab(bracket.tabID) or {}
-                end
+            if sid and RSTATS and RSTATS.GetHistoryForTab then
+                history = RSTATS:GetHistoryForTab(bracket.tabID) or {}
             end
         end
         local seasonMatches = {}
@@ -2128,6 +2193,12 @@ function Summary:Refresh()
             for _, m in ipairs(history) do
                 if m.endTime and m.endTime >= seasonStart and m.endTime < seasonFinish then
                     table.insert(seasonMatches, m)
+                end
+            end
+
+            local overallHistory = (bracket.bracketID == 7 or bracket.bracketID == 9) and historyAll or history
+            for _, m in ipairs(overallHistory) do
+                if m.endTime and m.endTime >= seasonStart and m.endTime < seasonFinish then
                     table.insert(overallSeasonMatches, m)
                 end
             end
@@ -2139,7 +2210,7 @@ function Summary:Refresh()
         }
 
         -- Build the 3 graph series (this was missing, so graphs never draw)
-        local winsSeries, crSeries, mmrSeries, times = BuildSeasonMatchSeries(history)
+        local winsSeries, crSeries, mmrSeries, times = BuildSeasonMatchSeries(history, seasonStart, seasonFinish)
 
         local last25Delta, last25Count = GetLast25CRDelta(history)
 
@@ -2178,6 +2249,9 @@ function Summary:Refresh()
             seriesCR = crSeries,
             seriesMMR = mmrSeries,
             seriesTimes = times,
+
+            seasonStart = seasonStart,
+            seasonFinish = seasonFinish,
 
             last25Text = last25Text,
         }
@@ -2256,11 +2330,13 @@ function Summary:Refresh()
     if self.frame and self.frame.damageCard and self.frame.healCard and self.frame.winsCard and self.frame.specCard then
         local limit = 10
 
-        -- IMPORTANT: your saved playerStats fields are "damage" and "healing"
+        -- Damage/Healing SHOULD be season-scoped (otherwise old expansions dominate forever).
         local topDmg  = BuildTopAllBracketRecords(perChar, "damage",  limit, seasonStart, seasonFinish)
         local topHeal = BuildTopAllBracketRecords(perChar, "healing", limit, seasonStart, seasonFinish)
-        local topWins = BuildMostWinsFriendly(perChar, seasonStart, seasonFinish)
-        local topSpec = BuildSameSpecWithOrVs(perChar, seasonStart, seasonFinish)
+
+        -- The other two can stay across all tracked history rows.
+        local topWins = BuildMostWinsFriendly(perChar, nil, nil)
+        local topSpec = BuildSameSpecWithOrVs(perChar, nil, nil)
 
         UpdateRecordCard(self.frame.damageCard, topDmg)
         UpdateRecordCard(self.frame.healCard, topHeal)
@@ -2268,13 +2344,13 @@ function Summary:Refresh()
         UpdateRecordCard(self.frame.specCard, topSpec)
     end
 
-    if self.frame and self.frame.streakCard and seasonStart and seasonFinish then
-        local streakByMode = BuildBestWinStreakByBracket(perChar, seasonStart, seasonFinish)
+    if self.frame and self.frame.streakCard then
+        local streakByMode = BuildBestWinStreakByBracket(perChar, nil, nil)
         self.frame.streakCard:SetData(streakByMode)
     end
 
-    if self.frame and self.frame.fastestWinCard and seasonStart and seasonFinish then
-        local fastByMode = BuildFastestWinByBracket(perChar, seasonStart, seasonFinish)
+    if self.frame and self.frame.fastestWinCard then
+        local fastByMode = BuildFastestWinByBracket(perChar, nil, nil)
         self.frame.fastestWinCard:SetData(fastByMode)
     end
 end

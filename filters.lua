@@ -71,7 +71,7 @@ local function BuildSeasons_US()
         -- TWW S3: NA Jan 19 10:00pm PST => Jan 20 06:00 UTC
         { label = "TWW S3", start = UtcTime(2025, 8, 12, 15, 0, 0), finish = UtcTime(2026, 1, 20, 6, 0, 0) },
         -- Midnight S1 (your planned dates): align start to reset; finish left as "night before maintenance" pattern.
-        { label = "MN S1", start = UtcTime(2026, 3, 4, 15, 0, 0), finish = UtcTime(2026, 8, 5, 5, 0, 0) },
+        { label = "MN S1", start = UtcTime(2026, 3, 17, 15, 0, 0), finish = UtcTime(2026, 8, 4, 5, 0, 0) },
     }
 end
 
@@ -85,7 +85,7 @@ local function BuildSeasons_EU()
         { label = "TWW S2", start = UtcTime(2025, 3, 5, 4, 0, 0),   finish = UtcTime(2025, 8, 5, 20, 0, 0) },
         -- TWW S3: EU Jan 20 22:00 CET => 21:00 UTC
         { label = "TWW S3", start = UtcTime(2025, 8, 13, 4, 0, 0),  finish = UtcTime(2026, 1, 20, 21, 0, 0) },
-        { label = "MN S1", start = UtcTime(2026, 3, 5, 4, 0, 0), finish = UtcTime(2026, 8, 5, 20, 0, 0) },
+        { label = "MN S1", start = UtcTime(2026, 3, 18, 4, 0, 0), finish = UtcTime(2026, 8, 5, 20, 0, 0) },
     }
 end
 
@@ -97,7 +97,7 @@ local function BuildSeasons_KR()
         { label = "TWW S1", start = KR_TW_ResetUTC(2024, 9, 12), finish = UtcTime(2025, 2, 26, 13, 0, 0) },
         { label = "TWW S2", start = KR_TW_ResetUTC(2025, 3, 6),  finish = UtcTime(2025, 8, 6, 13, 0, 0) },
         { label = "TWW S3", start = KR_TW_ResetUTC(2025, 8, 14), finish = UtcTime(2026, 1, 21, 13, 0, 0) },
-        { label = "MN S1", start = KR_TW_ResetUTC(2026, 3, 6), finish = UtcTime(2026, 8, 6, 13, 0, 0) },
+        { label = "MN S1", start = KR_TW_ResetUTC(2026, 3, 19), finish = UtcTime(2026, 8, 6, 13, 0, 0) },
     }
 end
 
@@ -109,7 +109,7 @@ local function BuildSeasons_TW()
         { label = "TWW S1", start = KR_TW_ResetUTC(2024, 9, 12), finish = UtcTime(2025, 2, 26, 14, 0, 0) },
         { label = "TWW S2", start = KR_TW_ResetUTC(2025, 3, 6),  finish = UtcTime(2025, 8, 6, 14, 0, 0) },
         { label = "TWW S3", start = KR_TW_ResetUTC(2025, 8, 14), finish = UtcTime(2026, 1, 21, 14, 0, 0) },
-        { label = "MN S1", start = KR_TW_ResetUTC(2026, 3, 6), finish = UtcTime(2026, 8, 6, 14, 0, 0) },
+        { label = "MN S1", start = KR_TW_ResetUTC(2026, 3, 19), finish = UtcTime(2026, 8, 6, 14, 0, 0) },
     }
 end
 
