@@ -726,7 +726,6 @@ end
 -- Same spec as YOU in that match: counts "With X" (friendly wins together) and "Beat X" (enemy beat you)
 local function BuildSameSpecWithOrVs(perChar, seasonStart, seasonFinish)
     if type(perChar) ~= "table" then return {} end
-    if not seasonStart or not seasonFinish then return {} end
 
     local me = GetPlayerFullName()
     local byName = {}
@@ -735,7 +734,7 @@ local function BuildSameSpecWithOrVs(perChar, seasonStart, seasonFinish)
         local history = perChar[bracket.historyKey] or {}
         for _, match in ipairs(history) do
             local t = match.endTime or match.timestamp
-            if t and t >= seasonStart and t < seasonFinish then
+            if t and (not seasonStart or t >= seasonStart) and (not seasonFinish or t < seasonFinish) then
                 local outcome = NormalizeOutcome(match.friendlyWinLoss)
                 if not outcome then
                     -- still allow counting appearances, but "with/beat" needs outcome
@@ -890,7 +889,7 @@ local function BuildSeasonMatchSeries(history)
 
     for _, match in ipairs(history) do
         local t = match.endTime or match.timestamp
-            if t and (not seasonStart or t >= seasonStart) and (not seasonFinish or t < seasonFinish) then
+        if t and t >= seasonStart and t < seasonFinish then
             local wl = match.friendlyWinLoss or ""
             if wl:find("W") then winsCum = winsCum + 1 end
 
