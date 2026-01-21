@@ -365,7 +365,6 @@ end
 
 local function BuildTopAllBracketRecords(perChar, valueKey, limit, seasonStart, seasonFinish)
     if type(perChar) ~= "table" then return {} end
-    if not seasonStart or not seasonFinish then return {} end
 
     local tmp = {}
 
@@ -891,7 +890,7 @@ local function BuildSeasonMatchSeries(history)
 
     for _, match in ipairs(history) do
         local t = match.endTime or match.timestamp
-        if t and t >= seasonStart and t < seasonFinish then
+            if t and (not seasonStart or t >= seasonStart) and (not seasonFinish or t < seasonFinish) then
             local wl = match.friendlyWinLoss or ""
             if wl:find("W") then winsCum = winsCum + 1 end
 
@@ -2332,9 +2331,11 @@ function Summary:Refresh()
     if self.frame and self.frame.damageCard and self.frame.healCard and self.frame.winsCard and self.frame.specCard then
         local limit = 10
 
-        -- IMPORTANT: your saved playerStats fields are "damage" and "healing"
-        local topDmg  = BuildTopAllBracketRecords(perChar, "damage",  limit, nil, nil)
-        local topHeal = BuildTopAllBracketRecords(perChar, "healing", limit, nil, nil)
+        -- Damage/Healing SHOULD be season-scoped (otherwise old expansions dominate forever).
+        local topDmg  = BuildTopAllBracketRecords(perChar, "damage",  limit, seasonStart, seasonFinish)
+        local topHeal = BuildTopAllBracketRecords(perChar, "healing", limit, seasonStart, seasonFinish)
+
+        -- The other two can stay across all tracked history rows.
         local topWins = BuildMostWinsFriendly(perChar, nil, nil)
         local topSpec = BuildSameSpecWithOrVs(perChar, nil, nil)
 
