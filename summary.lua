@@ -871,7 +871,7 @@ end
 -- 2) cr: cumulative CR delta across weeks
 -- 3) mmr: cumulative MMR delta across weeks
 --
-local function BuildSeasonMatchSeries(history)
+local function BuildSeasonMatchSeries(history, seasonStart, seasonFinish)
     if not history or #history == 0 then
         return {}, {}, {}, {}
     end
