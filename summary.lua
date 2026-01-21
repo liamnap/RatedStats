@@ -2093,13 +2093,29 @@ function Summary:Refresh()
             end
         end
 
-        if self.frame.seasonNote3 then
-            if seasonFinish then
-                self.frame.seasonNote3:SetText(ColorText("Season End: ") .. date("%d %b %Y", seasonFinish))
-            else
-                self.frame.seasonNote3:SetText(ColorText("Season End: ") .. "?")
+        -- If we have a future season entry in RatedStatsSeasons, show its start under Season End.
+        local nextSeasonStart
+        if seasonFinish and RatedStatsSeasons and type(RatedStatsSeasons) == "table" then
+            for _, s in ipairs(RatedStatsSeasons) do
+                if s and s.start and s.start > seasonFinish then
+                    nextSeasonStart = s.start
+                    break
+                end
             end
         end
+
+        local txt
+        if seasonFinish then
+            txt = ColorText("Season End: ") .. date("%d %b %Y", seasonFinish)
+        else
+            txt = ColorText("Season End: ") .. "?"
+        end
+
+        if nextSeasonStart then
+            txt = txt .. "\n" .. ColorText("New Season Start: ") .. date("%d %b %Y", nextSeasonStart)
+        end
+
+        self.frame.seasonNote3:SetText(txt)
 
         -- IMPORTANT: first open can overlap because LayoutCards() ran before these strings
         -- had final rendered heights. Re-layout on next frame after text updates.
