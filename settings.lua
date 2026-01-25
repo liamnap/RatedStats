@@ -394,6 +394,25 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
         end
 
         do
+            local opts = Settings.CreateControlTextContainer()
+            opts:Add(1, "Current")
+            opts:Add(2, "Current/Total")
+            opts:Add(3, "%")
+
+            local setting = Settings.RegisterAddOnSetting(
+                subcategory,
+                "RSTATS_BGE_HEALTH_TEXT",
+                "bgeHealthTextMode",
+                db.settings,
+                Settings.VarType.Number,
+                "Health text",
+                2
+            )
+            setting:SetValueChangedCallback(function() NotifyBGE() end)
+            Settings.CreateDropdown(subcategory, setting, function() return opts:GetData() end, nil)
+        end
+
+        do
             local setting = Settings.RegisterAddOnSetting(
                 subcategory,
                 "RSTATS_BGE_PREVIEW",
