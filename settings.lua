@@ -396,6 +396,80 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
         do
             local setting = Settings.RegisterAddOnSetting(
                 subcategory,
+                "RSTATS_BGE_PREVIEW",
+                "bgePreview",
+                db.settings,
+                Settings.VarType.Boolean,
+                "Preview outside PvP",
+                false
+            )
+            setting:SetValueChangedCallback(function() NotifyBGE() end)
+            Settings.CreateCheckbox(subcategory, setting, "Shows the frame out of PvP so you can tune size/position.")
+        end
+
+        do
+            local setting = Settings.RegisterAddOnSetting(
+                subcategory,
+                "RSTATS_BGE_PREVIEW_COUNT",
+                "bgePreviewCount",
+                db.settings,
+                Settings.VarType.Number,
+                "Preview rows",
+                8
+            )
+            setting:SetValueChangedCallback(function() NotifyBGE() end)
+            local options = Settings.CreateSliderOptions(1, 12, 1)
+            Settings.CreateSlider(subcategory, setting, options, "How many blank rows to show in preview mode.")
+        end
+
+        do
+            local setting = Settings.RegisterAddOnSetting(
+                subcategory,
+                "RSTATS_BGE_COLUMNS",
+                "bgeColumns",
+                db.settings,
+                Settings.VarType.Number,
+                "Columns",
+                1
+            )
+            setting:SetValueChangedCallback(function() NotifyBGE() end)
+            local options = Settings.CreateSliderOptions(1, 8, 1)
+            Settings.CreateSlider(subcategory, setting, options, "Number of columns (e.g. 2 for 2x20).")
+        end
+
+        do
+            local setting = Settings.RegisterAddOnSetting(
+                subcategory,
+                "RSTATS_BGE_ROWS_PER_COL",
+                "bgeRowsPerCol",
+                db.settings,
+                Settings.VarType.Number,
+                "Rows per column",
+                20
+            )
+            setting:SetValueChangedCallback(function() NotifyBGE() end)
+            local options = Settings.CreateSliderOptions(1, 40, 1)
+            Settings.CreateSlider(subcategory, setting, options, "Wrap after this many rows (e.g. 20 for 2x20).")
+        end
+
+        do
+            local setting = Settings.RegisterAddOnSetting(
+                subcategory,
+                "RSTATS_BGE_COL_GAP",
+                "bgeColGap",
+                db.settings,
+                Settings.VarType.Number,
+                "Column gap",
+                6
+            )
+            setting:SetValueChangedCallback(function() NotifyBGE() end)
+            local options = Settings.CreateSliderOptions(0, 30, 1)
+            Settings.CreateSlider(subcategory, setting, options, "Space between columns.")
+        end
+
+        do
+            local setting = Settings.RegisterAddOnSetting(
+                subcategory,
                 "RSTATS_BGE_ROW_WIDTH",
                 "bgeRowWidth",
                 db.settings,
