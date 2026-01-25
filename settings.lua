@@ -290,6 +290,155 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
         end
     end
 
+    -- Battleground Enemies subcategory (only if the module is installed + enabled)
+    local bgeName  = "Rated Stats - Battleground Enemies"
+    local bgeAddon = "RatedStats_BattlegroundEnemies"
+
+    if C_AddOns and C_AddOns.DoesAddOnExist and C_AddOns.DoesAddOnExist(bgeAddon)
+        and C_AddOns.GetAddOnEnableState and (C_AddOns.GetAddOnEnableState(bgeAddon, nil) ~= 0) then
+
+        local subcategory, layout = Settings.RegisterVerticalLayoutSubcategory(category, bgeName)
+
+        local function NotifyBGE()
+            if _G.RSTATS_BGE and type(_G.RSTATS_BGE.ApplySettings) == "function" then
+                _G.RSTATS_BGE:ApplySettings()
+            end
+        end
+
+        local TextInit =
+            _G.CreateSettingsListTextInitializer
+            or (Settings and Settings.CreateSettingsListTextInitializer)
+
+        local SubHeaderInit =
+            _G.CreateSettingsListSubsectionHeaderInitializer
+            or (Settings and Settings.CreateSettingsListSubsectionHeaderInitializer)
+
+        if layout and TextInit then
+            layout:AddInitializer(TextInit("Enemy frames built from NAME_PLATE_UNIT_* events. Only enemies with an active nameplate can be shown."))
+        elseif layout and SubHeaderInit then
+            layout:AddInitializer(SubHeaderInit("Battleground Enemies"))
+        end
+
+        do
+            local setting = Settings.RegisterAddOnSetting(
+                subcategory,
+                "RSTATS_BGE_ENABLED",
+                "bgeEnabled",
+                db.settings,
+                Settings.VarType.Boolean,
+                "Enable",
+                true
+            )
+            setting:SetValueChangedCallback(function() NotifyBGE() end)
+            Settings.CreateCheckbox(subcategory, setting, "Show enemy frames when in PvP instances.")
+        end
+
+        do
+            local setting = Settings.RegisterAddOnSetting(
+                subcategory,
+                "RSTATS_BGE_LOCKED",
+                "bgeLocked",
+                db.settings,
+                Settings.VarType.Boolean,
+                "Lock frame",
+                true
+            )
+            setting:SetValueChangedCallback(function() NotifyBGE() end)
+            Settings.CreateCheckbox(subcategory, setting, "When unlocked, you can drag the frame to move it.")
+        end
+
+        do
+            local optsLayout = Settings.CreateControlTextContainer()
+            optsLayout:Add(1, "Single list")
+            optsLayout:Add(2, "Grouped (sorted)")
+
+            local setting = Settings.RegisterAddOnSetting(
+                subcategory,
+                "RSTATS_BGE_LAYOUT",
+                "bgeLayout",
+                db.settings,
+                Settings.VarType.Number,
+                "Layout",
+                1
+            )
+            setting:SetValueChangedCallback(function() NotifyBGE() end)
+            Settings.CreateDropdown(subcategory, setting, function() return optsLayout:GetData() end, nil)
+        end
+
+        do
+            local setting = Settings.RegisterAddOnSetting(
+                subcategory,
+                "RSTATS_BGE_SHOW_ACHIEV_ICON",
+                "bgeShowAchievIcon",
+                db.settings,
+                Settings.VarType.Boolean,
+                "Show achievement icon",
+                false
+            )
+            setting:SetValueChangedCallback(function() NotifyBGE() end)
+            Settings.CreateCheckbox(subcategory, setting, "Shows an icon if Rated Stats - Achievements exposes an icon lookup API.")
+        end
+
+        do
+            local setting = Settings.RegisterAddOnSetting(
+                subcategory,
+                "RSTATS_BGE_SHOW_POWER",
+                "bgeShowPower",
+                db.settings,
+                Settings.VarType.Boolean,
+                "Show power bar",
+                true
+            )
+            setting:SetValueChangedCallback(function() NotifyBGE() end)
+            Settings.CreateCheckbox(subcategory, setting, "Shows mana/energy/rage/etc (when available).")
+        end
+
+        do
+            local setting = Settings.RegisterAddOnSetting(
+                subcategory,
+                "RSTATS_BGE_ROW_WIDTH",
+                "bgeRowWidth",
+                db.settings,
+                Settings.VarType.Number,
+                "Row width",
+                240
+            )
+            setting:SetValueChangedCallback(function() NotifyBGE() end)
+            local options = Settings.CreateSliderOptions(140, 520, 1)
+            Settings.CreateSlider(subcategory, setting, options, "Width of each row.")
+        end
+
+        do
+            local setting = Settings.RegisterAddOnSetting(
+                subcategory,
+                "RSTATS_BGE_ROW_HEIGHT",
+                "bgeRowHeight",
+                db.settings,
+                Settings.VarType.Number,
+                "Row height",
+                18
+            )
+            setting:SetValueChangedCallback(function() NotifyBGE() end)
+            local options = Settings.CreateSliderOptions(12, 34, 1)
+            Settings.CreateSlider(subcategory, setting, options, "Height of each row.")
+        end
+
+        do
+            local setting = Settings.RegisterAddOnSetting(
+                subcategory,
+                "RSTATS_BGE_ROW_GAP",
+                "bgeRowGap",
+                db.settings,
+                Settings.VarType.Number,
+                "Row gap",
+                2
+            )
+            setting:SetValueChangedCallback(function() NotifyBGE() end)
+            local options = Settings.CreateSliderOptions(0, 10, 1)
+            Settings.CreateSlider(subcategory, setting, options, "Space between rows.")
+        end
+    end
+
     -- Login announcements (main + Achievements module)
     local login = CreateFrame("Frame")
     login:RegisterEvent("PLAYER_LOGIN")
