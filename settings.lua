@@ -419,6 +419,9 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             )
             setting:SetValueChangedCallback(function() NotifyBGE() end)
             local options = Settings.CreateSliderOptions(1, 12, 1)
+            if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+            end
             Settings.CreateSlider(subcategory, setting, options, "How many blank rows to show in preview mode.")
         end
 
@@ -434,6 +437,9 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             )
             setting:SetValueChangedCallback(function() NotifyBGE() end)
             local options = Settings.CreateSliderOptions(1, 8, 1)
+            if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+            end
             Settings.CreateSlider(subcategory, setting, options, "Number of columns (e.g. 2 for 2x20).")
         end
 
@@ -449,6 +455,9 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             )
             setting:SetValueChangedCallback(function() NotifyBGE() end)
             local options = Settings.CreateSliderOptions(1, 40, 1)
+            if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+            end
             Settings.CreateSlider(subcategory, setting, options, "Wrap after this many rows (e.g. 20 for 2x20).")
         end
 
@@ -464,6 +473,9 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             )
             setting:SetValueChangedCallback(function() NotifyBGE() end)
             local options = Settings.CreateSliderOptions(0, 30, 1)
+            if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+            end
             Settings.CreateSlider(subcategory, setting, options, "Space between columns.")
         end
 
@@ -479,6 +491,9 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             )
             setting:SetValueChangedCallback(function() NotifyBGE() end)
             local options = Settings.CreateSliderOptions(140, 520, 1)
+            if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+            end
             Settings.CreateSlider(subcategory, setting, options, "Width of each row.")
         end
 
@@ -494,6 +509,9 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             )
             setting:SetValueChangedCallback(function() NotifyBGE() end)
             local options = Settings.CreateSliderOptions(12, 34, 1)
+            if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+            end
             Settings.CreateSlider(subcategory, setting, options, "Height of each row.")
         end
 
@@ -509,6 +527,9 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             )
             setting:SetValueChangedCallback(function() NotifyBGE() end)
             local options = Settings.CreateSliderOptions(0, 10, 1)
+            if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+            end
             Settings.CreateSlider(subcategory, setting, options, "Space between rows.")
         end
     end

@@ -68,7 +68,8 @@
 			"GameTooltip",
 			"UIParent",
 			"HideUIPanel",
-			"SecondsToTime"
+			"SecondsToTime",
+			"MinimalSliderWithSteppersMixin"
 		],
 		"Lua.type.weakUnionCheck": true
 	}
