@@ -437,7 +437,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 8
             )
             setting:SetValueChangedCallback(function() NotifyBGE() end)
-            local options = Settings.CreateSliderOptions(1, 12, 1)
+            local options = Settings.CreateSliderOptions(1, 10, 1)
             if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
                 options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
             end
@@ -527,7 +527,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 18
             )
             setting:SetValueChangedCallback(function() NotifyBGE() end)
-            local options = Settings.CreateSliderOptions(12, 34, 1)
+            local options = Settings.CreateSliderOptions(15, 50, 1)
             if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
                 options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
             end
