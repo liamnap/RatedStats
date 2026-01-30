@@ -509,7 +509,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 240
             )
             setting:SetValueChangedCallback(function() NotifyBGE() end)
-            local options = Settings.CreateSliderOptions(140, 520, 1)
+            local options = Settings.CreateSliderOptions(50, 520, 1)
             if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
                 options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
             end
