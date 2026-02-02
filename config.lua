@@ -11,7 +11,7 @@ local playerNameWithRegion = playerName .. "-" .. regionName
 
 RSTATS.Database = RSTATS_Database or {} -- adds Database table to RSTATS namespace
 RSTATS.Database[playerName] = RSTATS.Database[playerName] or {} -- Ensure the character-specific table exists within RSTATS_Database
-local Database = RSTATS.Database[playerName]
+Database = RSTATS.Database[playerName]
 
 -- The Config table will store configuration settings and functions related to the addon's configuration.
 local Config = RSTATS.Config
