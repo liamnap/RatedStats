@@ -131,7 +131,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
     Settings.RegisterAddOnCategory(category)
 
     -- Achievements subcategory (only if the module is installed + enabled)
-    local achievName = "Rated Stats - Achievements"
+    local achievName = "Achievements"
     local achievAddon = "RatedStats_Achiev"
 
     if C_AddOns and C_AddOns.DoesAddOnExist and C_AddOns.DoesAddOnExist(achievAddon)
@@ -287,6 +287,924 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 1
             )
             Settings.CreateDropdown(subcategory, setting, function() return optsRBGB:GetData() end, nil)
+        end
+    end
+
+    -- Battleground Enemies subcategory (only if the module is installed + enabled)
+    local bgeName  = "BattleGround Enemies"
+    local bgeAddon = "RatedStats_BattlegroundEnemies"
+
+    if C_AddOns and C_AddOns.DoesAddOnExist and C_AddOns.DoesAddOnExist(bgeAddon)
+        and C_AddOns.GetAddOnEnableState and (C_AddOns.GetAddOnEnableState(bgeAddon, nil) ~= 0) then
+
+        local subcategory, layout = Settings.RegisterVerticalLayoutSubcategory(category, bgeName)
+
+        local function NotifyBGE()
+            if _G.RSTATS_BGE and type(_G.RSTATS_BGE.ApplySettings) == "function" then
+                _G.RSTATS_BGE:ApplySettings()
+            end
+        end
+
+        local TextInit =
+            _G.CreateSettingsListTextInitializer
+            or (Settings and Settings.CreateSettingsListTextInitializer)
+
+        local SubHeaderInit =
+            _G.CreateSettingsListSubsectionHeaderInitializer
+            or (Settings and Settings.CreateSettingsListSubsectionHeaderInitializer)
+
+        local SectionHeaderInit = _G.CreateSettingsListSectionHeaderInitializer
+
+        if layout and TextInit then
+            layout:AddInitializer(TextInit("Enemy frames built from NAME_PLATE_UNIT_* events. Only enemies with an active nameplate can be shown."))
+        elseif layout and SubHeaderInit then
+            layout:AddInitializer(SubHeaderInit("Battleground Enemies"))
+        end
+
+        -- ============================
+        -- General
+        -- ============================
+        if layout then
+            if SectionHeaderInit then
+                layout:AddInitializer(SectionHeaderInit("General"))
+            elseif SubHeaderInit then
+                layout:AddInitializer(SubHeaderInit("General"))
+            end
+        end
+
+        do
+            local setting = Settings.RegisterAddOnSetting(
+                subcategory,
+                "RSTATS_BGE_ENABLED",
+                "bgeEnabled",
+                db.settings,
+                Settings.VarType.Boolean,
+                "Enable",
+                true
+            )
+            setting:SetValueChangedCallback(function() NotifyBGE() end)
+            Settings.CreateCheckbox(subcategory, setting, "Show enemy frames when in PvP instances.")
+        end
+
+        do
+            local setting = Settings.RegisterAddOnSetting(
+                subcategory,
+                "RSTATS_BGE_LOCKED",
+                "bgeLocked",
+                db.settings,
+                Settings.VarType.Boolean,
+                "Lock frame",
+                true
+            )
+            setting:SetValueChangedCallback(function() NotifyBGE() end)
+            Settings.CreateCheckbox(subcategory, setting, "When unlocked, you can drag the frame to move it.")
+        end
+
+        do
+            local optsLayout = Settings.CreateControlTextContainer()
+            optsLayout:Add(1, "Single list")
+            optsLayout:Add(2, "Grouped (sorted)")
+
+            local setting = Settings.RegisterAddOnSetting(
+                subcategory,
+                "RSTATS_BGE_LAYOUT",
+                "bgeLayout",
+                db.settings,
+                Settings.VarType.Number,
+                "Layout",
+                1
+            )
+            setting:SetValueChangedCallback(function() NotifyBGE() end)
+            Settings.CreateDropdown(subcategory, setting, function() return optsLayout:GetData() end, nil)
+        end
+
+        do
+            local setting = Settings.RegisterAddOnSetting(
+                subcategory,
+                "RSTATS_BGE_SHOW_ACHIEV_ICON",
+                "bgeShowAchievIcon",
+                db.settings,
+                Settings.VarType.Boolean,
+                "Show achievement icon",
+                false
+            )
+            setting:SetValueChangedCallback(function() NotifyBGE() end)
+            Settings.CreateCheckbox(subcategory, setting, "Shows an icon if Rated Stats - Achievements exposes an icon lookup API.")
+        end
+
+        do
+            local setting = Settings.RegisterAddOnSetting(
+                subcategory,
+                "RSTATS_BGE_SHOW_POWER",
+                "bgeShowPower",
+                db.settings,
+                Settings.VarType.Boolean,
+                "Show power bar",
+                true
+            )
+            setting:SetValueChangedCallback(function() NotifyBGE() end)
+            Settings.CreateCheckbox(subcategory, setting, "Shows mana/energy/rage/etc (when available).")
+        end
+
+        do
+            local opts = Settings.CreateControlTextContainer()
+            opts:Add(1, "Current")
+            opts:Add(2, "Current/Total")
+            opts:Add(3, "%")
+
+            local setting = Settings.RegisterAddOnSetting(
+                subcategory,
+                "RSTATS_BGE_HEALTH_TEXT",
+                "bgeHealthTextMode",
+                db.settings,
+                Settings.VarType.Number,
+                "Health text",
+                2
+            )
+            setting:SetValueChangedCallback(function() NotifyBGE() end)
+            Settings.CreateDropdown(subcategory, setting, function() return opts:GetData() end, nil)
+        end
+        -- Current Distance (nameplateMaxDistance)
+        --
+        -- Uses the real CVar so the displayed number is always accurate.
+        -- Tooltip provides the preferred slash command.
+        do
+            local tooltip = "Range may seem far for enemies, consider your own preference."
+
+            local setting = Settings.RegisterCVarSetting(
+                subcategory,
+                "nameplateMaxDistance",
+                Settings.VarType.Number,
+                "Current Distance"
+            )
+
+            -- Keep it simple: let users adjust here if they want; the tooltip also shows the slash command.
+            local options = Settings.CreateSliderOptions(0, 80, 1)
+            if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+            end
+            Settings.CreateSlider(subcategory, setting, options, tooltip)
+        end
+
+        -- ============================
+        -- Layout profiles (tabs)
+        -- ============================
+
+        -- This is not displayed as a control; it is driven by our tab buttons below.
+        local tabSetting = Settings.RegisterAddOnSetting(
+            subcategory,
+            "RSTATS_BGE_PROFILE_TAB",
+            "bgeProfileTab",
+            db.settings,
+            Settings.VarType.Number,
+            "Profile tab",
+            1
+        )
+
+        local function GetCurrentTab()
+            local v = (db.settings and db.settings.bgeProfileTab) or nil
+            if type(v) ~= "number" then
+                v = 1
+            end
+            if v < 1 or v > 4 then
+                v = 1
+            end
+            return v
+        end
+
+        local function AddTabPredicate(initializer, tabIndex)
+            if not initializer then return end
+            initializer:AddShownPredicate(function()
+                return GetCurrentTab() == tabIndex
+            end)
+        end
+
+        -- Tab bar row
+        do
+            local header
+            if SectionHeaderInit then
+                header = SectionHeaderInit("Layout Profiles")
+            elseif SubHeaderInit then
+                header = SubHeaderInit("Layout Profiles")
+            end
+
+            if header and layout then
+                header.InitFrame = function(init, frame)
+                    frame:Init(init)
+
+                    if not frame.__RSTATS_TabButtons then
+                        frame.__RSTATS_TabButtons = {}
+
+                        local labels = { "Rated (8v8)", "10v10", "15v15", ">15v15" }
+                        local prev
+
+                        local function UpdateVisual()
+                            local cur = GetCurrentTab()
+                            for i, btn in ipairs(frame.__RSTATS_TabButtons) do
+                                if i == cur then
+                                    btn:Disable()
+                                else
+                                    btn:Enable()
+                                end
+                            end
+                        end
+
+                        for i = 1, 4 do
+                            local btn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+                            btn:SetHeight(20)
+                            btn:SetText(labels[i])
+                            btn:SetWidth(math.max(70, btn:GetTextWidth() + 16))
+
+                            if not prev then
+                                btn:SetPoint("LEFT", frame.Title, "RIGHT", 12, 0)
+                            else
+                                btn:SetPoint("LEFT", prev, "RIGHT", 6, 0)
+                            end
+
+                            btn:SetScript("OnClick", function()
+                                tabSetting:SetValue(i, true)
+                                if SettingsInbound and SettingsInbound.RepairDisplay then
+                                    SettingsInbound.RepairDisplay()
+                                end
+                                UpdateVisual()
+                            end)
+
+                            frame.__RSTATS_TabButtons[i] = btn
+                            prev = btn
+                        end
+
+                        UpdateVisual()
+                    else
+                        -- Recycled frame: just update the visual state.
+                        local cur = GetCurrentTab()
+                        for i, btn in ipairs(frame.__RSTATS_TabButtons) do
+                            if i == cur then
+                                btn:Disable()
+                            else
+                                btn:Enable()
+                            end
+                        end
+                    end
+                end
+
+                layout:AddInitializer(header)
+            end
+        end
+
+        -- ----------------------------
+        -- Rated (8v8)
+        -- ----------------------------
+        do
+            local hdr
+            if SubHeaderInit and layout then
+
+                hdr = SubHeaderInit("Rated (8v8)")
+
+                AddTabPredicate(hdr, 1)
+
+                layout:AddInitializer(hdr)
+
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_RATED_PREVIEW",
+                    "bgeRatedPreview",
+                    db.settings,
+                    Settings.VarType.Boolean,
+                    "Preview outside PvP",
+                    false
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local init = Settings.CreateCheckbox(subcategory, setting, "Shows the frame out of PvP so you can tune size/position for Rated (8v8).")
+                AddTabPredicate(init, 1)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_RATED_PREVIEW_COUNT",
+                    "bgeRatedPreviewCount",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Preview rows",
+                    8
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(1, 40, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "How many blank rows to show in preview mode (Rated 8v8).")
+                AddTabPredicate(init, 1)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_RATED_COLUMNS",
+                    "bgeRatedColumns",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Columns",
+                    2
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(1, 8, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "Number of columns for Rated (8v8).")
+                AddTabPredicate(init, 1)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_RATED_ROWS_PER_COL",
+                    "bgeRatedRowsPerCol",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Rows per column",
+                    5
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(1, 40, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "Wrap after this many rows (Rated 8v8).")
+                AddTabPredicate(init, 1)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_RATED_COL_GAP",
+                    "bgeRatedColGap",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Column gap",
+                    0
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(0, 30, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "Space between columns (Rated 8v8).")
+                AddTabPredicate(init, 1)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_RATED_ROW_WIDTH",
+                    "bgeRatedRowWidth",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Row width",
+                    100
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(50, 520, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "Width of each row (Rated 8v8).")
+                AddTabPredicate(init, 1)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_RATED_ROW_HEIGHT",
+                    "bgeRatedRowHeight",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Row height",
+                    60
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(15, 140, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "Height of each row (Rated 8v8).")
+                AddTabPredicate(init, 1)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_RATED_ROW_GAP",
+                    "bgeRatedRowGap",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Row gap",
+                    0
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(0, 10, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "Space between rows (Rated 8v8).")
+                AddTabPredicate(init, 1)
+            end
+        end
+
+        -- ----------------------------
+        -- 10v10
+        -- ----------------------------
+        do
+            local hdr
+            if SubHeaderInit and layout then
+
+                hdr = SubHeaderInit("10v10")
+
+                AddTabPredicate(hdr, 2)
+
+                layout:AddInitializer(hdr)
+
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_10_PREVIEW",
+                    "bge10Preview",
+                    db.settings,
+                    Settings.VarType.Boolean,
+                    "Preview outside PvP",
+                    false
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local init = Settings.CreateCheckbox(subcategory, setting, "Shows the frame out of PvP so you can tune size/position for 10v10.")
+                AddTabPredicate(init, 2)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_10_PREVIEW_COUNT",
+                    "bge10PreviewCount",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Preview rows",
+                    10
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(1, 40, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "How many blank rows to show in preview mode (10v10).")
+                AddTabPredicate(init, 2)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_10_COLUMNS",
+                    "bge10Columns",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Columns",
+                    2
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(1, 8, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "Number of columns for 10v10.")
+                AddTabPredicate(init, 2)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_10_ROWS_PER_COL",
+                    "bge10RowsPerCol",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Rows per column",
+                    5
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(1, 40, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "Wrap after this many rows (10v10).")
+                AddTabPredicate(init, 2)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_10_COL_GAP",
+                    "bge10ColGap",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Column gap",
+                    0
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(0, 30, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "Space between columns (10v10).")
+                AddTabPredicate(init, 2)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_10_ROW_WIDTH",
+                    "bge10RowWidth",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Row width",
+                    100
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(50, 520, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "Width of each row (10v10).")
+                AddTabPredicate(init, 2)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_10_ROW_HEIGHT",
+                    "bge10RowHeight",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Row height",
+                    60
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(15, 140, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "Height of each row (10v10).")
+                AddTabPredicate(init, 2)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_10_ROW_GAP",
+                    "bge10RowGap",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Row gap",
+                    0
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(0, 10, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "Space between rows (10v10).")
+                AddTabPredicate(init, 2)
+            end
+        end
+
+        -- ----------------------------
+        -- 15v15
+        -- ----------------------------
+        do
+            local hdr
+            if SubHeaderInit and layout then
+
+                hdr = SubHeaderInit("15v15")
+
+                AddTabPredicate(hdr, 3)
+
+                layout:AddInitializer(hdr)
+
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_15_PREVIEW",
+                    "bge15Preview",
+                    db.settings,
+                    Settings.VarType.Boolean,
+                    "Preview outside PvP",
+                    false
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local init = Settings.CreateCheckbox(subcategory, setting, "Shows the frame out of PvP so you can tune size/position for 15v15.")
+                AddTabPredicate(init, 3)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_15_PREVIEW_COUNT",
+                    "bge15PreviewCount",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Preview rows",
+                    15
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(1, 40, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "How many blank rows to show in preview mode (15v15).")
+                AddTabPredicate(init, 3)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_15_COLUMNS",
+                    "bge15Columns",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Columns",
+                    3
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(1, 8, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "Number of columns for 15v15.")
+                AddTabPredicate(init, 3)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_15_ROWS_PER_COL",
+                    "bge15RowsPerCol",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Rows per column",
+                    5
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(1, 40, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "Wrap after this many rows (15v15).")
+                AddTabPredicate(init, 3)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_15_COL_GAP",
+                    "bge15ColGap",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Column gap",
+                    0
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(0, 30, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "Space between columns (15v15).")
+                AddTabPredicate(init, 3)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_15_ROW_WIDTH",
+                    "bge15RowWidth",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Row width",
+                    100
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(50, 520, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "Width of each row (15v15).")
+                AddTabPredicate(init, 3)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_15_ROW_HEIGHT",
+                    "bge15RowHeight",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Row height",
+                    60
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(15, 140, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "Height of each row (15v15).")
+                AddTabPredicate(init, 3)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_15_ROW_GAP",
+                    "bge15RowGap",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Row gap",
+                    0
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(0, 10, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "Space between rows (15v15).")
+                AddTabPredicate(init, 3)
+            end
+        end
+
+        -- ----------------------------
+        -- >15v15
+        -- ----------------------------
+        do
+            local hdr
+            if SubHeaderInit and layout then
+
+                hdr = SubHeaderInit(">15v15")
+
+                AddTabPredicate(hdr, 4)
+
+                layout:AddInitializer(hdr)
+
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_LARGE_PREVIEW",
+                    "bgeLargePreview",
+                    db.settings,
+                    Settings.VarType.Boolean,
+                    "Preview outside PvP",
+                    false
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local init = Settings.CreateCheckbox(subcategory, setting, "Shows the frame out of PvP so you can tune size/position for >15v15.")
+                AddTabPredicate(init, 4)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_LARGE_PREVIEW_COUNT",
+                    "bgeLargePreviewCount",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Preview rows",
+                    40
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(1, 40, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "How many blank rows to show in preview mode (>15v15).")
+                AddTabPredicate(init, 4)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_LARGE_COLUMNS",
+                    "bgeLargeColumns",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Columns",
+                    4
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(1, 8, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "Number of columns for >15v15.")
+                AddTabPredicate(init, 4)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_LARGE_ROWS_PER_COL",
+                    "bgeLargeRowsPerCol",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Rows per column",
+                    10
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(1, 40, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "Wrap after this many rows (>15v15).")
+                AddTabPredicate(init, 4)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_LARGE_COL_GAP",
+                    "bgeLargeColGap",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Column gap",
+                    0
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(0, 30, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "Space between columns (>15v15).")
+                AddTabPredicate(init, 4)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_LARGE_ROW_WIDTH",
+                    "bgeLargeRowWidth",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Row width",
+                    100
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(50, 520, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "Width of each row (>15v15).")
+                AddTabPredicate(init, 4)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_LARGE_ROW_HEIGHT",
+                    "bgeLargeRowHeight",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Row height",
+                    60
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(15, 140, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "Height of each row (>15v15).")
+                AddTabPredicate(init, 4)
+            end
+
+            do
+                local setting = Settings.RegisterAddOnSetting(
+                    subcategory,
+                    "RSTATS_BGE_LARGE_ROW_GAP",
+                    "bgeLargeRowGap",
+                    db.settings,
+                    Settings.VarType.Number,
+                    "Row gap",
+                    0
+                )
+                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                local options = Settings.CreateSliderOptions(0, 10, 1)
+                if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+                end
+                local init = Settings.CreateSlider(subcategory, setting, options, "Space between rows (>15v15).")
+                AddTabPredicate(init, 4)
+            end
         end
     end
 
