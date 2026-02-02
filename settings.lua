@@ -131,7 +131,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
     Settings.RegisterAddOnCategory(category)
 
     -- Achievements subcategory (only if the module is installed + enabled)
-    local achievName = "Rated Stats - Achievements"
+    local achievName = "Achievements"
     local achievAddon = "RatedStats_Achiev"
 
     if C_AddOns and C_AddOns.DoesAddOnExist and C_AddOns.DoesAddOnExist(achievAddon)
@@ -291,7 +291,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
     end
 
     -- Battleground Enemies subcategory (only if the module is installed + enabled)
-    local bgeName  = "Rated Stats - Battleground Enemies"
+    local bgeName  = "BattleGround Enemies"
     local bgeAddon = "RatedStats_BattlegroundEnemies"
 
     if C_AddOns and C_AddOns.DoesAddOnExist and C_AddOns.DoesAddOnExist(bgeAddon)
@@ -429,7 +429,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
         -- Uses the real CVar so the displayed number is always accurate.
         -- Tooltip provides the preferred slash command.
         do
-            local tooltip = "Range may seem far for enemies, consider your own preference\n  /run C_CVar.SetCVar(\"nameplateMaxDistance\", \"40\") to modify enemy range."
+            local tooltip = "Range may seem far for enemies, consider your own preference."
 
             local setting = Settings.RegisterCVarSetting(
                 subcategory,
