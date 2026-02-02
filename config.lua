@@ -11,7 +11,7 @@ local playerNameWithRegion = playerName .. "-" .. regionName
 
 RSTATS.Database = RSTATS_Database or {} -- adds Database table to RSTATS namespace
 RSTATS.Database[playerName] = RSTATS.Database[playerName] or {} -- Ensure the character-specific table exists within RSTATS_Database
-Database = RSTATS.Database[playerName]
+local Database = RSTATS.Database[playerName]
 
 -- The Config table will store configuration settings and functions related to the addon's configuration.
 local Config = RSTATS.Config
@@ -22,9 +22,6 @@ local scrollFrames = {}
 local scrollContents = {}
 local headerFontSize = 10
 local entryFontSize = 8
-
-Database.combatLogEvents = Database.combatLogEvents or {}
-combatLogEvents = Database.combatLogEvents
 
 local c = function(text) return RSTATS:ColorText(text) end
 
@@ -46,7 +43,7 @@ local function PrintTable(tbl, name)
 end
 
 -- Define a function to simulate /dump command
-function SimulateDumpCommand(tableName)
+local function SimulateDumpCommand(tableName)
     if tableName == "RSTATS_Database" then
         PrintTable(RSTATS_Database, "RSTATS_Database")
     elseif tableName == "RSTATS.Config" then
@@ -1244,7 +1241,9 @@ function RefreshDataEvent(self, event, ...)
 				end)
 
                 C_Timer.After(45, function()
-                    GetTalents:Start()
+                    if RSTATS.GetTalents then
+                        RSTATS.GetTalents:Start()
+                    end
                 end)
             end
 
@@ -1269,15 +1268,17 @@ function RefreshDataEvent(self, event, ...)
 				local historyTable = historyKey and Database[historyKey]
 				
 				C_Timer.After(120, function()
-					GetTalents:Start()
+					if RSTATS.GetTalents then
+						RSTATS.GetTalents:Start()
+					end
 				end)
 			end
 		end)
 
     elseif event == "PVP_MATCH_COMPLETE" then
         C_Timer.After(1, function()
-			if GetTalents then
-				GetTalents:Stop(false)
+			if RSTATS.GetTalents then
+				RSTATS.GetTalents:Stop(false)
 			end
 
             if self.isSoloShuffle then
@@ -1955,7 +1956,7 @@ end
 -- Spec-based rated ladders (SS / Solo RBG) need spec-scoped history
 -- ==========================================================
 -- Helper function to get player full name
-function GetPlayerFullName()
+local function GetPlayerFullName()
     local name = UnitName("player")
     local realm = GetRealmName()
     return name .. "-" .. realm
@@ -3075,9 +3076,9 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             -- Save the updated data
             SaveData()
 		
-		    if GetTalents then
-			    GetTalents:ReallyClearMemory() -- now safe to clear everything
-		    end
+			if RSTATS.GetTalents then
+				RSTATS.GetTalents:ReallyClearMemory() -- now safe to clear everything
+			end
 		
 		    -- Re-run filters to refresh the UI with the new match included
 		    local tabIDByCategoryID = {
