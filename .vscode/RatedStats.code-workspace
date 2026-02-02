@@ -69,7 +69,8 @@
 			"UIParent",
 			"HideUIPanel",
 			"SecondsToTime",
-			"MinimalSliderWithSteppersMixin"
+			"MinimalSliderWithSteppersMixin",
+			"SettingsInbound"
 		],
 		"Lua.type.weakUnionCheck": true
 	}
