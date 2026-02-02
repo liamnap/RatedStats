@@ -495,7 +495,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                     if not frame.__RSTATS_TabButtons then
                         frame.__RSTATS_TabButtons = {}
 
-                        local labels = { "Rated (8v8)", "10v10", "15v15", ">15v15" }
+                        local labels = { "Rated (8v8)", "10v10", "15v15", ">15" }
                         local prev
 
                         local function UpdateVisual()
