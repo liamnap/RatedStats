@@ -1,5 +1,9 @@
-GetTalents = {}
-PendingPvPTalents = PendingPvPTalents or {}
+local _, RSTATS = ...
+
+RSTATS.GetTalents = RSTATS.GetTalents or {}
+local GetTalents = RSTATS.GetTalents
+
+local PendingPvPTalents = {}
 RSTATS.DetectedPlayerTalents = RSTATS.DetectedPlayerTalents or {}
 
 local completedUnits = {}
@@ -19,7 +23,7 @@ local function NormalizeGUID(guid)
     return tostring(guid)
 end
 
-function GetPlayerFullName(unit)
+local function GetPlayerFullName(unit)
     local name, realm = UnitName(unit)
     realm = realm or GetRealmName()
     if not name then return nil end
