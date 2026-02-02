@@ -646,69 +646,6 @@ local function GetEnemyRaidLeaderName(enemyFaction, enemyPlayers)
     return enemyRaidLeader
 end
 
-local columns = C_PvP.GetMatchPVPStatColumns()
-for _, column in ipairs(columns) do
-end
-
--- Create a frame to register events
-local frame = CreateFrame("Frame")
-frame:RegisterEvent("PVP_MATCH_ACTIVE")
-frame:RegisterEvent("PVP_MATCH_COMPLETE")
-frame:RegisterEvent("UPDATE_UI_WIDGET")
-
-local inPvPMatch = false  -- Track if we are in a PvP match
-
-frame:SetScript("OnEvent", function(_, event, widgetID)
-    if event == "PVP_MATCH_ACTIVE" then
-        inPvPMatch = true
-    elseif event == "PVP_MATCH_COMPLETE" then
-        inPvPMatch = false
-    elseif event == "UPDATE_UI_WIDGET" and inPvPMatch and type(widgetID) == "number" then
-        -- Fetch the widget data based on the widgetID
-        local widgetData = C_UIWidgetManager.GetDoubleStatusBarWidgetVisualizationInfo(widgetInfo.widgetID)
-        if widgetData then
-            TrackScores(widgetID)
-        else
-        end
-    end
-end)
-
--- Function to print specific DoubleStatusBar widgets in a PvP instance
-function PrintAllWidgets()
-    local inInstance, instanceType = IsInInstance()
-    if not (inInstance and (instanceType == "pvp" or instanceType == "arena")) then
-        return
-    end
-
-    -- Loop over a large range of possible widget IDs
-    for i = 1, 10000 do
-        local widgetInfo = C_UIWidgetManager.GetDoubleStatusBarWidgetVisualizationInfo(i)
-        if widgetInfo then
-            local widgetID = widgetInfo.widgetID
-            -- Check for known DoubleStatusBar widget IDs related to battleground scoring
-            if widgetID == 1671 or widgetID == 2074 or widgetID == 1681 then
-                local data = C_UIWidgetManager.GetDoubleStatusBarWidgetVisualizationInfo(widgetID)
-                if data then
-                else
-                end
-            end
-        end
-    end
-end
-
--- Manually call this function whenever you're in a battleground.
-PrintAllWidgets()
-
-local function StartPrintingWidgets()
-    if not C_PvP.IsBattleground() then return end
-    C_Timer.NewTicker(60, PrintAllWidgets)  -- Print widgets every 60 seconds
-end
-
--- Start when you enter a battleground
-local frame = CreateFrame("Frame")
-frame:RegisterEvent("PLAYER_ENTERING_BATTLEGROUND")
-frame:SetScript("OnEvent", StartPrintingWidgets)
-
 local function IsInPvPMatch()
     return C_PvP.IsRatedBattleground() or C_PvP.IsBattleground() or C_PvP.IsSoloRBG()
 end
