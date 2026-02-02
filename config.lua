@@ -3474,7 +3474,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 	
 	if not headerFrame then
 		-- First time on this tab → actually create the widgets
-		headerFrame = CreateFrame("Frame", "HeaderFrame", contentFrame)
+		headerFrame = CreateFrame("Frame", "RatedStatsHeaderFrame", contentFrame)
 		headerFrame:SetPoint("TOPLEFT", mmrLabel, "BOTTOMLEFT", 0, -8)
 		
 		if UIConfig.isCompact then
@@ -3550,7 +3550,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 	local anchorForRows = content.headerTexts[1]
 
     -- 5) Create a base anchor frame placed immediately below mmrLabel.
-    local baseAnchor = CreateFrame("Frame", "HeadingAnchor", content)
+    local baseAnchor = CreateFrame("Frame", "RatedStatsHeadingAnchor", content)
     baseAnchor:SetSize(1, 1)
     baseAnchor:SetPoint("TOPLEFT", mmrLabel, "BOTTOMLEFT", 0, -12)
     content.baseAnchor = baseAnchor
@@ -3804,9 +3804,9 @@ end
 
 -- Pop-out frame + name box tweaks
 function RSTATS.OpenPlayerDetails(stats, matchEntry)
-    local frame = CreateFrame("Frame", "CreateCopyNameFrame", UIParent, "BackdropTemplate")
-	UIPanelWindows["CreateCopyNameFrame"] = { area = "center", pushable = 0, whileDead = true }
-	tinsert(UISpecialFrames, "CreateCopyNameFrame")
+    local frame = CreateFrame("Frame", "RatedStatsCreateCopyNameFrame", UIParent, "BackdropTemplate")
+	UIPanelWindows["RatedStatsCreateCopyNameFrame"] = { area = "center", pushable = 0, whileDead = true }
+	tinsert(UISpecialFrames, "RatedStatsCreateCopyNameFrame")
     frame:SetSize(300, 140)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("DIALOG")
@@ -3826,7 +3826,7 @@ function RSTATS.OpenPlayerDetails(stats, matchEntry)
     nameTitle:SetText("Player Name Copy:")
 	nameTitle:SetFont(GetUnicodeSafeFont(), 8)
 
-    local nameBox = CreateFrame("EditBox", "CreateCopyNameFrameEditBox", frame, "BackdropTemplate")
+    local nameBox = CreateFrame("EditBox", "RatedStatsCreateCopyNameFrameEditBox", frame, "BackdropTemplate")
     nameBox:SetSize(150, 20)
     nameBox:SetPoint("TOP", nameTitle, "BOTTOM", 0, -4)
     nameBox:SetAutoFocus(false)
@@ -3840,7 +3840,7 @@ function RSTATS.OpenPlayerDetails(stats, matchEntry)
 	end)
 
     -- 2) Close button
-    local close = CreateFrame("Button", "CreateCopyNameFrameEditBoxCloseButton", frame, "UIPanelCloseButton")
+    local close = CreateFrame("Button", "RatedStatsCreateCopyNameFrameEditBoxCloseButton", frame, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", frame, "TOPRIGHT")
 
     -- 3) Loadout box / icons
@@ -3903,7 +3903,7 @@ function RSTATS.CreateClickableName(parent, stats, matchEntry, x, y, columnWidth
   nameText:SetText(playerName)
   nameText:SetFont(GetUnicodeSafeFont(), 8)
 
-  local clickableFrame = CreateFrame("Button", "ClickableName", parent)
+  local clickableFrame = CreateFrame("Button", "RatedStatsClickableName", parent)
   clickableFrame:SetSize(nameText:GetStringWidth(), nameText:GetStringHeight())
   clickableFrame:SetPoint("CENTER", nameText, "CENTER")
 
@@ -5317,7 +5317,7 @@ function Config:CreateMenu()
     Config:CreateSearchBox(UIConfig)
     Config:CreateFilterMenu(UIConfig)
 
-	local statsBar = CreateFrame("Frame", "MatchStatsBar", UIConfig)
+	local statsBar = CreateFrame("Frame", "RatedStatsMatchStatsBar", UIConfig)
 	statsBar:SetSize(800, 24)
 	statsBar:SetPoint("BOTTOMLEFT", UIConfig, "BOTTOMLEFT", 16, 15)
 	statsBar:SetPoint("BOTTOMRIGHT", UIConfig, "BOTTOMRIGHT", -16, 15)
@@ -5343,7 +5343,7 @@ function Config:CreateMenu()
 
     -- Create 5 frames + scrollFrames for the match-history tabs
     for i = 1, 5 do
-        local frame = CreateFrame("Frame", "TabFrame", UIConfig)
+        local frame = CreateFrame("Frame", "RatedStatsTabFrame", UIConfig)
         frame:SetPoint("TOPLEFT", UIConfig, "TOPLEFT", 20, -100)
         frame:SetPoint("BOTTOMRIGHT", UIConfig, "BOTTOMRIGHT", -20, 40)
 		frame:SetClipsChildren(true)
@@ -5778,7 +5778,7 @@ function Config:CreateMenu()
     end
 
     -- Optional ToggleViewButton
-    UIConfig.ToggleViewButton = CreateFrame("Button","FrameCloseButton",UIConfig)
+    UIConfig.ToggleViewButton = CreateFrame("Button","RatedStatsFrameCloseButton",UIConfig)
     UIConfig.ToggleViewButton:SetSize(24,24)
     UIConfig.ToggleViewButton:SetPoint("RIGHT",UIConfig.CloseButton,"LEFT",0,0)
     UIConfig.ToggleViewButton:SetFrameStrata("DIALOG")
@@ -5940,7 +5940,7 @@ function Config:CreateMenu()
 	
     -- Small Arrow Buttons for Team View (like Spellbook arrows)
     local arrowSize = 24
-    UIConfig.TeamLeftButton = CreateFrame("Button", "TeamLeftButton", UIConfig, "UIPanelButtonTemplate")
+    UIConfig.TeamLeftButton = CreateFrame("Button", "RatedStatsTeamLeftButton", UIConfig, "UIPanelButtonTemplate")
     UIConfig.TeamLeftButton:SetSize(arrowSize, arrowSize)
     UIConfig.TeamLeftButton:SetPoint("BOTTOMRIGHT", UIConfig, "BOTTOMRIGHT", -48, 12)
     UIConfig.TeamLeftButton:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Up")
@@ -5954,7 +5954,7 @@ function Config:CreateMenu()
     end)
     UIConfig.TeamLeftButton:SetScript("OnLeave", GameTooltip_Hide)
 
-    UIConfig.TeamRightButton = CreateFrame("Button", "TeamRightButton", UIConfig, "UIPanelButtonTemplate")
+    UIConfig.TeamRightButton = CreateFrame("Button", "RatedStatsTeamRightButton", UIConfig, "UIPanelButtonTemplate")
     UIConfig.TeamRightButton:SetSize(arrowSize, arrowSize)
     UIConfig.TeamRightButton:SetPoint("BOTTOMRIGHT", UIConfig, "BOTTOMRIGHT", -20, 12)
     UIConfig.TeamRightButton:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up")
@@ -6049,7 +6049,7 @@ function Config:CreateMenu()
 
     -- ↪ When the main window closes, also tear down the copy‐name popup if open
     UIConfig:HookScript("OnHide", function(self)
-      local cf = _G["CreateCopyNameFrame"]
+      local cf = _G["RatedStatsCreateCopyNameFrame"]
       if cf and cf:IsShown() then
         HideUIPanel(cf)
       end
