@@ -131,7 +131,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
     Settings.RegisterAddOnCategory(category)
 
     -- Achievements subcategory (only if the module is installed + enabled)
-    local achievName = "Achievements"
+    local achievName = "Rated Stats - Achievements"
     local achievAddon = "RatedStats_Achiev"
 
     if C_AddOns and C_AddOns.DoesAddOnExist and C_AddOns.DoesAddOnExist(achievAddon)
@@ -291,7 +291,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
     end
 
     -- Battleground Enemies subcategory (only if the module is installed + enabled)
-    local bgeName  = "Battleground Enemies"
+    local bgeName  = "Rated Stats - Battleground Enemies"
     local bgeAddon = "RatedStats_BattlegroundEnemies"
 
     if C_AddOns and C_AddOns.DoesAddOnExist and C_AddOns.DoesAddOnExist(bgeAddon)
@@ -424,37 +424,26 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             setting:SetValueChangedCallback(function() NotifyBGE() end)
             Settings.CreateDropdown(subcategory, setting, function() return opts:GetData() end, nil)
         end
-
-        -- Current nameplate range readout (purely informational)
+        -- Current Distance (nameplateMaxDistance)
+        --
+        -- Uses the real CVar so the displayed number is always accurate.
+        -- Tooltip provides the preferred slash command.
         do
             local tooltip = "Range may seem far for enemies, consider your own preference\n  /run C_CVar.SetCVar(\"nameplateMaxDistance\", \"40\") to modify enemy range."
 
-            local distInit = Settings.CreateElementInitializer("SettingsListElementTemplate", { name = "", tooltip = tooltip })
-            distInit:AddEvaluateStateCVar("nameplateMaxDistance")
+            local setting = Settings.RegisterCVarSetting(
+                subcategory,
+                "nameplateMaxDistance",
+                Settings.VarType.Number,
+                "Current Distance"
+            )
 
-            distInit.InitFrame = function(init, frame)
-                local v = (_G.GetCVar and _G.GetCVar("nameplateMaxDistance")) or ""
-                init.data.name = "Current Distance: " .. tostring(v)
-
-                frame:Init(init)
-
-                -- Keep text live if the cvar changes while the settings panel is open.
-                if not frame.__RSTATS_DistanceHooked then
-                    frame.__RSTATS_DistanceHooked = true
-                    local orig = frame.EvaluateState
-                    frame.EvaluateState = function(self, ...)
-                        if orig then
-                            orig(self, ...)
-                        end
-                        local nv = (_G.GetCVar and _G.GetCVar("nameplateMaxDistance")) or ""
-                        self.Text:SetText("Current Distance: " .. tostring(nv))
-                    end
-                end
+            -- Keep it simple: let users adjust here if they want; the tooltip also shows the slash command.
+            local options = Settings.CreateSliderOptions(0, 80, 1)
+            if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
+                options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
             end
-
-            if layout then
-                layout:AddInitializer(distInit)
-            end
+            Settings.CreateSlider(subcategory, setting, options, tooltip)
         end
 
         -- ============================
@@ -568,9 +557,14 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
         do
             local hdr
             if SubHeaderInit and layout then
-                hdr = layout:AddInitializer(SubHeaderInit("Rated (8v8)"))
+
+                hdr = SubHeaderInit("Rated (8v8)")
+
+                AddTabPredicate(hdr, 1)
+
+                layout:AddInitializer(hdr)
+
             end
-            AddTabPredicate(hdr, 1)
 
             do
                 local setting = Settings.RegisterAddOnSetting(
@@ -727,9 +721,14 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
         do
             local hdr
             if SubHeaderInit and layout then
-                hdr = layout:AddInitializer(SubHeaderInit("10v10"))
+
+                hdr = SubHeaderInit("10v10")
+
+                AddTabPredicate(hdr, 2)
+
+                layout:AddInitializer(hdr)
+
             end
-            AddTabPredicate(hdr, 2)
 
             do
                 local setting = Settings.RegisterAddOnSetting(
@@ -886,9 +885,14 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
         do
             local hdr
             if SubHeaderInit and layout then
-                hdr = layout:AddInitializer(SubHeaderInit("15v15"))
+
+                hdr = SubHeaderInit("15v15")
+
+                AddTabPredicate(hdr, 3)
+
+                layout:AddInitializer(hdr)
+
             end
-            AddTabPredicate(hdr, 3)
 
             do
                 local setting = Settings.RegisterAddOnSetting(
@@ -1045,9 +1049,14 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
         do
             local hdr
             if SubHeaderInit and layout then
-                hdr = layout:AddInitializer(SubHeaderInit(">15v15"))
+
+                hdr = SubHeaderInit(">15v15")
+
+                AddTabPredicate(hdr, 4)
+
+                layout:AddInitializer(hdr)
+
             end
-            AddTabPredicate(hdr, 4)
 
             do
                 local setting = Settings.RegisterAddOnSetting(
