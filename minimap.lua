@@ -52,7 +52,7 @@ function RSTATS:InitializeMinimapIcon()
     -- The tracking border texture is meant to be larger than the 32x32 button.
     -- If you SetAllPoints it, you shrink the ring and it looks wrong.
     border:ClearAllPoints()
-    border:SetPoint("CENTER", btn, "CENTER", 6, -6)
+    border:SetPoint("CENTER", btn, "CENTER", 8, -8)
     border:SetSize(54, 54)
     btn.border = border
 
