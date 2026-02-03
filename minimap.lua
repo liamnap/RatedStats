@@ -49,7 +49,11 @@ function RSTATS:InitializeMinimapIcon()
 
     local border = btn:CreateTexture(nil, "OVERLAY")
     border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
-    border:SetAllPoints(btn)
+    -- The tracking border texture is meant to be larger than the 32x32 button.
+    -- If you SetAllPoints it, you shrink the ring and it looks wrong.
+    border:ClearAllPoints()
+    border:SetPoint("CENTER", btn, "CENTER", 0, 0)
+    border:SetSize(54, 54)
     btn.border = border
 
     local icon = btn:CreateTexture(nil, "ARTWORK")
