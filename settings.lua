@@ -479,6 +479,17 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             end)
         end
 
+        -- Store per-frame state in a weak-key table (avoid writing addon fields onto Blizzard-owned frames).
+        local RSTATS_SettingsFrameState = setmetatable({}, { __mode = "k" })
+        local function RS_GetSettingsFrameState(f)
+            local t = RSTATS_SettingsFrameState[f]
+            if not t then
+                t = {}
+                RSTATS_SettingsFrameState[f] = t
+            end
+            return t
+        end
+
         -- Tab bar row
         do
             local header
@@ -492,15 +503,16 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 header.InitFrame = function(init, frame)
                     frame:Init(init)
 
-                    if not frame.__RSTATS_TabButtons then
-                        frame.__RSTATS_TabButtons = {}
+                    local state = RS_GetSettingsFrameState(frame)
+                    if not state.TabButtons then
+                        state.TabButtons = {}
 
                         local labels = { "Rated (8v8)", "10v10", "15v15", ">15" }
                         local prev
 
                         local function UpdateVisual()
                             local cur = GetCurrentTab()
-                            for i, btn in ipairs(frame.__RSTATS_TabButtons) do
+                            for i, btn in ipairs(state.TabButtons) do
                                 if i == cur then
                                     btn:Disable()
                                 else
@@ -529,7 +541,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                                 UpdateVisual()
                             end)
 
-                            frame.__RSTATS_TabButtons[i] = btn
+                            state.TabButtons[i] = btn
                             prev = btn
                         end
 
@@ -537,7 +549,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                     else
                         -- Recycled frame: just update the visual state.
                         local cur = GetCurrentTab()
-                        for i, btn in ipairs(frame.__RSTATS_TabButtons) do
+                        for i, btn in ipairs(state.TabButtons) do
                             if i == cur then
                                 btn:Disable()
                             else
