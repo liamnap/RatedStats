@@ -648,10 +648,27 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             local want15    = (tab == 3)
             local wantLarge = (tab == 4)
 
-            db.settings.bgeRatedPreview = wantRated
-            db.settings.bge10Preview = want10
-            db.settings.bge15Preview = want15
-            db.settings.bgeLargePreview = wantLarge
+            -- Use Setting:SetValue so Blizzard Settings UI checkboxes update immediately.
+            if bgeRatedPreviewSetting and bgeRatedPreviewSetting.SetValue then
+                bgeRatedPreviewSetting:SetValue(wantRated)
+            else
+                db.settings.bgeRatedPreview = wantRated
+            end
+            if bge10PreviewSetting and bge10PreviewSetting.SetValue then
+                bge10PreviewSetting:SetValue(want10)
+            else
+                db.settings.bge10Preview = want10
+            end
+            if bge15PreviewSetting and bge15PreviewSetting.SetValue then
+                bge15PreviewSetting:SetValue(want15)
+            else
+                db.settings.bge15Preview = want15
+            end
+            if bgeLargePreviewSetting and bgeLargePreviewSetting.SetValue then
+                bgeLargePreviewSetting:SetValue(wantLarge)
+            else
+                db.settings.bgeLargePreview = wantLarge
+            end
 
             bgeSwitchingPreview = false
         end
@@ -723,7 +740,9 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                     "Preview outside PvP",
                     false
                 )
+                bgeRatedPreviewSetting = setting
                 setting:SetValueChangedCallback(function()
+                    if bgeSwitchingPreview then return end
                     if bgeSwitchingPreview then return end
                     if db and db.settings and db.settings.bgeRatedPreview then
                         db.settings.bge10Preview = false
@@ -896,7 +915,9 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                     "Preview outside PvP",
                     false
                 )
+                bge10PreviewSetting = setting
                 setting:SetValueChangedCallback(function()
+                    if bgeSwitchingPreview then return end
                     if bgeSwitchingPreview then return end
                     if db and db.settings and db.settings.bge10Preview then
                         db.settings.bgeRatedPreview = false
@@ -1069,7 +1090,9 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                     "Preview outside PvP",
                     false
                 )
+                bge15PreviewSetting = setting
                 setting:SetValueChangedCallback(function()
+                    if bgeSwitchingPreview then return end
                     if bgeSwitchingPreview then return end
                     if db and db.settings and db.settings.bge15Preview then
                         db.settings.bgeRatedPreview = false
@@ -1242,7 +1265,9 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                     "Preview outside PvP",
                     false
                 )
+                bge15PreviewSetting = setting
                 setting:SetValueChangedCallback(function()
+                    if bgeSwitchingPreview then return end
                     if bgeSwitchingPreview then return end
                     if db and db.settings and db.settings.bgeLargePreview then
                         db.settings.bgeRatedPreview = false
