@@ -2718,11 +2718,9 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 
 	for _, player in ipairs(playerStats) do
 		-- 1. Inject from PendingPvPTalents (inspect loadout only)
-		local pending = PendingPvPTalents[player.name]
 		if pending and pending.loadout and pending.loadout ~= "" and (not issecretvalue or not issecretvalue(pending.loadout)) then
 			player.loadout = pending.loadout
 			player.talentSource = "inspect"
-			PendingPvPTalents[player.name] = nil
 		end
 	
 		-- 2. Inject from DetectedPlayerTalents (loadout only)
