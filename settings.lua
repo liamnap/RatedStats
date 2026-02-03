@@ -376,24 +376,49 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             if InCombatLockdown and InCombatLockdown() then return end
             bgeApplyPending = false
             -- BG-only safety: don't touch BGE runtime in PvE unless preview is enabled.
-            if not ShouldApplyBGE() then
+            local bge = _G.RSTATS_BGE
+            if not bge then return end
+            if not ShouldApplyBGE() and not bge.frame then
                 return
             end
-            if _G.RSTATS_BGE and type(_G.RSTATS_BGE.ApplySettings) == "function" then
+            local bge = _G.RSTATS_BGE
+            if bge and type(bge.ApplySettings) == "function" then
+                -- Allow ApplySettings to run even when preview is being turned OFF,
+                -- as long as a preview frame already exists (so it can be hidden).
+                if not ShouldApplyBGE() and not bge.frame then
+                    return
+                end
+
+                -- Preview mode switching in PvE must not be "sticky".
+                -- Force BGE to re-resolve which preview profile is active.
+                bge._profilePrefix = nil
+
                 if type(securecall) == "function" then
-                    securecall(_G.RSTATS_BGE.ApplySettings, _G.RSTATS_BGE)
+                    securecall(bge.ApplySettings, bge)
                 else
-                    _G.RSTATS_BGE:ApplySettings()
+                    bge:ApplySettings()
                 end
             end
         end
 
         local function NotifyBGE()
-            -- No-op in PvE unless a preview is enabled.
-            if not ShouldApplyBGE() then
-                bgeApplyPending = false
-                return
-            end
+			local bge = _G.RSTATS_BGE
+			if not bge then
+				bgeApplyPending = false
+				return
+			end
+		
+			-- IMPORTANT:
+			-- If a preview frame is already visible, we MUST still run ApplySettings
+			-- so toggling preview OFF can HIDE it.
+			if not ShouldApplyBGE() and not bge.frame then
+				bgeApplyPending = false
+				return
+			end
+		
+			-- Preview profile switching in PvE must not stay "sticky".
+			-- Force BGE to re-resolve which preview profile is active.
+			bge._profilePrefix = nil
             bgeApplyPending = true
             if C_Timer and C_Timer.After then
                 C_Timer.After(0, RunBGEApply)
