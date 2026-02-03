@@ -646,6 +646,31 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 -- Force the Settings list to rebuild shown predicates when the tab changes.
                 -- Do NOT do anything in combat.
                 if InCombatLockdown and InCombatLockdown() then return end
+
+                -- If preview is currently active, transfer it to the newly selected profile.
+                -- This prevents multiple preview toggles being enabled at once (which would always resolve to Rated).
+                if db and db.settings then
+                    local s = db.settings
+                    local any = (s.bgeRatedPreview or s.bge10Preview or s.bge15Preview or s.bgeLargePreview) and true or false
+                    if any then
+                        local tab = GetCurrentTab()
+                        s.bgeRatedPreview = false
+                        s.bge10Preview = false
+                        s.bge15Preview = false
+                        s.bgeLargePreview = false
+                        if tab == 1 then
+                            s.bgeRatedPreview = true
+                        elseif tab == 2 then
+                            s.bge10Preview = true
+                        elseif tab == 3 then
+                            s.bge15Preview = true
+                        elseif tab == 4 then
+                            s.bgeLargePreview = true
+                        end
+                        NotifyBGE()
+                    end
+                end
+
                 if SettingsInbound and SettingsInbound.RepairDisplay then
                     SettingsInbound.RepairDisplay()
                 end
@@ -679,7 +704,15 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                     "Preview outside PvP",
                     false
                 )
-                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                setting:SetValueChangedCallback(function()
+                    if db and db.settings and db.settings.bgeRatedPreview then
+                        db.settings.bge10Preview = false
+                        db.settings.bge15Preview = false
+                        db.settings.bgeLargePreview = false
+                        db.settings.bgeProfileTab = 1
+                    end
+                    NotifyBGE()
+                end)
                 local init = Settings.CreateCheckbox(subcategory, setting, "Shows the frame out of PvP so you can tune size/position for Rated (8v8).")
                 AddTabPredicate(init, 1)
             end
@@ -843,7 +876,15 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                     "Preview outside PvP",
                     false
                 )
-                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                setting:SetValueChangedCallback(function()
+                    if db and db.settings and db.settings.bge10Preview then
+                        db.settings.bgeRatedPreview = false
+                        db.settings.bge15Preview = false
+                        db.settings.bgeLargePreview = false
+                        db.settings.bgeProfileTab = 2
+                    end
+                    NotifyBGE()
+                end)
                 local init = Settings.CreateCheckbox(subcategory, setting, "Shows the frame out of PvP so you can tune size/position for 10v10.")
                 AddTabPredicate(init, 2)
             end
@@ -1007,7 +1048,15 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                     "Preview outside PvP",
                     false
                 )
-                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                setting:SetValueChangedCallback(function()
+                    if db and db.settings and db.settings.bge15Preview then
+                        db.settings.bgeRatedPreview = false
+                        db.settings.bge10Preview = false
+                        db.settings.bgeLargePreview = false
+                        db.settings.bgeProfileTab = 3
+                    end
+                    NotifyBGE()
+                end)
                 local init = Settings.CreateCheckbox(subcategory, setting, "Shows the frame out of PvP so you can tune size/position for 15v15.")
                 AddTabPredicate(init, 3)
             end
@@ -1171,7 +1220,15 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                     "Preview outside PvP",
                     false
                 )
-                setting:SetValueChangedCallback(function() NotifyBGE() end)
+                setting:SetValueChangedCallback(function()
+                    if db and db.settings and db.settings.bgeLargePreview then
+                        db.settings.bgeRatedPreview = false
+                        db.settings.bge10Preview = false
+                        db.settings.bge15Preview = false
+                        db.settings.bgeProfileTab = 4
+                    end
+                    NotifyBGE()
+                end)
                 local init = Settings.CreateCheckbox(subcategory, setting, "Shows the frame out of PvP so you can tune size/position for >15v15.")
                 AddTabPredicate(init, 4)
             end
