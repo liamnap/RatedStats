@@ -507,7 +507,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             )
 
             -- Keep it simple: let users adjust here if they want; the tooltip also shows the slash command.
-            local options = Settings.CreateSliderOptions(0, 80, 1)
+            local options = Settings.CreateSliderOptions(0, 60, 1)
             if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
                 options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
             end
@@ -515,7 +515,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
         end
 
         -- ============================
-        -- Layout profiles (tabs)
+        -- Layout profiles
         -- ============================
 
         -- This is not displayed as a control; it is driven by our tab buttons below.
@@ -546,93 +546,33 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 return GetCurrentTab() == tabIndex
             end)
         end
-
-        -- Avoid taint: don't write addon fields onto Blizzard Settings frames.
-        local tabFrameState = setmetatable({}, { __mode = "k" })
-
-        -- Store per-frame state in a weak-key table (avoid writing addon fields onto Blizzard-owned frames).
-        local RSTATS_SettingsFrameState = setmetatable({}, { __mode = "k" })
-        local function RS_GetSettingsFrameState(f)
-            local t = RSTATS_SettingsFrameState[f]
-            if not t then
-                t = {}
-                RSTATS_SettingsFrameState[f] = t
-            end
-            return t
-        end
-
-        -- Tab bar row
+ 
+        -- Layout profile selector (safe: no overriding Blizzard initializer methods)
         do
-            local header
-            if SectionHeaderInit then
-                header = SectionHeaderInit("Layout Profiles")
-            elseif SubHeaderInit then
-                header = SubHeaderInit("Layout Profiles")
-            end
-
-            if header and layout then
-                header.InitFrame = function(init, frame)
-                    frame:Init(init)
-
-                    local state = RS_GetSettingsFrameState(frame)
-                    if not state.TabButtons then
-                        state.TabButtons = {}
-                        tabFrameState[frame] = state
-                    end
-
-                    if #state.TabButtons == 0 then
-
-                        local labels = { "Rated (8v8)", "10v10", "15v15", ">15" }
-                        local prev
-
-                        local function UpdateVisual()
-                            local cur = GetCurrentTab()
-                            for i, btn in ipairs(state.TabButtons) do
-                                if i == cur then
-                                    btn:Disable()
-                                else
-                                    btn:Enable()
-                                end
-                            end
-                        end
-
-                        for i = 1, 4 do
-                            local btn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-                            btn:SetHeight(20)
-                            btn:SetText(labels[i])
-                            btn:SetWidth(math.max(70, btn:GetTextWidth() + 16))
-
-                            if not prev then
-                                btn:SetPoint("LEFT", frame.Title, "RIGHT", 12, 0)
-                            else
-                                btn:SetPoint("LEFT", prev, "RIGHT", 6, 0)
-                            end
-
-                            btn:SetScript("OnClick", function()
-                                tabSetting:SetValue(i, true)
-                                UpdateVisual()
-                            end)
-
-                            state.TabButtons[i] = btn
-                            prev = btn
-                        end
-
-                        UpdateVisual()
-                    else
-                        -- Recycled frame: just update the visual state.
-                        local cur = GetCurrentTab()
-                        for i, btn in ipairs(state.TabButtons) do
-                            if i == cur then
-                                btn:Disable()
-                            else
-                                btn:Enable()
-                            end
-                        end
-                    end
+            if layout then
+                if SectionHeaderInit then
+                    layout:AddInitializer(SectionHeaderInit("Layout Profiles"))
+                elseif SubHeaderInit then
+                    layout:AddInitializer(SubHeaderInit("Layout Profiles"))
                 end
-
-                layout:AddInitializer(header)
             end
+
+            local optsTab = Settings.CreateControlTextContainer()
+            optsTab:Add(1, "Rated (8v8)")
+            optsTab:Add(2, "10v10")
+            optsTab:Add(3, "15v15")
+            optsTab:Add(4, ">15")
+
+            tabSetting:SetValueChangedCallback(function()
+                -- Force the Settings list to rebuild shown predicates when the tab changes.
+                -- Do NOT do anything in combat.
+                if InCombatLockdown and InCombatLockdown() then return end
+                if SettingsInbound and SettingsInbound.RepairDisplay then
+                    SettingsInbound.RepairDisplay()
+                end
+            end)
+
+            Settings.CreateDropdown(subcategory, tabSetting, function() return optsTab:GetData() end, "Choose which profile settings are shown below.")
         end
 
         -- ----------------------------
