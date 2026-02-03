@@ -303,16 +303,97 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
         -- If a change happens in combat, apply it right after combat ends.
         local bgeApplyPending = false
 
+        -- Defer nameplate distance writes if user changes the slider during combat.
+        local bgeDistanceApplyPending = false
+        local bgeDistancePendingValue = nil
+
+        local function RunBGENameplateDistanceApply()
+            if not bgeDistanceApplyPending then return end
+            if InCombatLockdown and InCombatLockdown() then return end
+            bgeDistanceApplyPending = false
+
+            local v = bgeDistancePendingValue
+            bgeDistancePendingValue = nil
+            if type(v) ~= "number" then return end
+
+            -- Apply the CVar safely (out of combat only).
+            if type(SetCVar) == "function" then
+                pcall(SetCVar, "nameplateMaxDistance", tostring(v))
+            elseif C_CVar and C_CVar.SetCVar then
+                pcall(C_CVar.SetCVar, "nameplateMaxDistance", tostring(v))
+            end
+        end
+
+        local function NotifyBGENameplateDistance()
+            -- Only do anything when user changes the slider.
+            -- Never write the CVar in combat; defer until combat ends.
+            local v = db and db.settings and db.settings.bgeNameplateMaxDistance or nil
+            if type(v) ~= "number" then return end
+
+            if InCombatLockdown and InCombatLockdown() then
+                bgeDistancePendingValue = v
+                bgeDistanceApplyPending = true
+                return
+            end
+
+            bgeDistancePendingValue = v
+            bgeDistanceApplyPending = true
+            RunBGENameplateDistanceApply()
+        end
+
+        local function RS_IsInInstancedPvP()
+            -- BG-only: "active battlefield" is the correct gate for battleground instances.
+            if C_PvP and C_PvP.IsActiveBattlefield and C_PvP.IsActiveBattlefield() then
+                return true
+            end
+
+            -- Fallback: instance type "pvp" covers battleground instances.
+            local inInstance, instanceType = IsInInstance()
+            if inInstance and instanceType == "pvp" then
+                return true
+            end
+
+            return false
+        end
+
+        local function RS_BGE_PreviewEnabled()
+            -- Outside PvP, only apply if any preview mode is enabled.
+            if not db or not db.settings then return false end
+            if db.settings.bgeRatedPreview then return true end
+            if db.settings.bge10Preview then return true end
+            if db.settings.bge15Preview then return true end
+            if db.settings.bgeLargePreview then return true end
+            return false
+        end
+
+        local function ShouldApplyBGE()
+            -- Apply in instanced PvP, or outside PvP only if any preview is enabled.
+            return RS_IsInInstancedPvP() or RS_BGE_PreviewEnabled()
+        end
+
         local function RunBGEApply()
             if not bgeApplyPending then return end
             if InCombatLockdown and InCombatLockdown() then return end
             bgeApplyPending = false
+            -- BG-only safety: don't touch BGE runtime in PvE unless preview is enabled.
+            if not ShouldApplyBGE() then
+                return
+            end
             if _G.RSTATS_BGE and type(_G.RSTATS_BGE.ApplySettings) == "function" then
-                _G.RSTATS_BGE:ApplySettings()
+                if type(securecall) == "function" then
+                    securecall(_G.RSTATS_BGE.ApplySettings, _G.RSTATS_BGE)
+                else
+                    _G.RSTATS_BGE:ApplySettings()
+                end
             end
         end
 
         local function NotifyBGE()
+            -- No-op in PvE unless a preview is enabled.
+            if not ShouldApplyBGE() then
+                bgeApplyPending = false
+                return
+            end
             bgeApplyPending = true
             if C_Timer and C_Timer.After then
                 C_Timer.After(0, RunBGEApply)
@@ -325,6 +406,8 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             local f = CreateFrame("Frame")
             f:RegisterEvent("PLAYER_REGEN_ENABLED")
             f:SetScript("OnEvent", function()
+                -- If something queued during combat, apply immediately after combat ends (but still BG/preview gated).
+                RunBGENameplateDistanceApply()
                 RunBGEApply()
             end)
         end
@@ -448,22 +531,37 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             setting:SetValueChangedCallback(function() NotifyBGE() end)
             Settings.CreateDropdown(subcategory, setting, function() return opts:GetData() end, nil)
         end
+
         -- Current Distance (nameplateMaxDistance)
         --
-        -- Uses the real CVar so the displayed number is always accurate.
-        -- Tooltip provides the preferred slash command.
+        -- IMPORTANT: do NOT register a live CVar setting into Blizzard Settings.
+        -- We store the value in our DB and apply the CVar ourselves (out of combat only).
         do
             local tooltip = "Range may seem far for enemies, consider your own preference."
 
-            local setting = Settings.RegisterCVarSetting(
+            if db and db.settings and type(db.settings.bgeNameplateMaxDistance) ~= "number" then
+                local cur = nil
+                if type(GetCVar) == "function" then
+                    cur = tonumber(GetCVar("nameplateMaxDistance"))
+                end
+                db.settings.bgeNameplateMaxDistance = cur or 60
+            end
+
+            local setting = Settings.RegisterAddOnSetting(
                 subcategory,
-                "nameplateMaxDistance",
+                "RSTATS_BGE_NAMEPLATE_MAX_DISTANCE",
+                "bgeNameplateMaxDistance",
+                db.settings,
                 Settings.VarType.Number,
-                "Current Distance"
+                "Current Distance",
+                db.settings.bgeNameplateMaxDistance or 60
             )
 
-            -- Keep it simple: let users adjust here if they want; the tooltip also shows the slash command.
-            local options = Settings.CreateSliderOptions(0, 80, 1)
+            setting:SetValueChangedCallback(function()
+                NotifyBGENameplateDistance()
+            end)
+
+            local options = Settings.CreateSliderOptions(0, 60, 1)
             if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
                 options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
             end
@@ -471,7 +569,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
         end
 
         -- ============================
-        -- Layout profiles (tabs)
+        -- Layout profiles
         -- ============================
 
         -- This is not displayed as a control; it is driven by our tab buttons below.
@@ -502,96 +600,33 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 return GetCurrentTab() == tabIndex
             end)
         end
-
-        -- Avoid taint: don't write addon fields onto Blizzard Settings frames.
-        local tabFrameState = setmetatable({}, { __mode = "k" })
-
-        -- Store per-frame state in a weak-key table (avoid writing addon fields onto Blizzard-owned frames).
-        local RSTATS_SettingsFrameState = setmetatable({}, { __mode = "k" })
-        local function RS_GetSettingsFrameState(f)
-            local t = RSTATS_SettingsFrameState[f]
-            if not t then
-                t = {}
-                RSTATS_SettingsFrameState[f] = t
-            end
-            return t
-        end
-
-        -- Tab bar row
+ 
+        -- Layout profile selector (safe: no overriding Blizzard initializer methods)
         do
-            local header
-            if SectionHeaderInit then
-                header = SectionHeaderInit("Layout Profiles")
-            elseif SubHeaderInit then
-                header = SubHeaderInit("Layout Profiles")
-            end
-
-            if header and layout then
-                header.InitFrame = function(init, frame)
-                    frame:Init(init)
-
-                    local state = RS_GetSettingsFrameState(frame)
-                    if not state.TabButtons then
-                        state.TabButtons = {}
-                        tabFrameState[frame] = state
-                    end
-
-                    if #state.TabButtons == 0 then
-
-                        local labels = { "Rated (8v8)", "10v10", "15v15", ">15" }
-                        local prev
-
-                        local function UpdateVisual()
-                            local cur = GetCurrentTab()
-                            for i, btn in ipairs(state.TabButtons) do
-                                if i == cur then
-                                    btn:Disable()
-                                else
-                                    btn:Enable()
-                                end
-                            end
-                        end
-
-                        for i = 1, 4 do
-                            local btn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-                            btn:SetHeight(20)
-                            btn:SetText(labels[i])
-                            btn:SetWidth(math.max(70, btn:GetTextWidth() + 16))
-
-                            if not prev then
-                                btn:SetPoint("LEFT", frame.Title, "RIGHT", 12, 0)
-                            else
-                                btn:SetPoint("LEFT", prev, "RIGHT", 6, 0)
-                            end
-
-                            btn:SetScript("OnClick", function()
-                                tabSetting:SetValue(i, true)
-                                if SettingsInbound and SettingsInbound.RepairDisplay then
-                                    SettingsInbound.RepairDisplay()
-                                end
-                                UpdateVisual()
-                            end)
-
-                            state.TabButtons[i] = btn
-                            prev = btn
-                        end
-
-                        UpdateVisual()
-                    else
-                        -- Recycled frame: just update the visual state.
-                        local cur = GetCurrentTab()
-                        for i, btn in ipairs(state.TabButtons) do
-                            if i == cur then
-                                btn:Disable()
-                            else
-                                btn:Enable()
-                            end
-                        end
-                    end
+            if layout then
+                if SectionHeaderInit then
+                    layout:AddInitializer(SectionHeaderInit("Layout Profiles"))
+                elseif SubHeaderInit then
+                    layout:AddInitializer(SubHeaderInit("Layout Profiles"))
                 end
-
-                layout:AddInitializer(header)
             end
+
+            local optsTab = Settings.CreateControlTextContainer()
+            optsTab:Add(1, "Rated (8v8)")
+            optsTab:Add(2, "10v10")
+            optsTab:Add(3, "15v15")
+            optsTab:Add(4, ">15")
+
+            tabSetting:SetValueChangedCallback(function()
+                -- Force the Settings list to rebuild shown predicates when the tab changes.
+                -- Do NOT do anything in combat.
+                if InCombatLockdown and InCombatLockdown() then return end
+                if SettingsInbound and SettingsInbound.RepairDisplay then
+                    SettingsInbound.RepairDisplay()
+                end
+            end)
+
+            Settings.CreateDropdown(subcategory, tabSetting, function() return optsTab:GetData() end, "Choose which profile settings are shown below.")
         end
 
         -- ----------------------------
