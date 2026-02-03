@@ -1,5 +1,5 @@
 ## Title: RatedStats
-## Version: v3.8
+## Version: v3.9
 ## Author: liamnap
 ## Interface: 110207, 120000
 ## DefaultState: enabled
@@ -7,7 +7,7 @@
 ## IconTexture: Interface\AddOns\RatedStats\RatedStats.tga
 
 ## X-Category: Battlegrounds/PvP
-## OptionalDeps: Blizzard_AddOns, RatedStats_Achiev, RatedStats_NoChat, LibDataBroker-1.1, LibDBIcon-1.0
+## OptionalDeps: Blizzard_AddOns, RatedStats_Achiev, RatedStats_NoChat, RatedStats_BattleGroundEnemies
 
 core.lua
 filters.lua

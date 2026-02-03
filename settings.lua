@@ -299,10 +299,34 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
 
         local subcategory, layout = Settings.RegisterVerticalLayoutSubcategory(category, bgeName)
 
-        local function NotifyBGE()
+        -- Avoid running ApplySettings inside Settings callbacks and never run it in combat.
+        -- If a change happens in combat, apply it right after combat ends.
+        local bgeApplyPending = false
+
+        local function RunBGEApply()
+            if not bgeApplyPending then return end
+            if InCombatLockdown and InCombatLockdown() then return end
+            bgeApplyPending = false
             if _G.RSTATS_BGE and type(_G.RSTATS_BGE.ApplySettings) == "function" then
                 _G.RSTATS_BGE:ApplySettings()
             end
+        end
+
+        local function NotifyBGE()
+            bgeApplyPending = true
+            if C_Timer and C_Timer.After then
+                C_Timer.After(0, RunBGEApply)
+            else
+                RunBGEApply()
+            end
+        end
+
+        do
+            local f = CreateFrame("Frame")
+            f:RegisterEvent("PLAYER_REGEN_ENABLED")
+            f:SetScript("OnEvent", function()
+                RunBGEApply()
+            end)
         end
 
         local TextInit =
@@ -479,6 +503,20 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             end)
         end
 
+        -- Avoid taint: don't write addon fields onto Blizzard Settings frames.
+        local tabFrameState = setmetatable({}, { __mode = "k" })
+
+        -- Store per-frame state in a weak-key table (avoid writing addon fields onto Blizzard-owned frames).
+        local RSTATS_SettingsFrameState = setmetatable({}, { __mode = "k" })
+        local function RS_GetSettingsFrameState(f)
+            local t = RSTATS_SettingsFrameState[f]
+            if not t then
+                t = {}
+                RSTATS_SettingsFrameState[f] = t
+            end
+            return t
+        end
+
         -- Tab bar row
         do
             local header
@@ -492,15 +530,20 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 header.InitFrame = function(init, frame)
                     frame:Init(init)
 
-                    if not frame.__RSTATS_TabButtons then
-                        frame.__RSTATS_TabButtons = {}
+                    local state = RS_GetSettingsFrameState(frame)
+                    if not state.TabButtons then
+                        state.TabButtons = {}
+                        tabFrameState[frame] = state
+                    end
+
+                    if #state.TabButtons == 0 then
 
                         local labels = { "Rated (8v8)", "10v10", "15v15", ">15" }
                         local prev
 
                         local function UpdateVisual()
                             local cur = GetCurrentTab()
-                            for i, btn in ipairs(frame.__RSTATS_TabButtons) do
+                            for i, btn in ipairs(state.TabButtons) do
                                 if i == cur then
                                     btn:Disable()
                                 else
@@ -529,7 +572,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                                 UpdateVisual()
                             end)
 
-                            frame.__RSTATS_TabButtons[i] = btn
+                            state.TabButtons[i] = btn
                             prev = btn
                         end
 
@@ -537,7 +580,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                     else
                         -- Recycled frame: just update the visual state.
                         local cur = GetCurrentTab()
-                        for i, btn in ipairs(frame.__RSTATS_TabButtons) do
+                        for i, btn in ipairs(state.TabButtons) do
                             if i == cur then
                                 btn:Disable()
                             else
