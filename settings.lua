@@ -303,6 +303,44 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
         -- If a change happens in combat, apply it right after combat ends.
         local bgeApplyPending = false
 
+        -- Defer nameplate distance writes if user changes the slider during combat.
+        local bgeDistanceApplyPending = false
+        local bgeDistancePendingValue = nil
+
+        local function RunBGENameplateDistanceApply()
+            if not bgeDistanceApplyPending then return end
+            if InCombatLockdown and InCombatLockdown() then return end
+            bgeDistanceApplyPending = false
+
+            local v = bgeDistancePendingValue
+            bgeDistancePendingValue = nil
+            if type(v) ~= "number" then return end
+
+            -- Apply the CVar safely (out of combat only).
+            if type(SetCVar) == "function" then
+                pcall(SetCVar, "nameplateMaxDistance", tostring(v))
+            elseif C_CVar and C_CVar.SetCVar then
+                pcall(C_CVar.SetCVar, "nameplateMaxDistance", tostring(v))
+            end
+        end
+
+        local function NotifyBGENameplateDistance()
+            -- Only do anything when user changes the slider.
+            -- Never write the CVar in combat; defer until combat ends.
+            local v = db and db.settings and db.settings.bgeNameplateMaxDistance or nil
+            if type(v) ~= "number" then return end
+
+            if InCombatLockdown and InCombatLockdown() then
+                bgeDistancePendingValue = v
+                bgeDistanceApplyPending = true
+                return
+            end
+
+            bgeDistancePendingValue = v
+            bgeDistanceApplyPending = true
+            RunBGENameplateDistanceApply()
+        end
+
         local function RS_IsInInstancedPvP()
             -- BG-only: "active battlefield" is the correct gate for battleground instances.
             if C_PvP and C_PvP.IsActiveBattlefield and C_PvP.IsActiveBattlefield() then
@@ -369,6 +407,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             f:RegisterEvent("PLAYER_REGEN_ENABLED")
             f:SetScript("OnEvent", function()
                 -- If something queued during combat, apply immediately after combat ends (but still BG/preview gated).
+                RunBGENameplateDistanceApply()
                 RunBGEApply()
             end)
         end
@@ -492,21 +531,36 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             setting:SetValueChangedCallback(function() NotifyBGE() end)
             Settings.CreateDropdown(subcategory, setting, function() return opts:GetData() end, nil)
         end
+
         -- Current Distance (nameplateMaxDistance)
         --
-        -- Uses the real CVar so the displayed number is always accurate.
-        -- Tooltip provides the preferred slash command.
+        -- IMPORTANT: do NOT register a live CVar setting into Blizzard Settings.
+        -- We store the value in our DB and apply the CVar ourselves (out of combat only).
         do
             local tooltip = "Range may seem far for enemies, consider your own preference."
 
-            local setting = Settings.RegisterCVarSetting(
+            if db and db.settings and type(db.settings.bgeNameplateMaxDistance) ~= "number" then
+                local cur = nil
+                if type(GetCVar) == "function" then
+                    cur = tonumber(GetCVar("nameplateMaxDistance"))
+                end
+                db.settings.bgeNameplateMaxDistance = cur or 60
+            end
+
+            local setting = Settings.RegisterAddOnSetting(
                 subcategory,
-                "nameplateMaxDistance",
+                "RSTATS_BGE_NAMEPLATE_MAX_DISTANCE",
+                "bgeNameplateMaxDistance",
+                db.settings,
                 Settings.VarType.Number,
-                "Current Distance"
+                "Current Distance",
+                db.settings.bgeNameplateMaxDistance or 60
             )
 
-            -- Keep it simple: let users adjust here if they want; the tooltip also shows the slash command.
+            setting:SetValueChangedCallback(function()
+                NotifyBGENameplateDistance()
+            end)
+
             local options = Settings.CreateSliderOptions(0, 60, 1)
             if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and options.SetLabelFormatter then
                 options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
