@@ -3,6 +3,18 @@
 --------------------------------------
 local _, RSTATS = ... -- The first line sets up the local variables `_` and `RSTATS`, where `_` is typically used to ignore values, and `RSTATS` is the namespace for the addon
 local playerName = UnitName("player") .. "-" .. GetRealmName()
+
+-- Helper: stable full name (Name-Realm). Must be defined before first use.
+local function GetPlayerFullName()
+    local name, realm = UnitFullName("player")
+    name = name or UnitName("player")
+    realm = realm or GetRealmName()
+    if name and realm then
+        return name .. "-" .. realm
+    end
+    return playerName
+end
+
 -- Get the region dynamically
 local regionName = GetCurrentRegionName()  -- This will return the region as a string (e.g., "US", "EU", "KR")
 
@@ -1892,12 +1904,6 @@ end
 -- ==========================================================
 -- Spec-based rated ladders (SS / Solo RBG) need spec-scoped history
 -- ==========================================================
--- Helper function to get player full name
-local function GetPlayerFullName()
-    local name = UnitName("player")
-    local realm = GetRealmName()
-    return name .. "-" .. realm
-end
 
 -- Prevent overlapping login retries from creating duplicate "missed game" inserts.
 local _missedGamesRunToken = 0
