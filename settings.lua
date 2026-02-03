@@ -294,7 +294,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
     local bgeName  = "BattleGround Enemies"
     local bgeAddon = "RatedStats_BattlegroundEnemies"
 
-    if false and C_AddOns and C_AddOns.DoesAddOnExist and C_AddOns.DoesAddOnExist(bgeAddon)
+    if C_AddOns and C_AddOns.DoesAddOnExist and C_AddOns.DoesAddOnExist(bgeAddon)
         and C_AddOns.GetAddOnEnableState and (C_AddOns.GetAddOnEnableState(bgeAddon, nil) ~= 0) then
 
         local subcategory, layout = Settings.RegisterVerticalLayoutSubcategory(category, bgeName)
@@ -303,16 +303,39 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
         -- If a change happens in combat, apply it right after combat ends.
         local bgeApplyPending = false
 
+        local function ShouldApplyBGE()
+            if IsInPVPInstance() then
+                return true
+            end
+            -- Outside PvP, only apply if any preview mode is enabled.
+            if db and db.settings then
+                if db.settings.bgeRatedPreview then return true end
+                if db.settings.bge10Preview then return true end
+                if db.settings.bge15Preview then return true end
+                if db.settings.bgeLargePreview then return true end
+            end
+            return false
+        end
+
         local function RunBGEApply()
             if not bgeApplyPending then return end
             if InCombatLockdown and InCombatLockdown() then return end
             bgeApplyPending = false
+            -- BG-only safety: don't touch BGE runtime in PvE unless preview is enabled.
+            if not ShouldApplyBGE() then
+                return
+            end
             if _G.RSTATS_BGE and type(_G.RSTATS_BGE.ApplySettings) == "function" then
                 _G.RSTATS_BGE:ApplySettings()
             end
         end
 
         local function NotifyBGE()
+            -- No-op in PvE unless preview is enabled.
+            if not ShouldApplyBGE() then
+                bgeApplyPending = false
+                return
+            end
             bgeApplyPending = true
             if C_Timer and C_Timer.After then
                 C_Timer.After(0, RunBGEApply)
@@ -325,7 +348,11 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             local f = CreateFrame("Frame")
             f:RegisterEvent("PLAYER_REGEN_ENABLED")
             f:SetScript("OnEvent", function()
-                RunBGEApply()
+                if ShouldApplyBGE() then
+                    RunBGEApply()
+                else
+                    bgeApplyPending = false
+                end
             end)
         end
 
