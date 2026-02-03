@@ -1454,4 +1454,3 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
         MaybeSendMyVersions("initial")
     end
 end)
-
