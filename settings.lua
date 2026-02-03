@@ -324,12 +324,17 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             return false
         end
 
+        local function ShouldApplyBGE()
+            -- Apply in instanced PvP, or outside PvP only if any preview is enabled.
+            return RS_IsInInstancedPvP() or RS_BGE_PreviewEnabled()
+        end
+
         local function RunBGEApply()
             if not bgeApplyPending then return end
             if InCombatLockdown and InCombatLockdown() then return end
             bgeApplyPending = false
             -- BG-only safety: don't touch BGE runtime in PvE unless preview is enabled.
-            if not RS_IsInInstancedPvP() and not RS_BGE_PreviewEnabled() then
+            if not ShouldApplyBGE() then
                 return
             end
             if _G.RSTATS_BGE and type(_G.RSTATS_BGE.ApplySettings) == "function" then
@@ -339,7 +344,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
 
         local function NotifyBGE()
             -- No-op in PvE unless a preview is enabled.
-            if not RS_IsInInstancedPvP() and not RS_BGE_PreviewEnabled() then
+            if not ShouldApplyBGE() then
                 bgeApplyPending = false
                 return
             end
@@ -355,11 +360,8 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             local f = CreateFrame("Frame")
             f:RegisterEvent("PLAYER_REGEN_ENABLED")
             f:SetScript("OnEvent", function()
-                if ShouldApplyBGE() then
-                    RunBGEApply()
-                else
-                    bgeApplyPending = false
-                end
+                -- If something queued during combat, apply immediately after combat ends (but still BG/preview gated).
+                RunBGEApply()
             end)
         end
 
