@@ -304,13 +304,17 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
         local bgeApplyPending = false
 
         local function RS_IsInInstancedPvP()
+            -- BG-only: "active battlefield" is the correct gate for battleground instances.
+            if C_PvP and C_PvP.IsActiveBattlefield and C_PvP.IsActiveBattlefield() then
+                return true
+            end
+
+            -- Fallback: instance type "pvp" covers battleground instances.
             local inInstance, instanceType = IsInInstance()
-            if inInstance and (instanceType == "pvp" or instanceType == "arena") then
+            if inInstance and instanceType == "pvp" then
                 return true
             end
-            if C_PvP and C_PvP.IsPVPMap and C_PvP.IsPVPMap() then
-                return true
-            end
+
             return false
         end
 
@@ -338,7 +342,11 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 return
             end
             if _G.RSTATS_BGE and type(_G.RSTATS_BGE.ApplySettings) == "function" then
-                _G.RSTATS_BGE:ApplySettings()
+                if type(securecall) == "function" then
+                    securecall(_G.RSTATS_BGE.ApplySettings, _G.RSTATS_BGE)
+                else
+                    _G.RSTATS_BGE:ApplySettings()
+                end
             end
         end
 
