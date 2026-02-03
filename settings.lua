@@ -743,7 +743,6 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 bgeRatedPreviewSetting = setting
                 setting:SetValueChangedCallback(function()
                     if bgeSwitchingPreview then return end
-                    if bgeSwitchingPreview then return end
                     if db and db.settings and db.settings.bgeRatedPreview then
                         db.settings.bge10Preview = false
                         db.settings.bge15Preview = false
@@ -917,7 +916,6 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 )
                 bge10PreviewSetting = setting
                 setting:SetValueChangedCallback(function()
-                    if bgeSwitchingPreview then return end
                     if bgeSwitchingPreview then return end
                     if db and db.settings and db.settings.bge10Preview then
                         db.settings.bgeRatedPreview = false
@@ -1093,7 +1091,6 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 bge15PreviewSetting = setting
                 setting:SetValueChangedCallback(function()
                     if bgeSwitchingPreview then return end
-                    if bgeSwitchingPreview then return end
                     if db and db.settings and db.settings.bge15Preview then
                         db.settings.bgeRatedPreview = false
                         db.settings.bge10Preview = false
@@ -1265,9 +1262,8 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                     "Preview outside PvP",
                     false
                 )
-                bge15PreviewSetting = setting
+                bgeLargePreviewSetting = setting
                 setting:SetValueChangedCallback(function()
-                    if bgeSwitchingPreview then return end
                     if bgeSwitchingPreview then return end
                     if db and db.settings and db.settings.bgeLargePreview then
                         db.settings.bgeRatedPreview = false
