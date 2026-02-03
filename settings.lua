@@ -625,7 +625,37 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 return GetCurrentTab() == tabIndex
             end)
         end
- 
+
+        -- Keep preview toggles in sync when switching profiles.
+        local bgeSwitchingPreview = false
+        local bgeRatedPreviewSetting
+        local bge10PreviewSetting
+        local bge15PreviewSetting
+        local bgeLargePreviewSetting
+
+        local function AnyPreviewEnabled()
+            if not db or not db.settings then return false end
+            local s = db.settings
+            return (s.bgeRatedPreview or s.bge10Preview or s.bge15Preview or s.bgeLargePreview) and true or false
+        end
+
+        local function SetPreviewExclusiveForTab(tab)
+            if not db or not db.settings then return end
+            bgeSwitchingPreview = true
+
+            local wantRated = (tab == 1)
+            local want10    = (tab == 2)
+            local want15    = (tab == 3)
+            local wantLarge = (tab == 4)
+
+            db.settings.bgeRatedPreview = wantRated
+            db.settings.bge10Preview = want10
+            db.settings.bge15Preview = want15
+            db.settings.bgeLargePreview = wantLarge
+
+            bgeSwitchingPreview = false
+        end
+
         -- Layout profile selector (safe: no overriding Blizzard initializer methods)
         do
             if layout then
@@ -647,28 +677,17 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                 -- Do NOT do anything in combat.
                 if InCombatLockdown and InCombatLockdown() then return end
 
-                -- If preview is currently active, transfer it to the newly selected profile.
-                -- This prevents multiple preview toggles being enabled at once (which would always resolve to Rated).
-                if db and db.settings then
-                    local s = db.settings
-                    local any = (s.bgeRatedPreview or s.bge10Preview or s.bge15Preview or s.bgeLargePreview) and true or false
-                    if any then
-                        local tab = GetCurrentTab()
-                        s.bgeRatedPreview = false
-                        s.bge10Preview = false
-                        s.bge15Preview = false
-                        s.bgeLargePreview = false
-                        if tab == 1 then
-                            s.bgeRatedPreview = true
-                        elseif tab == 2 then
-                            s.bge10Preview = true
-                        elseif tab == 3 then
-                            s.bge15Preview = true
-                        elseif tab == 4 then
-                            s.bgeLargePreview = true
-                        end
-                        NotifyBGE()
-                    end
+                -- If preview is currently on for any profile, transfer it to the newly selected profile
+                -- and turn the previous profile off.
+                if AnyPreviewEnabled() then
+                    SetPreviewExclusiveForTab(GetCurrentTab())
+                    NotifyBGE()
+                end
+
+                -- If any preview is on, transfer it to the selected profile (exclusive).
+                if AnyPreviewEnabled() then
+                    SetPreviewExclusiveForTab(GetCurrentTab())
+                    NotifyBGE()
                 end
 
                 if SettingsInbound and SettingsInbound.RepairDisplay then
@@ -705,6 +724,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                     false
                 )
                 setting:SetValueChangedCallback(function()
+                    if bgeSwitchingPreview then return end
                     if db and db.settings and db.settings.bgeRatedPreview then
                         db.settings.bge10Preview = false
                         db.settings.bge15Preview = false
@@ -877,6 +897,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                     false
                 )
                 setting:SetValueChangedCallback(function()
+                    if bgeSwitchingPreview then return end
                     if db and db.settings and db.settings.bge10Preview then
                         db.settings.bgeRatedPreview = false
                         db.settings.bge15Preview = false
@@ -1049,6 +1070,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                     false
                 )
                 setting:SetValueChangedCallback(function()
+                    if bgeSwitchingPreview then return end
                     if db and db.settings and db.settings.bge15Preview then
                         db.settings.bgeRatedPreview = false
                         db.settings.bge10Preview = false
@@ -1221,6 +1243,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                     false
                 )
                 setting:SetValueChangedCallback(function()
+                    if bgeSwitchingPreview then return end
                     if db and db.settings and db.settings.bgeLargePreview then
                         db.settings.bgeRatedPreview = false
                         db.settings.bge10Preview = false
