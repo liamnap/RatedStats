@@ -479,6 +479,9 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             end)
         end
 
+        -- Avoid taint: don't write addon fields onto Blizzard Settings frames.
+        local tabFrameState = setmetatable({}, { __mode = "k" })
+
         -- Store per-frame state in a weak-key table (avoid writing addon fields onto Blizzard-owned frames).
         local RSTATS_SettingsFrameState = setmetatable({}, { __mode = "k" })
         local function RS_GetSettingsFrameState(f)
@@ -506,6 +509,10 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
                     local state = RS_GetSettingsFrameState(frame)
                     if not state.TabButtons then
                         state.TabButtons = {}
+                        tabFrameState[frame] = state
+                    end
+
+                    if #state.TabButtons == 0 then
 
                         local labels = { "Rated (8v8)", "10v10", "15v15", ">15" }
                         local prev
