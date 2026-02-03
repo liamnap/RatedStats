@@ -294,7 +294,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
     local bgeName  = "BattleGround Enemies"
     local bgeAddon = "RatedStats_BattlegroundEnemies"
 
-    if C_AddOns and C_AddOns.DoesAddOnExist and C_AddOns.DoesAddOnExist(bgeAddon)
+    if false and C_AddOns and C_AddOns.DoesAddOnExist and C_AddOns.DoesAddOnExist(bgeAddon)
         and C_AddOns.GetAddOnEnableState and (C_AddOns.GetAddOnEnableState(bgeAddon, nil) ~= 0) then
 
         local subcategory, layout = Settings.RegisterVerticalLayoutSubcategory(category, bgeName)
