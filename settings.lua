@@ -299,10 +299,34 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
 
         local subcategory, layout = Settings.RegisterVerticalLayoutSubcategory(category, bgeName)
 
-        local function NotifyBGE()
+        -- Avoid running ApplySettings inside Settings callbacks and never run it in combat.
+        -- If a change happens in combat, apply it right after combat ends.
+        local bgeApplyPending = false
+
+        local function RunBGEApply()
+            if not bgeApplyPending then return end
+            if InCombatLockdown and InCombatLockdown() then return end
+            bgeApplyPending = false
             if _G.RSTATS_BGE and type(_G.RSTATS_BGE.ApplySettings) == "function" then
                 _G.RSTATS_BGE:ApplySettings()
             end
+        end
+
+        local function NotifyBGE()
+            bgeApplyPending = true
+            if C_Timer and C_Timer.After then
+                C_Timer.After(0, RunBGEApply)
+            else
+                RunBGEApply()
+            end
+        end
+
+        do
+            local f = CreateFrame("Frame")
+            f:RegisterEvent("PLAYER_REGEN_ENABLED")
+            f:SetScript("OnEvent", function()
+                RunBGEApply()
+            end)
         end
 
         local TextInit =
