@@ -41,10 +41,31 @@ function RSTATS:InitializeMinimapIcon()
     btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     btn:RegisterForDrag("LeftButton")
 
+    -- Blizzard-style minimap button visuals: background + border + masked icon.
+    local bg = btn:CreateTexture(nil, "BACKGROUND")
+    bg:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
+    bg:SetAllPoints(btn)
+    btn.bg = bg
+
+    local border = btn:CreateTexture(nil, "OVERLAY")
+    border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+    border:SetAllPoints(btn)
+    btn.border = border
+
     local icon = btn:CreateTexture(nil, "ARTWORK")
-    icon:SetAllPoints(btn)
     icon:SetTexture("Interface\\AddOns\\RatedStats\\RatedStats.tga")
+    -- Inset so it sits inside the border ring (matches other minimap buttons).
+    icon:ClearAllPoints()
+    icon:SetPoint("TOPLEFT", btn, "TOPLEFT", 6, -6)
+    icon:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -6, 6)
     btn.icon = icon
+
+    -- Circular-ish mask so the icon doesn't look like a hard square.
+    local mask = btn:CreateMaskTexture()
+    mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    mask:SetAllPoints(icon)
+    icon:AddMaskTexture(mask)
+    btn.iconMask = mask
 
     local hl = btn:CreateTexture(nil, "HIGHLIGHT")
     hl:SetAllPoints(btn)
