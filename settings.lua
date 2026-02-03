@@ -566,9 +566,6 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
 
                             btn:SetScript("OnClick", function()
                                 tabSetting:SetValue(i, true)
-                                if SettingsInbound and SettingsInbound.RepairDisplay then
-                                    SettingsInbound.RepairDisplay()
-                                end
                                 UpdateVisual()
                             end)
 
