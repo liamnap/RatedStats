@@ -303,17 +303,24 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
         -- If a change happens in combat, apply it right after combat ends.
         local bgeApplyPending = false
 
-        local function ShouldApplyBGE()
-            if IsInPVPInstance() then
+        local function RS_IsInInstancedPvP()
+            local inInstance, instanceType = IsInInstance()
+            if inInstance and (instanceType == "pvp" or instanceType == "arena") then
                 return true
             end
-            -- Outside PvP, only apply if any preview mode is enabled.
-            if db and db.settings then
-                if db.settings.bgeRatedPreview then return true end
-                if db.settings.bge10Preview then return true end
-                if db.settings.bge15Preview then return true end
-                if db.settings.bgeLargePreview then return true end
+            if C_PvP and C_PvP.IsPVPMap and C_PvP.IsPVPMap() then
+                return true
             end
+            return false
+        end
+
+        local function RS_BGE_PreviewEnabled()
+            -- Outside PvP, only apply if any preview mode is enabled.
+            if not db or not db.settings then return false end
+            if db.settings.bgeRatedPreview then return true end
+            if db.settings.bge10Preview then return true end
+            if db.settings.bge15Preview then return true end
+            if db.settings.bgeLargePreview then return true end
             return false
         end
 
@@ -322,7 +329,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             if InCombatLockdown and InCombatLockdown() then return end
             bgeApplyPending = false
             -- BG-only safety: don't touch BGE runtime in PvE unless preview is enabled.
-            if not ShouldApplyBGE() then
+            if not RS_IsInInstancedPvP() and not RS_BGE_PreviewEnabled() then
                 return
             end
             if _G.RSTATS_BGE and type(_G.RSTATS_BGE.ApplySettings) == "function" then
@@ -331,8 +338,8 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
         end
 
         local function NotifyBGE()
-            -- No-op in PvE unless preview is enabled.
-            if not ShouldApplyBGE() then
+            -- No-op in PvE unless a preview is enabled.
+            if not RS_IsInInstancedPvP() and not RS_BGE_PreviewEnabled() then
                 bgeApplyPending = false
                 return
             end
