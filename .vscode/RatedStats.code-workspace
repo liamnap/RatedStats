@@ -71,7 +71,10 @@
 			"Settings",
 			"CreateSettingsListSectionHeaderInitializer",
 			"MinimalSliderWithSteppersMixin",
-			"SettingsInbound"
+			"SettingsInbound",
+			"SetCVar",
+			"GetCVar",
+			"Minimap"
 		]
 	}
 }
