@@ -110,10 +110,20 @@ local function GetRelevantUnits(callback)
                     end
 
                     local guid = NormalizeGUID(UnitGUID(unit))
-                    if guid and not seen[guid] then
-                        seen[guid] = true
-                        foundCount = foundCount + 1
-                        callback(unit, guid) -- ⏱️ Send unit to processing immediately
+                    if guid then
+                        -- Midnight: even if guid is a "string", it may still be "secret" and explode as a table key.
+                        local okRead, already = pcall(function()
+                            return seen[guid]
+                        end)
+                        if okRead and not already then
+                            local okWrite = pcall(function()
+                                seen[guid] = true
+                            end)
+                            if okWrite then
+                                foundCount = foundCount + 1
+                                callback(unit, guid) -- ⏱️ Send unit to processing immediately
+                            end
+                        end
                     end
                 end
             end
