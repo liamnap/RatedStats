@@ -96,18 +96,19 @@ local function GetRelevantUnits(callback)
                     local rawGuid = nil
                     do
                         local ok, v = pcall(UnitGUID, unit)
-                        if ok and type(v) == "string" and v ~= "" then
+                        -- Midnight: v can be "secret". Do NOT compare it (e.g. v ~= "").
+                        -- Only accept plain Lua strings; otherwise treat as unavailable.
+                        if ok and type(v) == "string" then
                             rawGuid = v
                         end
                     end
 
-                    local guid = nil
-                    if rawGuid then
-                        local ok2, v2 = pcall(NormalizeGUID, rawGuid)
-                        if ok2 and type(v2) == "string" and v2 ~= "" then
-                            guid = v2
-                        end
+                    local ok2, v2 = pcall(NormalizeGUID, rawGuid)
+                    -- Same rule: never compare possible secret-derived values.
+                    if ok2 and type(v2) == "string" then
+                        guid = v2
                     end
+
                     local guid = NormalizeGUID(UnitGUID(unit))
                     if guid and not seen[guid] then
                         seen[guid] = true
