@@ -93,12 +93,36 @@ local function GetRelevantUnits(callback)
                 local unit = prefix .. i
                 if UnitExists(unit) and UnitIsPlayer(unit) then
                     -- Midnight: only process friendlies; enemies can produce "secret" values.
-                    if UnitIsFriend("player", unit) then
-                        local guid = NormalizeGUID(UnitGUID(unit))
-                        if guid and not seen[guid] then
-                            seen[guid] = true
-                            foundCount = foundCount + 1
-                            callback(unit, guid) -- ⏱️ Send unit to processing immediately
+                    local rawGuid = nil
+                    do
+                        local ok, v = pcall(UnitGUID, unit)
+                        -- Midnight: v can be "secret". Do NOT compare it (e.g. v ~= "").
+                        -- Only accept plain Lua strings; otherwise treat as unavailable.
+                        if ok and type(v) == "string" then
+                            rawGuid = v
+                        end
+                    end
+
+                    local ok2, v2 = pcall(NormalizeGUID, rawGuid)
+                    -- Same rule: never compare possible secret-derived values.
+                    if ok2 and type(v2) == "string" then
+                        guid = v2
+                    end
+
+                    local guid = NormalizeGUID(UnitGUID(unit))
+                    if guid then
+                        -- Midnight: even if guid is a "string", it may still be "secret" and explode as a table key.
+                        local okRead, already = pcall(function()
+                            return seen[guid]
+                        end)
+                        if okRead and not already then
+                            local okWrite = pcall(function()
+                                seen[guid] = true
+                            end)
+                            if okWrite then
+                                foundCount = foundCount + 1
+                                callback(unit, guid) -- ⏱️ Send unit to processing immediately
+                            end
                         end
                     end
                 end

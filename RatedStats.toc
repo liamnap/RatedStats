@@ -1,5 +1,5 @@
 ## Title: RatedStats
-## Version: v3.12
+## Version: v3.13
 ## Author: liamnap
 ## Interface: 110207, 120000
 ## DefaultState: enabled
