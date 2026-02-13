@@ -6,3 +6,5 @@
 *.xml text eol=lf
 *.toc text eol=lf
 *.txt text eol=lf
+
+.vscode/*.code-workspace merge=theirs
