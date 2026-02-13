@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Resolve repo root no matter where script lives
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "${REPO_ROOT}"
+
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo "ERROR: Not inside a git repo."
   exit 1
