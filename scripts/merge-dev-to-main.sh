@@ -40,8 +40,8 @@ next_main_tag() {
 
   while IFS= read -r t; do
     if [[ "$t" =~ ^v([0-9]+)\.([0-9]+)$ ]]; then
-      major="${BASH_REMATCH[1]}"
-      build="${BASH_REMATCH[2]}"
+      major=$((10#${BASH_REMATCH[1]}))
+      build=$((10#${BASH_REMATCH[2]}))
 
       if (( major > max_major )); then
         max_major="$major"
