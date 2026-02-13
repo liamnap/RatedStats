@@ -160,7 +160,30 @@ if [[ -n "${user_msg}" ]]; then
 fi
 
 # Real merge preserving commit history
-git merge --no-ff "${dev_branch}" -m "${merge_msg}"
+# Attempt merge
+if ! git merge --no-ff "${dev_branch}" -m "${merge_msg}"; then
+    echo
+    echo "Merge conflict detected. Attempting auto-resolution for known safe files..."
+
+    # Accept DEV versions for safe files
+    git checkout --theirs .gitattributes 2>/dev/null || true
+    git checkout --theirs .vscode/RatedStats.code-workspace 2>/dev/null || true
+    git checkout --theirs RatedStats.toc 2>/dev/null || true
+
+    # Stage resolved files
+    git add .gitattributes 2>/dev/null || true
+    git add -f .vscode/RatedStats.code-workspace 2>/dev/null || true
+    git add RatedStats.toc 2>/dev/null || true
+
+    # Check if any conflicts remain
+    if git diff --name-only --diff-filter=U | grep -q .; then
+        echo "Unresolved conflicts remain. Please resolve manually."
+        exit 1
+    fi
+
+    echo "Auto-resolution complete. Finalizing merge..."
+    git commit --no-edit
+fi
 
 # Stamp the release version into the root TOC and stage it (even if dev didn't touch it).
 # This makes in-game version comparisons possible (Details/BGE-style peer compare).
