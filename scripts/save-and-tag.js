@@ -2,6 +2,9 @@
 const { execSync, execFileSync } = require('child_process');
 const fs = require('fs');
 
+const path = require('path');
+process.chdir(path.resolve(__dirname, '..'));
+
 const fileChanged = process.argv[2];
 if (!fileChanged) {
     console.error("No file specified.");
