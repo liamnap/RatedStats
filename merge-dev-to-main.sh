@@ -15,7 +15,7 @@ confirm_env="${RS_CONFIRM_SPAM:-}"
 
 orig_branch="$(git rev-parse --abbrev-ref HEAD)"
 
-echo "== RatedStats: Promote ${dev_branch} -> ${main_branch} (lua/toc only; tag main) =="
+echo "== RatedStats: Promote ${dev_branch} -> ${main_branch} (full merge; tag main) =="
 
 if [[ -n "$(git status --porcelain)" ]]; then
   echo "ERROR: Working tree is dirty. Commit/stash first."
@@ -64,7 +64,7 @@ next_main_tag() {
   printf '%s\n' "${candidate}"
 }
 
-echo "[1/7] Fetching ${remote} (including tags)..."
+echo "[1/8] Fetching ${remote} (including tags)..."
 git fetch --prune --tags "${remote}"
 
 for b in "${dev_branch}" "${main_branch}"; do
@@ -75,14 +75,14 @@ for b in "${dev_branch}" "${main_branch}"; do
   fi
 done
 
-echo "[2/7] Fast-forwarding local branches..."
+echo "[2/8] Fast-forwarding local branches..."
 git checkout -q "${dev_branch}"
 git pull --ff-only "${remote}" "${dev_branch}"
 
 git checkout -q "${main_branch}"
 git pull --ff-only "${remote}" "${main_branch}"
 
-echo "[3/7] Calculating diff ${remote}/${main_branch}..${remote}/${dev_branch}..."
+echo "[3/8] Calculating diff ${remote}/${main_branch}..${remote}/${dev_branch}..."
 mapfile -t changed < <(git diff --name-only "${remote}/${main_branch}..${remote}/${dev_branch}" | tr -d '\r')
 if [[ ${#changed[@]} -eq 0 ]]; then
   echo "Nothing to merge: ${dev_branch} has no changes vs ${main_branch}."
@@ -93,33 +93,8 @@ fi
 echo "Changed files (${#changed[@]}):"
 printf ' - %s\n' "${changed[@]}"
 
-allowed=()
-disallowed=()
-for f in "${changed[@]}"; do
-  if [[ "$f" == *.toc ]]; then
-    allowed+=("$f")
-  elif [[ "$f" == *.lua ]]; then
-    allowed+=("$f")
-  else
-    disallowed+=("$f")
-  fi
-done
-
 echo
-echo "Selective merge policy:"
-echo " - Allowed: *.lua and *.toc"
-if [[ ${#allowed[@]} -eq 0 ]]; then
-  echo "Nothing allowed to merge (only non-Lua/non-TOC changes). Aborting."
-  git checkout -q "${orig_branch}"
-  exit 0
-fi
-if [[ ${#disallowed[@]} -gt 0 ]]; then
-  echo " - Disallowed (will remain as main's version):"
-  printf '   - %s\n' "${disallowed[@]}"
-fi
-
-echo
-echo "[4/7] Spam scan (prints/chat/event/ticker/onupdate)..."
+echo "[4/8] Spam scan (prints/chat/event/ticker/onupdate)..."
 
 spam_hits=0
 
@@ -144,7 +119,7 @@ scan_file() {
   fi
 }
 
-for f in "${allowed[@]}"; do
+for f in "${changed[@]}"; do
   scan_file "$f"
 done
 
@@ -167,36 +142,20 @@ else
 fi
 
 echo
-echo "[5/7] Promoting allowed files from ${dev_branch} onto ${main_branch}..."
-merge_msg="Promote ${dev_branch} -> ${main_branch} (lua/toc only)"
-echo "Commit message (enter to accept default): ${merge_msg}"
+echo "[5/8] Merging ${dev_branch} into ${main_branch} (preserve history)..."
+git checkout -q "${main_branch}"
+# Pre-calc the next main tag
+tag="$(next_main_tag)"
+echo "Next main tag (will be stamped into TOC + used as git tag): ${tag}"
+merge_msg="Release ${tag}"
+echo "Merge message (enter to accept default): ${merge_msg}"
 read -r user_msg || true
 if [[ -n "${user_msg}" ]]; then
   merge_msg="${user_msg}"
 fi
 
-git checkout -q "${main_branch}"
-
-echo "[5b] Applying allowed files from ${remote}/${dev_branch}..."
-
-# Pre-calc the next main tag so we can stamp it into the TOC BEFORE committing.
-tag="$(next_main_tag)"
-echo "Next main tag (will be stamped into TOC + used as git tag): ${tag}"
-
-# We are NOT merging. We are copying the allowed paths from dev onto main.
-for p in "${allowed[@]}"; do
-  if git cat-file -e "${remote}/${dev_branch}:${p}" >/dev/null 2>&1; then
-    if git restore -h >/dev/null 2>&1; then
-      git restore --source "${remote}/${dev_branch}" --staged --worktree -- "${p}"
-    else
-      git checkout "${remote}/${dev_branch}" -- "${p}"
-      git add -- "${p}"
-    fi
-  else
-    # Allowed file was deleted on dev; reflect that on main.
-    git rm -f --ignore-unmatch -- "${p}" >/dev/null 2>&1 || true
-  fi
-done
+# Real merge preserving commit history
+git merge --no-ff "${dev_branch}" -m "${merge_msg}"
 
 # Stamp the release version into the root TOC and stage it (even if dev didn't touch it).
 # This makes in-game version comparisons possible (Details/BGE-style peer compare).
@@ -227,17 +186,28 @@ echo "[5c] Committing promoted changes..."
 git commit -m "${merge_msg}"
 
 echo
-echo "[6/7] Tagging main with next version (based on latest main tag)..."
+echo "[6/8] Tagging main with next version (based on latest main tag)..."
 echo "Tagging main: ${tag}"
 
 # RatedStats releases commonly use lightweight tags; keep that behavior.
 git tag "${tag}"
 
 echo
-echo "[7/7] Pushing ${main_branch} + tags to ${remote}..."
+echo "[7/8] Pushing ${main_branch} + tags to ${remote}..."
 git push "${remote}" "${main_branch}"
 git push "${remote}" --tags
 
 echo
 echo "Merge complete."
 git checkout -q "${orig_branch}"
+
+echo
+echo "[8/8] Creating GitHub release..."
+
+if command -v gh >/dev/null 2>&1; then
+  gh release create "${tag}" \
+    --title "RatedStats ${tag}" \
+    --generate-notes
+else
+  echo "WARNING: GitHub CLI not installed. Release not created."
+fi
