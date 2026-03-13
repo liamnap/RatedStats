@@ -5264,28 +5264,58 @@ end
 -- Config functions continued
 ----------------------------------
 
+local function GetNextAWCDisplay()
+    local now = time()
+
+    -- This is AWC data, not ladder season data.
+    -- Keep it separate from RatedStatsSeasons.
+    local awcEvents = {
+        {
+            label = "BlizzCon",
+            start = time({ year = 2026, month = 9, day = 12, hour = 0, min = 0, sec = 0 }),
+            finish = time({ year = 2026, month = 9, day = 13, hour = 23, min = 59, sec = 59 }),
+            display = "BlizzCon - Sep 12-13, 2026 | Time TBC",
+        },
+    }
+
+    for _, event in ipairs(awcEvents) do
+        if now <= event.finish then
+            return event.display
+        end
+    end
+
+    return
+end
+
 local function CreateAWCBanner(parent)
     if parent.AWCBanner then
         return parent.AWCBanner
     end
 
     local banner = CreateFrame("Frame", nil, parent)
-    banner:SetSize(320, 92)
-    banner:SetPoint("TOP", parent, "TOP", 520, -52)
+    banner:SetSize(360, 120)
+    banner:SetPoint("TOP", parent, "TOP", 360, -88)
     banner:SetFrameStrata("HIGH")
     banner:SetFrameLevel(10)
 
     banner.logo = banner:CreateTexture(nil, "ARTWORK")
-    banner.logo:SetSize(220, 40)
+    banner.logo:SetSize(260, 52)
     banner.logo:SetPoint("TOP", banner, "TOP", 0, 0)
     banner.logo:SetTexture("Interface\\AddOns\\RatedStats\\images\\AWC_MN.png")
 
+    banner.label = banner:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    banner.label:SetFont(GetUnicodeSafeFont(), 12, "OUTLINE")
+    banner.label:SetPoint("TOP", banner.logo, "BOTTOM", 0, -8)
+    banner.label:SetWidth(360)
+    banner.label:SetJustifyH("CENTER")
+    banner.label:SetText(RSTATS:ColorText("Next AWC:"))
+
     banner.text = banner:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     banner.text:SetFont(GetUnicodeSafeFont(), 11, "OUTLINE")
-    banner.text:SetPoint("TOP", banner.logo, "BOTTOM", 0, -6)
-    banner.text:SetWidth(320)
+    banner.text:SetPoint("TOP", banner.label, "BOTTOM", 0, -2)
+    banner.text:SetWidth(360)
     banner.text:SetJustifyH("CENTER")
-    banner.text:SetText(RSTATS:ColorText("Next AWC: BlizzCon - Sep 12-13, 2026 | Time TBC"))
+    banner.text:SetText("|cffffffff" .. GetNextAWCDisplay() .. "|r")
 
     parent.AWCBanner = banner
     return banner
