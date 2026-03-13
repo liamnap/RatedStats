@@ -1,169 +1,257 @@
 -- Rated Stats: Export / Wipe utilities
--- Provides a copy-to-clipboard style window (EditBox) to export SavedVariables for the current character,
--- and a safe wipe function for the current character's database.
-
-local RS_COLOR = "|cffb69e86"
-local function RSPrint(msg)
-    print(RS_COLOR .. msg .. "|r")
-end
+-- Export window provides REFlex-compatible CSV headings and lets users filter by bracket.
 
 local function GetPlayerKey()
     return UnitName("player") .. "-" .. GetRealmName()
 end
 
--- Basic Lua table serializer (safe-ish):
--- - Skips functions/userdata/threads
--- - Skips secret values (12.0+)
--- - Stable key ordering
-local function EscapeString(s)
-    s = s:gsub("\\", "\\\\")
-    s = s:gsub("\n", "\\n")
-    s = s:gsub("\r", "\\r")
-    s = s:gsub("\t", "\\t")
-    s = s:gsub("\"", "\\\"")
-    return "\"" .. s .. "\""
+local function ToNumber(v)
+    local n = tonumber(v)
+    if n then return n end
+    return 0
 end
 
-local function IsSecret(v)
-    if type(issecretvalue) == "function" then
-        local ok, ret = pcall(issecretvalue, v)
-        return ok and ret
-    end
-    return false
+local function WinTo01(winLoss)
+    -- Our addon uses W/L/I etc. REFlex prints numeric-ish truthiness.
+    if winLoss == "W" then return 1 end
+    if winLoss == "L" then return 0 end
+    return 0
 end
 
-local function SerializeValue(v, indent, visited)
-    local t = type(v)
-
-    if IsSecret(v) then
-        return "nil"
-    end
-
-    if t == "nil" then
-        return "nil"
-    elseif t == "number" or t == "boolean" then
-        return tostring(v)
-    elseif t == "string" then
-        return EscapeString(v)
-    elseif t == "table" then
-        if visited[v] then
-            return "nil" -- avoid cycles
-        end
-        visited[v] = true
-
-        local pad = string.rep(" ", indent)
-        local pad2 = string.rep(" ", indent + 2)
-
-        -- collect keys
-        local keys = {}
-        for k in pairs(v) do
-            local kt = type(k)
-            if kt == "string" or kt == "number" then
-                table.insert(keys, k)
-            end
-        end
-
-        table.sort(keys, function(a, b)
-            local ta, tb = type(a), type(b)
-            if ta ~= tb then
-                return ta < tb
-            end
-            return a < b
-        end)
-
-        local out = {}
-        table.insert(out, "{\n")
-        for _, k in ipairs(keys) do
-            local keyStr
-            if type(k) == "string" and k:match("^[%a_][%w_]*$") then
-                keyStr = k
-            else
-                keyStr = "[" .. SerializeValue(k, indent + 2, visited) .. "]"
-            end
-
-            local valStr = SerializeValue(v[k], indent + 2, visited)
-            if valStr ~= nil then
-                table.insert(out, pad2 .. keyStr .. " = " .. valStr .. ",\n")
-            end
-        end
-        table.insert(out, pad .. "}")
-        visited[v] = nil
-        return table.concat(out)
-    else
-        return "nil"
-    end
+local function CleanCSVField(v)
+    if v == nil then return "" end
+    v = tostring(v)
+    -- REFlex CSV uses semicolon separators; sanitize semicolons/newlines.
+    v = v:gsub(";", ",")
+    v = v:gsub("\r", " ")
+    v = v:gsub("\n", " ")
+    return v
 end
 
-local function BuildExportString()
+local function GetHistoryForExport(modeKey)
     if type(LoadData) == "function" then
         LoadData()
     end
 
+    local db = RSTATS_Database
+    if type(db) ~= "table" then return nil end
+
     local key = GetPlayerKey()
-    if not RSTATS_Database or not RSTATS_Database[key] then
-        return "-- Rated Stats export\n-- No data found for: " .. key .. "\n"
+    local pdata = db[key]
+    if type(pdata) ~= "table" then return nil end
+
+    -- If available, reuse the addon helper for spec-aware history (SS / SoloRBG).
+    if RSTATS and RSTATS.GetHistoryForTab then
+        local tabID = ({
+            SoloShuffle = 1,
+            ["2v2"] = 2,
+            ["3v3"] = 3,
+            RBG = 4,
+            SoloRBG = 5,
+        })[modeKey]
+
+        if tabID then
+            local ok, data = pcall(RSTATS.GetHistoryForTab, RSTATS, tabID)
+            if ok and type(data) == "table" then
+                return data
+            end
+        end
     end
 
-    local payload = RSTATS_Database[key]
-    local body = SerializeValue(payload, 0, {})
-    if not body then
-        return "-- Rated Stats export\n-- Failed to serialize for: " .. key .. "\n"
+    -- Fallback: direct tables
+    return ({
+        SoloShuffle = pdata.SoloShuffleHistory,
+        ["2v2"] = pdata.v2History,
+        ["3v3"] = pdata.v3History,
+        RBG = pdata.RBGHistory,
+        SoloRBG = pdata.SoloRBGHistory,
+    })[modeKey]
+end
+
+local function GetArenaComps(entry)
+    local friendly = {}
+    local enemy = {}
+
+    local teamFaction = entry.teamFaction
+    if not teamFaction and type(entry.playerStats) == "table" and entry.playerStats[1] and entry.playerStats[1].faction then
+        teamFaction = entry.playerStats[1].faction
     end
 
-    return "-- Rated Stats export\n-- Character: " .. key .. "\n-- Generated: " .. date("%Y-%m-%d %H:%M:%S") .. "\n\n" ..
-           "return " .. body .. "\n"
+    if type(entry.playerStats) == "table" then
+        for _, ps in ipairs(entry.playerStats) do
+            if ps and ps.name and ps.name ~= "-" then
+                local spec = ps.spec or ""
+                local token = spec .. "-" .. ps.name
+                if teamFaction and ps.faction == teamFaction then
+                    table.insert(friendly, token)
+                else
+                    table.insert(enemy, token)
+                end
+            end
+        end
+    end
+
+    table.sort(friendly)
+    table.sort(enemy)
+
+    return table.concat(friendly, ","), table.concat(enemy, ",")
+end
+
+local function BuildREFlexCSV(modeKey)
+    local data = GetHistoryForExport(modeKey)
+    if type(data) ~= "table" then
+        return "Timestamp;Map;Duration;Victory;KillingBlows;HonorKills;Deaths;Damage;Healing;Honor;RatingChange;MMR;EnemyMMR;Specialization;PrestigeLevel;isRated;isBrawl;isMercenary\n"
+    end
+
+    local isBG = (modeKey == "RBG" or modeKey == "SoloRBG")
+
+    local out = {}
+
+    if isBG then
+        table.insert(out, "Timestamp;Map;Duration;Victory;KillingBlows;HonorKills;Deaths;Damage;Healing;Honor;RatingChange;MMR;EnemyMMR;Specialization;PrestigeLevel;isRated;isBrawl;isMercenary\n")
+        for _, entry in ipairs(data) do
+            if type(entry) == "table" then
+                local ps = type(entry.playerStats) == "table" and entry.playerStats[1] or nil
+
+                local ts = ToNumber(entry.timestamp or entry.endTime)
+                local map = CleanCSVField(entry.mapName or "")
+
+                local duration = ToNumber(entry.duration)
+                local victory = WinTo01(entry.winLoss)
+
+                local kb = ps and ToNumber(ps.killingBlows) or 0
+                local hk = ps and ToNumber(ps.honorableKills) or 0
+                local deaths = ps and ToNumber(ps.deaths) or 0
+                local dmg = ps and ToNumber(ps.damage) or 0
+                local heal = ps and ToNumber(ps.healing) or 0
+
+                local honor = ToNumber(entry.honor)
+                local ratingChange = ToNumber(ps and ps.ratingChange or entry.friendlyRatingChange)
+                local mmr = ToNumber(entry.friendlyMMR or entry.mmr)
+                local enemyMMR = ToNumber(entry.enemyMMR)
+
+                local spec = CleanCSVField(entry.specName or "")
+                local prestige = ToNumber(entry.prestigeLevel)
+
+                local isRated = 1
+                local isBrawl = 0
+                local isMerc = 0
+
+                table.insert(out,
+                    ts .. ";" .. map .. ";" .. duration .. ";" .. victory .. ";" ..
+                    kb .. ";" .. hk .. ";" .. deaths .. ";" .. dmg .. ";" .. heal .. ";" .. honor .. ";" ..
+                    ratingChange .. ";" .. mmr .. ";" .. enemyMMR .. ";" .. spec .. ";" .. prestige .. ";" ..
+                    isRated .. ";" .. isBrawl .. ";" .. isMerc .. "\n"
+                )
+            end
+        end
+    else
+        table.insert(out, "Timestamp;Map;PlayersNumber;TeamComposition;EnemyComposition;Duration;Victory;KillingBlows;Damage;Healing;Honor;RatingChange;MMR;EnemyMMR;Specialization;isRated\n")
+        local playersNum = ({ SoloShuffle = 6, ["2v2"] = 2, ["3v3"] = 3 })[modeKey] or 0
+
+        for _, entry in ipairs(data) do
+            if type(entry) == "table" then
+                local ps = type(entry.playerStats) == "table" and entry.playerStats[1] or nil
+
+                local ts = ToNumber(entry.timestamp or entry.endTime)
+                local map = CleanCSVField(entry.mapName or "")
+
+                local teamComp, enemyComp = GetArenaComps(entry)
+
+                local duration = ToNumber(entry.duration)
+                local victory = WinTo01(entry.winLoss)
+
+                local kb = ps and ToNumber(ps.killingBlows) or 0
+                local dmg = ps and ToNumber(ps.damage) or 0
+                local heal = ps and ToNumber(ps.healing) or 0
+
+                local honor = ToNumber(entry.honor)
+                local ratingChange = ToNumber(ps and ps.ratingChange or entry.friendlyRatingChange)
+                local mmr = ToNumber(entry.friendlyMMR or entry.mmr)
+                local enemyMMR = ToNumber(entry.enemyMMR)
+
+                local spec = CleanCSVField(entry.specName or "")
+                local isRated = 1
+
+                table.insert(out,
+                    ts .. ";" .. map .. ";" .. playersNum .. ";" .. CleanCSVField(teamComp) .. ";" .. CleanCSVField(enemyComp) .. ";" ..
+                    duration .. ";" .. victory .. ";" .. kb .. ";" .. dmg .. ";" .. heal .. ";" .. honor .. ";" ..
+                    ratingChange .. ";" .. mmr .. ";" .. enemyMMR .. ";" .. spec .. ";" .. isRated .. "\n"
+                )
+            end
+        end
+    end
+
+    return table.concat(out)
 end
 
 local exportFrame
+local selectedModeKey = "SoloShuffle"
 
 local function EnsureExportFrame()
     if exportFrame then return end
 
     exportFrame = CreateFrame("Frame", "RatedStatsExportFrame", UIParent, "BasicFrameTemplateWithInset")
-    exportFrame:SetSize(780, 520)
+    exportFrame:SetSize(820, 560)
     exportFrame:SetPoint("CENTER")
     exportFrame:SetFrameStrata("DIALOG")
     exportFrame:Hide()
 
-    exportFrame.TitleText:SetText("Rated Stats - Export Data")
+    exportFrame.TitleText:SetText("Rated Stats - Export Data (REFlex CSV)")
 
-    -- NOTE: In some UI load orders, passing an inherits/template string to CreateFontString
-    -- can result in an unset/invalid font, and the next SetText call can throw
-    -- "Wrong object type for function". Set the FontObject explicitly instead.
-    local info = exportFrame:CreateFontString(nil, "OVERLAY")
-    info:SetFontObject(GameFontHighlightSmall)
-    info:SetPoint("TOPLEFT", exportFrame.InsetBg, "TOPLEFT", 10, -8)
-    info:SetPoint("TOPRIGHT", exportFrame.InsetBg, "TOPRIGHT", -10, -8)
-    -- Some clients throw "Wrong object type for function" on SetJustifyH even though this is a FontString.
-    -- It is purely cosmetic, so guard it.
-    if info.SetJustifyH then
-        info:SetJustifyH("LEFT")
+    -- Mode buttons (top row inside inset)
+    local modes = {
+        { key = "SoloShuffle", label = "SS" },
+        { key = "2v2", label = "2v2" },
+        { key = "3v3", label = "3v3" },
+        { key = "RBG", label = "RBG" },
+        { key = "SoloRBG", label = "SoloRBG" },
+    }
+
+    local prev
+    exportFrame.ModeButtons = {}
+
+    for i = 1, #modes do
+        local m = modes[i]
+        local b = CreateFrame("Button", nil, exportFrame, "UIPanelButtonTemplate")
+        b:SetSize(74, 22)
+        if prev then
+            b:SetPoint("TOPLEFT", prev, "TOPRIGHT", 6, 0)
+        else
+            b:SetPoint("TOPLEFT", exportFrame.InsetBg, "TOPLEFT", 10, -8)
+        end
+        b:SetText(m.label)
+        b:SetScript("OnClick", function()
+            selectedModeKey = m.key
+            if exportFrame and exportFrame.EditBox then
+                exportFrame.EditBox:SetText(BuildREFlexCSV(selectedModeKey))
+                exportFrame.EditBox:HighlightText()
+            end
+        end)
+        exportFrame.ModeButtons[m.key] = b
+        prev = b
     end
-    info:SetText("Select all (Ctrl+A) and copy (Ctrl+C). Paste into a file if you want to keep a backup.")
 
-    -- Parent the scroll frame to the main frame (InsetBg is a texture in this template).
     local scroll = CreateFrame("ScrollFrame", nil, exportFrame, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", exportFrame.InsetBg, "TOPLEFT", 8, -30)
+    scroll:SetPoint("TOPLEFT", exportFrame.InsetBg, "TOPLEFT", 8, -36)
     scroll:SetPoint("BOTTOMRIGHT", exportFrame.InsetBg, "BOTTOMRIGHT", -30, 10)
 
     local edit = CreateFrame("EditBox", nil, scroll)
     edit:SetMultiLine(true)
     edit:SetAutoFocus(false)
     edit:SetFontObject(ChatFontNormal)
-    edit:SetWidth(720)
+    edit:SetWidth(760)
     edit:SetTextInsets(6, 6, 6, 6)
     edit:SetScript("OnEscapePressed", function() exportFrame:Hide() end)
 
     scroll:SetScrollChild(edit)
     exportFrame.EditBox = edit
 
-    -- Refresh text each time it opens
     exportFrame:SetScript("OnShow", function()
-        exportFrame.EditBox:SetText(BuildExportString())
+        exportFrame.EditBox:SetText(BuildREFlexCSV(selectedModeKey))
         exportFrame.EditBox:HighlightText()
     end)
 
-    -- Right-click quick select
     exportFrame.EditBox:SetScript("OnMouseDown", function(self, button)
         if button == "RightButton" then
             self:HighlightText()
@@ -207,6 +295,6 @@ function RSTATS:WipeDatabase()
         LoadData()
     end
 
-    RSPrint("Rated Stats database wiped for: " .. key)
-    RSPrint("Recommendation: /reload")
+    print("|cffb69e86Rated Stats:|r Database wiped for: " .. key)
+    print("|cffb69e86Rated Stats:|r Recommendation: /reload")
 end
