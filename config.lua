@@ -5286,19 +5286,14 @@ local function CreateAWCBanner(parent)
     banner.logo:SetPoint("TOP", banner, "TOP", 0, 10)
     banner.logo:SetTexture("Interface\\AddOns\\RatedStats\\images\\AWC_MN.png")
 
-    banner.leftText = banner:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    banner.leftText:SetFont(GetUnicodeSafeFont(), 11, "OUTLINE")
-    banner.leftText:SetPoint("TOP", banner.logo, "BOTTOM", -2, 12)
-    banner.leftText:SetJustifyH("RIGHT")
-
-    banner.rightText = banner:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    banner.rightText:SetFont(GetUnicodeSafeFont(), 11, "OUTLINE")
-    banner.rightText:SetPoint("LEFT", banner.leftText, "RIGHT", 0, 0)
-    banner.rightText:SetJustifyH("LEFT")
+    banner.text = banner:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    banner.text:SetFont(GetUnicodeSafeFont(), 11, "OUTLINE")
+    banner.text:SetPoint("TOP", banner.logo, "BOTTOM", 0, 12)
+    banner.text:SetWidth(360)
+    banner.text:SetJustifyH("CENTER")
 
     local bannerData = (RSTATS.GetAWCBannerText and RSTATS:GetAWCBannerText()) or { left = "Next AWC", right = " TBC" }
-    banner.leftText:SetText(RSTATS:ColorText(bannerData.left))
-    banner.rightText:SetText("|cffffffff" .. bannerData.right .. "|r")
+    banner.text:SetText(RSTATS:ColorText(bannerData.left) .. "|cffffffff" .. bannerData.right .. "|r")
 
     PositionAWCBanner()
 
