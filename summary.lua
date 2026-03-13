@@ -67,6 +67,37 @@ local function GetPlayerFullName()
     return UnitName("player") .. "-" .. GetRealmName()
 end
 
+local function GetPlayerDB()
+    local db = GetDB()
+    if type(db) ~= "table" then return nil end
+    return db[GetPlayerFullName()]
+end
+
+local GRAPH_STYLE_POINTS = 1
+local GRAPH_STYLE_CANDLE = 2
+
+local function GetSummaryGraphStyle()
+    local db = GetPlayerDB()
+    local settings = db and db.settings
+    local style = settings and tonumber(settings.summaryGraphStyle) or nil
+
+    if style ~= GRAPH_STYLE_POINTS and style ~= GRAPH_STYLE_CANDLE then
+        style = GRAPH_STYLE_CANDLE
+        if settings then
+            settings.summaryGraphStyle = style
+        end
+    end
+
+    return style
+end
+
+local function GetSummaryGraphStyleText(style)
+    if tonumber(style) == GRAPH_STYLE_CANDLE then
+        return "Candlestick"
+    end
+    return "Points"
+end
+
 local function GetActiveSpecID()
     local specIndex = GetSpecialization()
     if not specIndex then return nil end
@@ -291,6 +322,106 @@ local function DrawSpark(frame, values, times, xMinFixed, xMaxFixed, yMinFixed, 
     return yMin, yMax
 end
 
+local function DrawCandles(frame, candles, times, xMinFixed, xMaxFixed, yMinFixed, yMaxFixed, xInsetL, xInsetR)
+    ClearSpark(frame)
+
+    if not candles or #candles == 0 then
+        return 0, 1
+    end
+
+    local w = frame:GetWidth() or 0
+    local h = frame:GetHeight() or 0
+    if w <= 1 or h <= 1 then
+        return 0, 1
+    end
+
+    xInsetL = tonumber(xInsetL) or 0
+    xInsetR = tonumber(xInsetR) or 0
+    if xInsetL < 0 then xInsetL = 0 end
+    if xInsetR < 0 then xInsetR = 0 end
+    if (xInsetL + xInsetR) > (w - 2) then
+        xInsetL, xInsetR = 0, 0
+    end
+
+    local drawW = w - xInsetL - xInsetR
+    local n = #candles
+    local useTimeX = (type(times) == "table" and #times == n and xMinFixed and xMaxFixed and xMaxFixed > xMinFixed)
+
+    local yMin, yMax
+    if yMinFixed ~= nil and yMaxFixed ~= nil then
+        yMin, yMax = yMinFixed, yMaxFixed
+    else
+        yMin, yMax = math.huge, -math.huge
+        for i = 1, n do
+            local c = candles[i]
+            if c then
+                if c.low < yMin then yMin = c.low end
+                if c.high > yMax then yMax = c.high end
+            end
+        end
+        if yMin == math.huge then
+            yMin, yMax = 0, 1
+        end
+    end
+
+    if yMax == yMin then
+        yMax = yMin + 1
+    end
+
+    local xStep = (n > 1) and (drawW / (n - 1)) or drawW
+    local candleHalfWidth = Clamp(math.floor(xStep * 0.22), 2, 6)
+
+    local function mapX(i)
+        if useTimeX then
+            local t = times[i]
+            if not t then
+                return xInsetL + ((i - 1) * xStep)
+            end
+            local u = (t - xMinFixed) / (xMaxFixed - xMinFixed)
+            if u < 0 then u = 0 end
+            if u > 1 then u = 1 end
+            return xInsetL + (u * drawW)
+        end
+        return xInsetL + ((i - 1) * xStep)
+    end
+
+    local function mapY(v)
+        local t = (v - yMin) / (yMax - yMin)
+        if t < 0 then t = 0 end
+        if t > 1 then t = 1 end
+        local y = t * h
+        if y < 1 then y = 1 end
+        return y
+    end
+
+    for i = 1, n do
+        local c = candles[i]
+        if c then
+            local x = mapX(i)
+            local yOpen = mapY(c.open)
+            local yHigh = mapY(c.high)
+            local yLow = mapY(c.low)
+            local yClose = mapY(c.close)
+
+            local wick = frame:CreateLine(nil, "ARTWORK")
+            wick:SetThickness(1)
+            wick:SetColorTexture(1, 0.82, 0.2, 0.95)
+            wick:SetStartPoint("BOTTOMLEFT", frame, x, yLow)
+            wick:SetEndPoint("BOTTOMLEFT", frame, x, yHigh)
+            table.insert(frame._lines, wick)
+
+            local body = frame:CreateLine(nil, "ARTWORK")
+            body:SetThickness(candleHalfWidth * 2)
+            body:SetColorTexture(1, 0.82, 0.2, 0.95)
+            body:SetStartPoint("BOTTOMLEFT", frame, x, yOpen)
+            body:SetEndPoint("BOTTOMLEFT", frame, x, yClose)
+            table.insert(frame._lines, body)
+        end
+    end
+
+    return yMin, yMax
+end
+
 local function NearestIndexByTime(times, targetT)
     local bestI, bestD
     for i = 1, #times do
@@ -321,6 +452,25 @@ local function Downsample(values, times, maxPoints)
         outT[i] = times and times[idx] or nil
     end
     return outV, outT
+end
+
+local function DownsampleCandles(candles, times, maxPoints)
+    local n = candles and #candles or 0
+    if n <= maxPoints then return candles, times end
+    if maxPoints < 1 then maxPoints = 1 end
+
+    local outC, outT = {}, {}
+    local step = (n - 1) / math.max(1, (maxPoints - 1))
+
+    for i = 1, maxPoints do
+        local idx = math.floor((i - 1) * step + 1.5)
+        if idx < 1 then idx = 1 end
+        if idx > n then idx = n end
+        outC[i] = candles[idx]
+        outT[i] = times and times[idx] or nil
+    end
+
+    return outC, outT
 end
 
 local function Clamp(v, lo, hi)
@@ -873,11 +1023,11 @@ end
 --
 local function BuildSeasonMatchSeries(history, seasonStart, seasonFinish)
     if not history or #history == 0 then
-        return {}, {}, {}, {}
+        return {}, {}, {}, {}, {}, {}, {}, {}
     end
 
     if not seasonStart or not seasonFinish then
-        return {}, {}, {}, {}
+        return {}, {}, {}, {}, {}, {}, {}, {}
     end
 
     local playerName = GetPlayerFullName()
@@ -885,7 +1035,53 @@ local function BuildSeasonMatchSeries(history, seasonStart, seasonFinish)
     table.sort(history, SortByEndTime)
 
     local winsSeries, crSeries, mmrSeries, times = {}, {}, {}, {}
+    local crCandles, crCandleTimes = {}, {}
+    local mmrCandles, mmrCandleTimes = {}, {}
     local winsCum = 0
+    local daily = {}
+    local orderedDays = {}
+
+    local function GetDayStart(ts)
+        local d = date("*t", ts)
+        d.hour = 0
+        d.min = 0
+        d.sec = 0
+        return time(d)
+    end
+
+    local function GetBucket(dayStart)
+        local bucket = daily[dayStart]
+        if bucket then
+            return bucket
+        end
+
+        bucket = {
+            dayStart = dayStart,
+            dayMid = dayStart + 43200,
+        }
+        daily[dayStart] = bucket
+        table.insert(orderedDays, bucket)
+        return bucket
+    end
+
+    local function UpdateOHLC(bucket, key, value)
+        if value == nil then return end
+
+        local c = bucket[key]
+        if not c then
+            bucket[key] = {
+                open = value,
+                high = value,
+                low = value,
+                close = value,
+            }
+            return
+        end
+
+        if value > c.high then c.high = value end
+        if value < c.low then c.low = value end
+        c.close = value
+    end
 
     for _, match in ipairs(history) do
         local t = match.endTime or match.timestamp
@@ -910,6 +1106,11 @@ local function BuildSeasonMatchSeries(history, seasonStart, seasonFinish)
             table.insert(winsSeries, winsCum)
             table.insert(crSeries, cr or 0)
             table.insert(mmrSeries, mmr or 0)
+
+            local dayStart = GetDayStart(t)
+            local bucket = GetBucket(dayStart)
+            UpdateOHLC(bucket, "cr", tonumber(cr))
+            UpdateOHLC(bucket, "mmr", tonumber(mmr))
         end
     end
 
@@ -935,7 +1136,18 @@ local function BuildSeasonMatchSeries(history, seasonStart, seasonFinish)
         table.insert(mmrSeries, lastMMR)
     end
     
-    return winsSeries, crSeries, mmrSeries, times
+    for _, bucket in ipairs(orderedDays) do
+        if bucket.cr then
+            table.insert(crCandles, bucket.cr)
+            table.insert(crCandleTimes, bucket.dayMid)
+        end
+        if bucket.mmr then
+            table.insert(mmrCandles, bucket.mmr)
+            table.insert(mmrCandleTimes, bucket.dayMid)
+        end
+    end
+
+    return winsSeries, crSeries, mmrSeries, times, crCandles, crCandleTimes, mmrCandles, mmrCandleTimes
 end
 
 local function CreateBackdrop(frame)
@@ -954,21 +1166,34 @@ function Summary:_RenderCardGraph(card)
 
     local data = card._data
     local mode = card._graphMode or 1
+    local graphStyle = GetSummaryGraphStyle()
     local w = card.spark:GetWidth() or 0
     local maxPoints = math.floor(w / 6)
     if maxPoints < 2 then maxPoints = 2 end
 
     local series, times
+    local candles, candleTimes
+    local useCandles = false
 
     if mode == 1 then
         card.sparkLabel:SetText("Wins")
         series, times = Downsample(data.seriesWins or {}, data.seriesTimes or {}, maxPoints)
     elseif mode == 2 then
         card.sparkLabel:SetText("CR +/-")
-        series, times = Downsample(data.seriesCR or {}, data.seriesTimes or {}, maxPoints)
+        if graphStyle == GRAPH_STYLE_CANDLE then
+            candles, candleTimes = DownsampleCandles(data.candlesCR or {}, data.candleTimesCR or {}, maxPoints)
+            useCandles = true
+        else
+            series, times = Downsample(data.seriesCR or {}, data.seriesTimes or {}, maxPoints)
+        end
     else
         card.sparkLabel:SetText("MMR +/-")
-        series, times = Downsample(data.seriesMMR or {}, data.seriesTimes or {}, maxPoints)
+        if graphStyle == GRAPH_STYLE_CANDLE then
+            candles, candleTimes = DownsampleCandles(data.candlesMMR or {}, data.candleTimesMMR or {}, maxPoints)
+            useCandles = true
+        else
+            series, times = Downsample(data.seriesMMR or {}, data.seriesTimes or {}, maxPoints)
+        end
     end
 
     local seasonStart = data and data.seasonStart or nil
@@ -980,26 +1205,45 @@ function Summary:_RenderCardGraph(card)
         seasonFinish = seasonFinish or RSTATS:GetCurrentSeasonFinish()
     end
 
-    local yMin, yMax = DrawSpark(
-        card.spark,
-        series or {},
-        times,
-        seasonStart,
-        seasonFinish,
-        nil,
-        nil,
-        card._xInsetL or 0,
-        card._xInsetR or 0
-    )
+    local yMin, yMax
+
+    if useCandles then
+        yMin, yMax = DrawCandles(
+            card.spark,
+            candles or {},
+            candleTimes,
+            seasonStart,
+            seasonFinish,
+            nil,
+            nil,
+            card._xInsetL or 0,
+            card._xInsetR or 0
+        )
+    else
+        yMin, yMax = DrawSpark(
+            card.spark,
+            series or {},
+            times,
+            seasonStart,
+            seasonFinish,
+            nil,
+            nil,
+            card._xInsetL or 0,
+            card._xInsetR or 0
+        )
+    end
 
     -- Store hover data for tooltip/highlight
     card.spark._hover = card.spark._hover or {}
     local hv = card.spark._hover
     hv.series = series or {}
     hv.times  = times or {}
+    hv.candles = candles or {}
+    hv.candleTimes = candleTimes or {}
     hv.yMin   = yMin
     hv.yMax   = yMax
     hv.mode   = mode
+    hv.graphStyle = graphStyle
     hv.xInsetL = card._xInsetL or 0
     hv.xInsetR = card._xInsetR or 0
     if seasonStart and seasonFinish then
@@ -1092,7 +1336,9 @@ local function CreateBracketCard(parent)
 
     local function SparkUpdateHover(spark)
         local hv = spark._hover
-        if not hv or not hv.series or #hv.series < 2 then
+        local hasSeries = hv and hv.series and (#hv.series >= 2)
+        local hasCandles = hv and hv.candles and (#hv.candles >= 1)
+        if not hv or (not hasSeries and not hasCandles) then
             SparkHideHover(spark)
             return
         end
@@ -1139,7 +1385,7 @@ local function CreateBracketCard(parent)
             return
         end
 
-        local n = #hv.series
+        local n = hasCandles and #hv.candles or #hv.series
         local idx
 
         local u = (lx - xInsetL) / drawW
@@ -1155,7 +1401,8 @@ local function CreateBracketCard(parent)
             if idx > n then idx = n end
         end
 
-        local v = hv.series[idx]
+        local candle = hasCandles and hv.candles[idx] or nil
+        local v = candle and candle.close or hv.series[idx]
         if v == nil then
             SparkHideHover(spark)
             return
@@ -1192,15 +1439,22 @@ local function CreateBracketCard(parent)
         spark.hoverDot:SetPoint("CENTER", spark, "BOTTOMLEFT", px, py)
         spark.hoverDot:Show()
 
-        local t = hv.times and hv.times[idx] or nil
-        local dateText = t and date("%d %b %Y %H:%M", t) or ""
+        local t = hasCandles and (hv.candleTimes and hv.candleTimes[idx]) or (hv.times and hv.times[idx] or nil)
+        local dateText = t and (hasCandles and date("%d %b %Y", t) or date("%d %b %Y %H:%M", t)) or ""
         local valText = tostring(math.floor(tonumber(v) or 0))
 
         if GameTooltip then
             GameTooltip:SetOwner(spark, "ANCHOR_CURSOR")
             GameTooltip:ClearLines()
-            if dateText ~= "" then
-                -- Label in addon colour, value left as default (tooltip text is white)
+            if hasCandles and candle then
+                if dateText ~= "" then
+                    GameTooltip:AddLine(ColorText(dateText))
+                end
+                GameTooltip:AddLine("Open: " .. tostring(math.floor(tonumber(candle.open) or 0)))
+                GameTooltip:AddLine("High: " .. tostring(math.floor(tonumber(candle.high) or 0)))
+                GameTooltip:AddLine("Low: " .. tostring(math.floor(tonumber(candle.low) or 0)))
+                GameTooltip:AddLine("Close: " .. tostring(math.floor(tonumber(candle.close) or 0)))
+            elseif dateText ~= "" then
                 GameTooltip:AddLine(ColorText(dateText .. ": ") .. valText)
             else
                 GameTooltip:AddLine(valText)
@@ -1451,6 +1705,49 @@ function Summary:Create(parentFrame)
     f.seasonNote3 = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     f.seasonNote3:SetPoint("TOP", f.seasonNote2, "BOTTOM", 0, -2)
     f.seasonNote3:SetFont(GetUnicodeSafeFont(), 10, "OUTLINE")
+
+    f.graphStyleLabel = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    f.graphStyleLabel:SetPoint("TOPRIGHT", f, "TOPRIGHT", -140, -16)
+    f.graphStyleLabel:SetFont(GetUnicodeSafeFont(), 10, "OUTLINE")
+    f.graphStyleLabel:SetText("Graph")
+
+    f.graphStyleDropdown = CreateFrame("Frame", "RatedStatsSummaryGraphStyleDropdown", f, "UIDropDownMenuTemplate")
+    f.graphStyleDropdown:ClearAllPoints()
+    f.graphStyleDropdown:SetPoint("LEFT", f.graphStyleLabel, "RIGHT", -8, -2)
+    UIDropDownMenu_SetWidth(f.graphStyleDropdown, 120)
+    UIDropDownMenu_SetText(f.graphStyleDropdown, GetSummaryGraphStyleText(GetSummaryGraphStyle()))
+
+    UIDropDownMenu_Initialize(f.graphStyleDropdown, function(self, level)
+        local currentStyle = GetSummaryGraphStyle()
+        local info = UIDropDownMenu_CreateInfo()
+
+        info.text = "Candlestick"
+        info.checked = (currentStyle == GRAPH_STYLE_CANDLE)
+        info.func = function()
+            local db = GetPlayerDB()
+            if db then
+                db.settings = db.settings or {}
+                db.settings.summaryGraphStyle = GRAPH_STYLE_CANDLE
+            end
+            UIDropDownMenu_SetText(f.graphStyleDropdown, "Candlestick")
+            Summary:Refresh()
+        end
+        UIDropDownMenu_AddButton(info, level)
+
+        info = UIDropDownMenu_CreateInfo()
+        info.text = "Points"
+        info.checked = (currentStyle == GRAPH_STYLE_POINTS)
+        info.func = function()
+            local db = GetPlayerDB()
+            if db then
+                db.settings = db.settings or {}
+                db.settings.summaryGraphStyle = GRAPH_STYLE_POINTS
+            end
+            UIDropDownMenu_SetText(f.graphStyleDropdown, "Points")
+            Summary:Refresh()
+        end
+        UIDropDownMenu_AddButton(info, level)
+    end)
 
     f.cards = {}
 
@@ -2110,6 +2407,10 @@ end
 function Summary:Refresh()
     if not self.frame or not self.frame.cards then return end
 
+    if self.frame.graphStyleDropdown then
+        UIDropDownMenu_SetText(self.frame.graphStyleDropdown, GetSummaryGraphStyleText(GetSummaryGraphStyle()))
+    end
+
     local Database = GetDB() or {}
     local playerKey = GetPlayerFullName()
     local perChar = Database[playerKey] or {}
@@ -2210,7 +2511,8 @@ function Summary:Refresh()
         }
 
         -- Build the 3 graph series (this was missing, so graphs never draw)
-        local winsSeries, crSeries, mmrSeries, times = BuildSeasonMatchSeries(history, seasonStart, seasonFinish)
+        local winsSeries, crSeries, mmrSeries, times, crCandles, crCandleTimes, mmrCandles, mmrCandleTimes =
+            BuildSeasonMatchSeries(history, seasonStart, seasonFinish)
 
         local last25Delta, last25Count = GetLast25CRDelta(history)
 
@@ -2249,6 +2551,10 @@ function Summary:Refresh()
             seriesCR = crSeries,
             seriesMMR = mmrSeries,
             seriesTimes = times,
+            candlesCR = crCandles,
+            candleTimesCR = crCandleTimes,
+            candlesMMR = mmrCandles,
+            candleTimesMMR = mmrCandleTimes,
 
             seasonStart = seasonStart,
             seasonFinish = seasonFinish,
