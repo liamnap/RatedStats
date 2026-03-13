@@ -74,7 +74,9 @@
 			"StaticPopupDialogs",
 			"YES",
 			"NO",
-			"StaticPopup_Show"
+			"StaticPopup_Show",
+			"LOCALIZED_CLASS_NAMES_MALE",
+			"LOCALIZED_CLASS_NAMES_FEMALE"
 		],
 		"Lua.type.weakUnionCheck": true
 	}
