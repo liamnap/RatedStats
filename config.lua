@@ -5824,6 +5824,30 @@ function Config:CreateMenu()
     UIConfig.SettingsButton.Icon:SetTexCoord(0.10, 0.90, 0.10, 0.90)
     UIConfig.SettingsButton.Icon:SetVertexColor(1, 0.82, 0.2, 1) -- match the yellow-ish button glyphs
 
+    -- Export/Download button (next to Settings)
+    UIConfig.ExportButton = CreateFrame("Button", "RatedStatsExportButton", UIConfig)
+    UIConfig.ExportButton:SetSize(24, 24)
+    UIConfig.ExportButton:SetPoint("RIGHT", UIConfig.SettingsButton, "LEFT", 0, 0)
+    UIConfig.ExportButton:SetFrameStrata("DIALOG")
+    UIConfig.ExportButton:SetFrameLevel(UIConfig.CloseButton:GetFrameLevel())
+    UIConfig.ExportButton:SetHighlightAtlas("RedButton-Highlight", "ADD")
+
+    UIConfig.ExportButton.BG = UIConfig.ExportButton:CreateTexture(nil, "ARTWORK")
+    UIConfig.ExportButton.BG:SetAllPoints()
+    UIConfig.ExportButton.BG:SetAtlas("RedButton-Exit")
+
+    UIConfig.ExportButton.Cover = UIConfig.ExportButton:CreateTexture(nil, "OVERLAY")
+    UIConfig.ExportButton.Cover:SetPoint("TOPLEFT", 4, -4)
+    UIConfig.ExportButton.Cover:SetPoint("BOTTOMRIGHT", -4, 4)
+    UIConfig.ExportButton.Cover:SetColorTexture(0.33, 0.06, 0.06, 1)
+
+    UIConfig.ExportButton.Icon = UIConfig.ExportButton:CreateTexture(nil, "OVERLAY")
+    UIConfig.ExportButton.Icon:SetPoint("CENTER", 0, 0)
+    UIConfig.ExportButton.Icon:SetAtlas("StreamCinematic-DownloadIcon", false)
+    UIConfig.ExportButton.Icon:SetSize(22, 22)
+    UIConfig.ExportButton.Icon:SetTexCoord(0.10, 0.90, 0.10, 0.90)
+    UIConfig.ExportButton.Icon:SetVertexColor(1, 0.82, 0.2, 1)
+
     UIConfig.SettingsButton:SetScript("OnMouseDown", function(self)
         if self.BG then self.BG:SetAtlas("RedButton-exit-pressed") end
         if self.Icon then self.Icon:SetPoint("CENTER", 1, -1) end
@@ -5837,6 +5861,26 @@ function Config:CreateMenu()
         GameTooltip:SetText("Settings", 1, 1, 1)
         GameTooltip:AddLine("Open Rated Stats settings.", 0.8, 0.8, 0.8)
         GameTooltip:Show()
+    end)
+    UIConfig.ExportButton:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Export", 1, 1, 1)
+        GameTooltip:AddLine("Open the export window (copy to clipboard).", 0.8, 0.8, 0.8)
+        GameTooltip:Show()
+    end)
+    UIConfig.ExportButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    UIConfig.ExportButton:SetScript("OnMouseDown", function(self)
+        if self.BG then self.BG:SetAtlas("RedButton-exit-pressed") end
+        if self.Icon then self.Icon:SetPoint("CENTER", 1, -1) end
+    end)
+    UIConfig.ExportButton:SetScript("OnMouseUp", function(self)
+        if self.BG then self.BG:SetAtlas("RedButton-Exit") end
+        if self.Icon then self.Icon:SetPoint("CENTER", 0, 0) end
+    end)
+    UIConfig.ExportButton:SetScript("OnClick", function()
+        if RSTATS and RSTATS.OpenExportWindow then
+            RSTATS:OpenExportWindow()
+        end
     end)
     UIConfig.SettingsButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
     UIConfig.SettingsButton:SetScript("OnClick", function()
