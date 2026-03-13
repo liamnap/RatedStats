@@ -18,4 +18,5 @@ minimap.lua
 settings.lua
 addfriend.lua
 summary.lua
+export.lua
 init.lua
