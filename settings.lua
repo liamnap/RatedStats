@@ -188,6 +188,33 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
         Settings.CreateCheckbox(category, setting, "Deletes all Rated Stats history for your current character.\n\nTo wipe all databases wipe from CurseForge or delete in the WTF Folder")
     end
 
+    do
+        local optsSummaryGraph = Settings.CreateControlTextContainer()
+        optsSummaryGraph:Add(2, "Candlestick")
+        optsSummaryGraph:Add(1, "Points")
+
+        if type(db.settings.summaryGraphStyle) ~= "number" then
+            db.settings.summaryGraphStyle = 2
+        end
+
+        local setting = Settings.RegisterAddOnSetting(
+            category,
+            "RSTATS_SUMMARY_GRAPH_STYLE",
+            "summaryGraphStyle",
+            db.settings,
+            Settings.VarType.Number,
+            "Summary graph style",
+            2
+        )
+        Settings.CreateDropdown(category, setting, function() return optsSummaryGraph:GetData() end, nil)
+
+        setting:SetValueChangedCallback(function()
+            if RSTATS and RSTATS.Summary and RSTATS.Summary.frame and RSTATS.Summary.frame:IsShown() then
+                RSTATS.Summary:Refresh()
+            end
+        end)
+    end
+
     Settings.RegisterAddOnCategory(category)
 
     -- Achievements subcategory (only if the module is installed + enabled)
