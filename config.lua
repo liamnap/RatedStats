@@ -5300,22 +5300,31 @@ local function CreateAWCBanner(parent)
 
     banner.logo = banner:CreateTexture(nil, "ARTWORK")
     banner.logo:SetSize(75, 75)
-    banner.logo:SetPoint("TOP", banner, "TOP", 0, 0)
     banner.logo:SetTexture("Interface\\AddOns\\RatedStats\\images\\AWC_MN.png")
+
+    local function PositionAWCBanner()
+        local parentWidth = parent:GetWidth() or 0
+        local xOffset = math.floor(parentWidth * 0.40)
+        banner:ClearAllPoints()
+        banner:SetPoint("TOP", parent, "TOP", xOffset, -88)
+    end
 
     banner.label = banner:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     banner.label:SetFont(GetUnicodeSafeFont(), 12, "OUTLINE")
-    banner.label:SetPoint("TOP", banner.logo, "BOTTOM", 0, -8)
+    banner.label:SetPoint("TOP", banner.logo, "BOTTOM", 0, -2)
     banner.label:SetWidth(360)
     banner.label:SetJustifyH("CENTER")
     banner.label:SetText(RSTATS:ColorText("Next AWC:"))
 
     banner.text = banner:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     banner.text:SetFont(GetUnicodeSafeFont(), 11, "OUTLINE")
-    banner.text:SetPoint("TOP", banner.label, "BOTTOM", 0, -2)
+    banner.text:SetPoint("TOP", banner.label, "BOTTOM", 0, -1)
     banner.text:SetWidth(360)
     banner.text:SetJustifyH("CENTER")
     banner.text:SetText("|cffffffff" .. GetNextAWCDisplay() .. "|r")
+
+    PositionAWCBanner()
+    banner:SetScript("OnSizeChanged", PositionAWCBanner)
 
     parent.AWCBanner = banner
     return banner
