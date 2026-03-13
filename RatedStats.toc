@@ -19,4 +19,5 @@ settings.lua
 addfriend.lua
 summary.lua
 export.lua
+awc.lua
 init.lua
