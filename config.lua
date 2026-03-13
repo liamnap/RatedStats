@@ -5267,8 +5267,6 @@ end
 local function GetNextAWCDisplay()
     local now = time()
 
-    -- This is AWC data, not ladder season data.
-    -- Keep it separate from RatedStatsSeasons.
     local awcEvents = {
         {
             label = "BlizzCon",
@@ -5284,7 +5282,7 @@ local function GetNextAWCDisplay()
         end
     end
 
-    return
+    return "TBC"
 end
 
 local function CreateAWCBanner(parent)
@@ -5294,13 +5292,8 @@ local function CreateAWCBanner(parent)
 
     local banner = CreateFrame("Frame", nil, parent)
     banner:SetSize(360, 120)
-    banner:SetPoint("TOP", parent, "TOP", 360, -88)
     banner:SetFrameStrata("HIGH")
     banner:SetFrameLevel(10)
-
-    banner.logo = banner:CreateTexture(nil, "ARTWORK")
-    banner.logo:SetSize(75, 75)
-    banner.logo:SetTexture("Interface\\AddOns\\RatedStats\\images\\AWC_MN.png")
 
     local function PositionAWCBanner()
         local parentWidth = parent:GetWidth() or 0
@@ -5308,6 +5301,11 @@ local function CreateAWCBanner(parent)
         banner:ClearAllPoints()
         banner:SetPoint("TOP", parent, "TOP", xOffset, -88)
     end
+
+    banner.logo = banner:CreateTexture(nil, "ARTWORK")
+    banner.logo:SetSize(75, 75)
+    banner.logo:SetPoint("TOP", banner, "TOP", 0, 0)
+    banner.logo:SetTexture("Interface\\AddOns\\RatedStats\\images\\AWC_MN.png")
 
     banner.label = banner:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     banner.label:SetFont(GetUnicodeSafeFont(), 12, "OUTLINE")
@@ -5324,7 +5322,6 @@ local function CreateAWCBanner(parent)
     banner.text:SetText("|cffffffff" .. GetNextAWCDisplay() .. "|r")
 
     PositionAWCBanner()
-    banner:SetScript("OnSizeChanged", PositionAWCBanner)
 
     parent.AWCBanner = banner
     return banner
