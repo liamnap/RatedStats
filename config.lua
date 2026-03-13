@@ -5264,6 +5264,33 @@ end
 -- Config functions continued
 ----------------------------------
 
+local function CreateAWCBanner(parent)
+    if parent.AWCBanner then
+        return parent.AWCBanner
+    end
+
+    local banner = CreateFrame("Frame", nil, parent)
+    banner:SetSize(180, 64)
+    banner:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -38, -42)
+    banner:SetFrameStrata("HIGH")
+    banner:SetFrameLevel(10)
+
+    banner.logo = banner:CreateTexture(nil, "ARTWORK")
+    banner.logo:SetSize(140, 24)
+    banner.logo:SetPoint("TOP", banner, "TOP", 0, 0)
+    banner.logo:SetTexture("Interface\\AddOns\\RatedStats\\images\\AWC_MN.png")
+
+    banner.text = banner:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    banner.text:SetFont(GetUnicodeSafeFont(), 9, "")
+    banner.text:SetPoint("TOP", banner.logo, "BOTTOM", 0, -6)
+    banner.text:SetWidth(180)
+    banner.text:SetJustifyH("CENTER")
+    banner.text:SetText(RSTATS:ColorText("Next AWC: BlizzCon - Sep 12-13, 2026 | Time TBC"))
+
+    parent.AWCBanner = banner
+    return banner
+end
+
 function Config:CreateMenu()
     if UIConfig then return UIConfig end
 
@@ -5328,9 +5355,10 @@ function Config:CreateMenu()
     portrait:SetDrawLayer("ARTWORK", -1)
     UIConfig.portrait = portrait
 
-    -- Example extra UI
+    -- Extra UI
     Config:CreateSearchBox(UIConfig)
     Config:CreateFilterMenu(UIConfig)
+    CreateAWCBanner(UIConfig)
 
 	local statsBar = CreateFrame("Frame", "RatedStatsMatchStatsBar", UIConfig)
 	statsBar:SetSize(800, 24)
