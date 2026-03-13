@@ -76,7 +76,8 @@
 			"NO",
 			"StaticPopup_Show",
 			"LOCALIZED_CLASS_NAMES_MALE",
-			"LOCALIZED_CLASS_NAMES_FEMALE"
+			"LOCALIZED_CLASS_NAMES_FEMALE",
+			"Clamp"
 		],
 		"Lua.type.weakUnionCheck": true
 	}
