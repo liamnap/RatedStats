@@ -64,6 +64,25 @@ function RSTATS:GetAWCAnnouncement()
     return nil
 end
 
+function RSTATS:GetNextAWCDisplay()
+    local now = time()
+    local region = (GetCurrentRegion and GetCurrentRegion()) or 3
+
+    for _, event in ipairs(self.AWCEvents or {}) do
+        local timeText = (event.timeByRegion and event.timeByRegion[region]) or "TBC"
+
+        if now <= event.finish then
+            if event.display then
+                return event.display
+            end
+
+            return date("%d %b %Y", event.start) .. " | " .. timeText
+        end
+    end
+
+    return "TBC"
+end
+
 local function GetAWCDateKey(ts)
     local t = date("*t", ts or time())
     return string.format("%04d-%02d-%02d", t.year, t.month, t.day)
