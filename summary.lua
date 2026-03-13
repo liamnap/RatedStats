@@ -1808,12 +1808,12 @@ function Summary:Create(parentFrame)
 
         if self.graphStyleDropdown and self.cards and self.cards[1] then
             self.graphStyleDropdown:ClearAllPoints()
-            self.graphStyleDropdown:SetPoint("TOPLEFT", self.cards[1], "BOTTOMLEFT", -16, 2)
+            self.graphStyleDropdown:SetPoint("TOPLEFT", self.cards[1], "TOPLEFT", -10, -26)
         end
 
         if self.graphStyleLabel and self.graphStyleDropdown then
             self.graphStyleLabel:ClearAllPoints()
-            self.graphStyleLabel:SetPoint("BOTTOMLEFT", self.graphStyleDropdown, "TOPLEFT", 20, -2)
+            self.graphStyleLabel:SetPoint("LEFT", self.graphStyleDropdown, "RIGHT", -6, 2)
         end
 
 		-- Anchor bottom deterministically from the computed card geometry.
