@@ -2233,6 +2233,7 @@ local raceIcons = {
 	["Earthen"] = "|TInterface\\CHARACTERFRAME\\TemporaryPortrait-Male-Dwarf.blp:12:12:0:0:64:64:0:64:0:64|t",
     ["Goblin"] = "|TInterface\\Icons\\achievement_Goblinhead.blp:12:12:0:0:64:64:0:64:0:64|t",
     ["Gnome"] = "|TInterface\\Icons\\Achievement_Character_Gnome_Male.blp:12:12:0:0:64:64:0:64:0:64|t",
+    ["Haranir"] = "|TInterface\\Icons\\INV12_Haranir_Character_Creation_Male.blp:12:12:0:0:64:64:0:64:0:64|t",
     ["Highmountain Tauren"] = "|TInterface\\Icons\\INV_Misc_Head_Tauren_01.blp:12:12:0:0:64:64:0:64:0:64|t",
     ["Human"] = "|TInterface\\Icons\\Achievement_Character_Human_Male.blp:12:12:0:0:64:64:0:64:0:64|t",
     ["Kul Tiran"] = "|TInterface\\CHARACTERFRAME\\TemporaryPortrait-Male-KulTiran.blp:12:12:0:0:64:64:0:64:0:64|t", 
@@ -2272,72 +2273,82 @@ local classIcons = {
 
 local specIcons = {
     -- Death Knight
-    ["Blood"] = "|TInterface\\Icons\\Spell_Deathknight_BloodPresence:12:12:0:0:64:64:0:64:0:64|t",
-    ["Frost"] = "|TInterface\\Icons\\Spell_Deathknight_FrostPresence:12:12:0:0:64:64:0:64:0:64|t",
-    ["Unholy"] = "|TInterface\\Icons\\Spell_Deathknight_UnholyPresence:12:12:0:0:64:64:0:64:0:64|t",
+    ["Death Knight:Blood"] = "|TInterface\\Icons\\Spell_Deathknight_BloodPresence:12:12:0:0:64:64:0:64:0:64|t",
+    ["Death Knight:Frost"] = "|TInterface\\Icons\\Spell_Deathknight_FrostPresence:12:12:0:0:64:64:0:64:0:64|t",
+    ["Death Knight:Unholy"] = "|TInterface\\Icons\\Spell_Deathknight_UnholyPresence:12:12:0:0:64:64:0:64:0:64|t",
 
     -- Demon Hunter
-    ["Havoc"] = "|TInterface\\Icons\\Ability_DemonHunter_SpecDPS:12:12:0:0:64:64:0:64:0:64|t",
-    ["Vengeance"] = "|TInterface\\Icons\\Ability_DemonHunter_SpecTank:12:12:0:0:64:64:0:64:0:64|t",
+    ["Demon Hunter:Havoc"] = "|TInterface\\Icons\\Ability_DemonHunter_SpecDPS:12:12:0:0:64:64:0:64:0:64|t",
+    ["Demon Hunter:Vengeance"] = "|TInterface\\Icons\\Ability_DemonHunter_SpecTank:12:12:0:0:64:64:0:64:0:64|t",
+	["Demon Hunter:Devourer"] = "|TInterface\\Icons\\Classicon_DemonHunter_Void_64.blp:12:12:0:0:64:64:0:64:0:64|t",
 
     -- Druid
-    ["Balance"] = "|TInterface\\Icons\\Spell_Nature_StarFall:12:12:0:0:64:64:0:64:0:64|t",
-    ["Feral"] = "|TInterface\\Icons\\Ability_Druid_CatForm:12:12:0:0:64:64:0:64:0:64|t",
-    ["Guardian"] = "|TInterface\\Icons\\Ability_Racial_BearForm:12:12:0:0:64:64:0:64:0:64|t",
-    ["Restoration"] = "|TInterface\\Icons\\Spell_Nature_HealingTouch:12:12:0:0:64:64:0:64:0:64|t",
+    ["Druid:Balance"] = "|TInterface\\Icons\\Spell_Nature_StarFall:12:12:0:0:64:64:0:64:0:64|t",
+    ["Druid:Feral"] = "|TInterface\\Icons\\Ability_Druid_CatForm:12:12:0:0:64:64:0:64:0:64|t",
+    ["Druid:Guardian"] = "|TInterface\\Icons\\Ability_Racial_BearForm:12:12:0:0:64:64:0:64:0:64|t",
+    ["Druid:Restoration"] = "|TInterface\\Icons\\Spell_Nature_HealingTouch:12:12:0:0:64:64:0:64:0:64|t",
 
     -- Evoker
-    ["Devastation"] = "|TInterface\\Icons\\ClassIcon_Evoker_Devastation:12:12:0:0:64:64:0:64:0:64|t",
-    ["Preservation"] = "|TInterface\\Icons\\ClassIcon_Evoker_Preservation:12:12:0:0:64:64:0:64:0:64|t",
-    ["Augmentation"] = "|TInterface\\Icons\\ClassIcon_Evoker_Augmentation:12:12:0:0:64:64:0:64:0:64|t",
+    ["Evoker:Devastation"] = "|TInterface\\Icons\\ClassIcon_Evoker_Devastation:12:12:0:0:64:64:0:64:0:64|t",
+    ["Evoker:Preservation"] = "|TInterface\\Icons\\ClassIcon_Evoker_Preservation:12:12:0:0:64:64:0:64:0:64|t",
+    ["Evoker:Augmentation"] = "|TInterface\\Icons\\ClassIcon_Evoker_Augmentation:12:12:0:0:64:64:0:64:0:64|t",
 
     -- Hunter
-    ["Beast Mastery"] = "|TInterface\\Icons\\Ability_Hunter_BeastMastery:12:12:0:0:64:64:0:64:0:64|t",
-    ["Marksmanship"] = "|TInterface\\Icons\\Ability_Hunter_FocusedAim:12:12:0:0:64:64:0:64:0:64|t",
-    ["Survival"] = "|TInterface\\Icons\\Ability_Hunter_SurvivalInstincts:12:12:0:0:64:64:0:64:0:64|t",
+    ["Hunter:Beast Mastery"] = "|TInterface\\Icons\\Ability_Hunter_BeastMastery:12:12:0:0:64:64:0:64:0:64|t",
+    ["Hunter:Marksmanship"] = "|TInterface\\Icons\\Ability_Hunter_FocusedAim:12:12:0:0:64:64:0:64:0:64|t",
+    ["Hunter:Survival"] = "|TInterface\\Icons\\Ability_Hunter_SurvivalInstincts:12:12:0:0:64:64:0:64:0:64|t",
 
     -- Mage
-    ["Arcane"] = "|TInterface\\Icons\\Spell_Holy_MagicalSentry:12:12:0:0:64:64:0:64:0:64|t",
-    ["Fire"] = "|TInterface\\Icons\\Spell_Fire_FireBolt02:12:12:0:0:64:64:0:64:0:64|t",
-    ["Frost"] = "|TInterface\\Icons\\Spell_Frost_FrostBolt02:12:12:0:0:64:64:0:64:0:64|t",
+    ["Mage:Arcane"] = "|TInterface\\Icons\\Spell_Holy_MagicalSentry:12:12:0:0:64:64:0:64:0:64|t",
+    ["Mage:Fire"] = "|TInterface\\Icons\\Spell_Fire_FireBolt02:12:12:0:0:64:64:0:64:0:64|t",
+    ["Mage:Frost"] = "|TInterface\\Icons\\Spell_Frost_FrostBolt02:12:12:0:0:64:64:0:64:0:64|t",
 
     -- Monk
-    ["Brewmaster"] = "|TInterface\\Icons\\Spell_Monk_Brewmaster_Spec:12:12:0:0:64:64:0:64:0:64|t",
-    ["Mistweaver"] = "|TInterface\\Icons\\Spell_Monk_MistWeaver_Spec:12:12:0:0:64:64:0:64:0:64|t",
-    ["Windwalker"] = "|TInterface\\Icons\\Spell_Monk_WindWalker_Spec:12:12:0:0:64:64:0:64:0:64|t",
+    ["Monk:Brewmaster"] = "|TInterface\\Icons\\Spell_Monk_Brewmaster_Spec:12:12:0:0:64:64:0:64:0:64|t",
+    ["Monk:Mistweaver"] = "|TInterface\\Icons\\Spell_Monk_MistWeaver_Spec:12:12:0:0:64:64:0:64:0:64|t",
+    ["Monk:Windwalker"] = "|TInterface\\Icons\\Spell_Monk_WindWalker_Spec:12:12:0:0:64:64:0:64:0:64|t",
 
     -- Paladin
-    ["Holy"] = "|TInterface\\Icons\\Spell_Holy_HolyBolt:12:12:0:0:64:64:0:64:0:64|t",
-    ["Protection"] = "|TInterface\\Icons\\Ability_Paladin_ShieldoftheTemplar:12:12:0:0:64:64:0:64:0:64|t",
-    ["Retribution"] = "|TInterface\\Icons\\Spell_Holy_AuraOfLight:12:12:0:0:64:64:0:64:0:64|t",
+    ["Paladin:Holy"] = "|TInterface\\Icons\\Spell_Holy_HolyBolt:12:12:0:0:64:64:0:64:0:64|t",
+    ["Paladin:Protection"] = "|TInterface\\Icons\\Ability_Paladin_ShieldoftheTemplar:12:12:0:0:64:64:0:64:0:64|t",
+    ["Paladin:Retribution"] = "|TInterface\\Icons\\Spell_Holy_AuraOfLight:12:12:0:0:64:64:0:64:0:64|t",
 
     -- Priest
-    ["Discipline"] = "|TInterface\\Icons\\Spell_Holy_PowerWordShield:12:12:0:0:64:64:0:64:0:64|t",
-    ["Holy"] = "|TInterface\\Icons\\Spell_Holy_GuardianSpirit:12:12:0:0:64:64:0:64:0:64|t",
-    ["Shadow"] = "|TInterface\\Icons\\Spell_Shadow_ShadowWordPain:12:12:0:0:64:64:0:64:0:64|t",
+    ["Priest:Discipline"] = "|TInterface\\Icons\\Spell_Holy_PowerWordShield:12:12:0:0:64:64:0:64:0:64|t",
+    ["Priest:Holy"] = "|TInterface\\Icons\\Spell_Holy_GuardianSpirit:12:12:0:0:64:64:0:64:0:64|t",
+    ["Priest:Shadow"] = "|TInterface\\Icons\\Spell_Shadow_ShadowWordPain:12:12:0:0:64:64:0:64:0:64|t",
 
     -- Rogue
-    ["Assassination"] = "|TInterface\\Icons\\Ability_Rogue_DeadlyBrew:12:12:0:0:64:64:0:64:0:64|t",
-    ["Outlaw"] = "|TInterface\\Icons\\Ability_Rogue_Waylay:12:12:0:0:64:64:0:64:0:64|t",
-    ["Subtlety"] = "|TInterface\\Icons\\Ability_Stealth:12:12:0:0:64:64:0:64:0:64|t",
+    ["Rogue:Assassination"] = "|TInterface\\Icons\\Ability_Rogue_DeadlyBrew:12:12:0:0:64:64:0:64:0:64|t",
+    ["Rogue:Outlaw"] = "|TInterface\\Icons\\Ability_Rogue_Waylay:12:12:0:0:64:64:0:64:0:64|t",
+    ["Rogue:Subtlety"] = "|TInterface\\Icons\\Ability_Stealth:12:12:0:0:64:64:0:64:0:64|t",
 
     -- Shaman
-    ["Elemental"] = "|TInterface\\Icons\\Spell_Nature_Lightning:12:12:0:0:64:64:0:64:0:64|t",
-    ["Enhancement"] = "|TInterface\\Icons\\Spell_Shaman_ImprovedStormstrike:12:12:0:0:64:64:0:64:0:64|t",
-    ["Restoration"] = "|TInterface\\Icons\\Spell_Nature_MagicImmunity:12:12:0:0:64:64:0:64:0:64|t",
+    ["Shaman:Elemental"] = "|TInterface\\Icons\\Spell_Nature_Lightning:12:12:0:0:64:64:0:64:0:64|t",
+    ["Shaman:Enhancement"] = "|TInterface\\Icons\\Spell_Shaman_ImprovedStormstrike:12:12:0:0:64:64:0:64:0:64|t",
+    ["Shaman:Restoration"] = "|TInterface\\Icons\\Spell_Nature_MagicImmunity:12:12:0:0:64:64:0:64:0:64|t",
 
     -- Warlock
-    ["Affliction"] = "|TInterface\\Icons\\Spell_Shadow_DeathCoil:12:12:0:0:64:64:0:64:0:64|t",
-    ["Demonology"] = "|TInterface\\Icons\\Spell_Shadow_Metamorphosis:12:12:0:0:64:64:0:64:0:64|t",
-    ["Destruction"] = "|TInterface\\Icons\\Spell_Shadow_RainOfFire:12:12:0:0:64:64:0:64:0:64|t",
+    ["Warlock:Affliction"] = "|TInterface\\Icons\\Spell_Shadow_DeathCoil:12:12:0:0:64:64:0:64:0:64|t",
+    ["Warlock:Demonology"] = "|TInterface\\Icons\\Spell_Shadow_Metamorphosis:12:12:0:0:64:64:0:64:0:64|t",
+    ["Warlock:Destruction"] = "|TInterface\\Icons\\Spell_Shadow_RainOfFire:12:12:0:0:64:64:0:64:0:64|t",
 
     -- Warrior
-    ["Arms"] = "|TInterface\\Icons\\Ability_Warrior_SavageBlow:12:12:0:0:64:64:0:64:0:64|t",
-    ["Fury"] = "|TInterface\\Icons\\Ability_Warrior_InnerRage:12:12:0:0:64:64:0:64:0:64|t",
-    ["Protection"] = "|TInterface\\Icons\\Ability_Warrior_DefensiveStance:12:12:0:0:64:64:0:64:0:64|t",
+    ["Warrior:Arms"] = "|TInterface\\Icons\\Ability_Warrior_SavageBlow:12:12:0:0:64:64:0:64:0:64|t",
+    ["Warrior:Fury"] = "|TInterface\\Icons\\Ability_Warrior_InnerRage:12:12:0:0:64:64:0:64:0:64|t",
+    ["Warrior:Protection"] = "|TInterface\\Icons\\Ability_Warrior_DefensiveStance:12:12:0:0:64:64:0:64:0:64|t",
 
     ["-"] = "-"  -- This will preserve the hyphen in the text
 }
+
+local function GetSpecIcon(className, specName)
+    if not specName or specName == "-" then
+        return "-"
+    end
+
+    local key = (className or "") .. ":" .. specName
+    return specIcons[key] or specName
+end
 
 local function CreateIconWithTooltip(parentFrame, content, tooltipText, xOffset, yOffset, columnWidth, rowHeight, isAtlas)
     if isAtlas then
@@ -4438,7 +4449,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 factionIcons[player.faction] or player.faction,
                 raceIcons[player.race] or player.race,
                 classIcons[player.class] or player.class,
-                specIcons[player.spec] or player.spec,
+                GetSpecIcon(player.class, player.spec),
                 roleIcons[player.role] or player.role,
                 FormatCRMMR(player),
                 player.killingBlows,
@@ -4455,7 +4466,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 factionIcons[player.faction] or player.faction,
                 raceIcons[player.race] or player.race,
                 classIcons[player.class] or player.class,
-                specIcons[player.spec] or player.spec,
+                GetSpecIcon(player.class, player.spec),
                 roleIcons[player.role] or player.role,
                 FormatCRMMR(player),
                 player.killingBlows,
@@ -4588,7 +4599,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 factionIcons[player.faction] or player.faction,
                 raceIcons[player.race] or player.race,
                 classIcons[player.class] or player.class,
-                specIcons[player.spec] or player.spec,
+                GetSpecIcon(player.class, player.spec),
                 roleIcons[player.role] or player.role,
                 FormatCRMMR(player),
                 player.killingBlows,
@@ -4605,7 +4616,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 factionIcons[player.faction] or player.faction,
                 raceIcons[player.race] or player.race,
                 classIcons[player.class] or player.class,
-                specIcons[player.spec] or player.spec,
+                GetSpecIcon(player.class, player.spec),
                 roleIcons[player.role] or player.role,
                 FormatCRMMR(player),
                 player.killingBlows,

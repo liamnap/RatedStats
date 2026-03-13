@@ -185,7 +185,7 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
             end
         end)
 
-        Settings.CreateCheckbox(category, setting, "Deletes all Rated Stats history for your current character.")
+        Settings.CreateCheckbox(category, setting, "Deletes all Rated Stats history for your current character.\n\nTo wipe all databases wipe from CurseForge or delete in the WTF Folder")
     end
 
     Settings.RegisterAddOnCategory(category)
