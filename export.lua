@@ -308,9 +308,8 @@ local function BuildREFlexCSV(modeKey, specFilter)
                 local s = GetMyPlayerStat(entry)
 
                 local specRaw = GetSpecString(entry, s)
-                if specFilter and specFilter ~= "ALL" and specRaw ~= specFilter then
-                    goto continue_entry
-                end
+                local okSpec = (not specFilter) or (specFilter == "ALL") or (specRaw == specFilter)
+                if okSpec then
 
                 local ts = ToNumber(entry.timestamp or entry.endTime)
                 local map = CleanCSVField(entry.mapName or "")
@@ -347,7 +346,7 @@ local function BuildREFlexCSV(modeKey, specFilter)
                     ratingChange .. ";" .. mmr .. ";" .. enemyMMR .. ";" .. spec .. ";" .. prestige .. ";" ..
                     isRated .. ";" .. isBrawl .. ";" .. isMerc .. "\n"
                 )
-                ::continue_entry::
+                end
             end
         end
     else
@@ -362,9 +361,8 @@ local function BuildREFlexCSV(modeKey, specFilter)
                 local s = GetMyPlayerStat(entry)
 
                 local specRaw = GetSpecString(entry, s)
-                if specFilter and specFilter ~= "ALL" and specRaw ~= specFilter then
-                    goto continue_entry
-                end
+                local okSpec = (not specFilter) or (specFilter == "ALL") or (specRaw == specFilter)
+                if okSpec then
 
                 local ts = ToNumber(entry.timestamp or entry.endTime)
                 local map = CleanCSVField(entry.mapName or "")
@@ -394,7 +392,7 @@ local function BuildREFlexCSV(modeKey, specFilter)
                     duration .. ";" .. victory .. ";" .. kb .. ";" .. dmg .. ";" .. heal .. ";" .. honor .. ";" ..
                     ratingChange .. ";" .. mmr .. ";" .. enemyMMR .. ";" .. spec .. ";" .. isRated .. "\n"
                 )
-                ::continue_entry::
+                end
             end
         end
     end
