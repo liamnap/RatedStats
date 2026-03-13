@@ -4,14 +4,14 @@ local function BuildAWCEvents()
             day = 1,
             start = time({ year = 2026, month = 9, day = 12, hour = 0, min = 0, sec = 0 }),
             finish = time({ year = 2026, month = 9, day = 12, hour = 23, min = 59, sec = 59 }),
-            preText = "Next AWC on 12 Sep 2026 at ",
+            preText = "Next AWC on ",
             todayText = "AWC Today at ",
             display = "BlizzCon - Sep 12-13, 2026 | Time TBC",
             timeByRegion = {
-                [1] = "TBC",
-                [2] = "TBC",
-                [3] = "TBC",
-                [4] = "TBC",
+                [1] = "12-13 Sep 2026 at 10:00 PDT",
+                [2] = "13-14 Sep 2026 at 02:00 KST",
+                [3] = "12-13 Sep 2026 at 18:00 UK",
+                [4] = "13-14 Sep 2026 at 01:00 CST",
             },
         },
         {
@@ -20,10 +20,10 @@ local function BuildAWCEvents()
             finish = time({ year = 2026, month = 9, day = 13, hour = 23, min = 59, sec = 59 }),
             todayText = "Day 2 of AWC Today at ",
             timeByRegion = {
-                [1] = "TBC",
-                [2] = "TBC",
-                [3] = "TBC",
-                [4] = "TBC",
+                [1] = "10:00 PDT",
+                [2] = "02:00 KST",
+                [3] = "18:00 UK",
+                [4] = "01:00 CST",
             },
         },
         {
@@ -32,10 +32,10 @@ local function BuildAWCEvents()
             finish = time({ year = 2026, month = 9, day = 14, hour = 23, min = 59, sec = 59 }),
             todayText = "Weekend Finals today at ",
             timeByRegion = {
-                [1] = "TBC",
-                [2] = "TBC",
-                [3] = "TBC",
-                [4] = "TBC",
+                [1] = "10:00 PDT",
+                [2] = "02:00 KST",
+                [3] = "18:00 UK",
+                [4] = "01:00 CST",
             },
         },
     }
@@ -73,18 +73,32 @@ function RSTATS:GetAWCBannerText()
         local timeText = (event.timeByRegion and event.timeByRegion[region]) or "TBC"
 
         if now < event.start then
-            if i == 1 then
-                return "Next AWC at " .. timeText
-            end
-            return "Next AWC at " .. timeText
+            return {
+                left = "Next AWC",
+                right = " on " .. timeText,
+            }
         end
 
         if now >= event.start and now <= event.finish then
-            return (event.todayText or "AWC Today at ") .. timeText
+            local todayText = (event.todayText or "AWC Today at ")
+            local left, right = todayText:match("^(.-)( at .-)$")
+            if left and right then
+                return {
+                    left = left,
+                    right = right:gsub(" at .-$", "") and (" at " .. timeText),
+                }
+            end
+            return {
+                left = todayText:gsub("%s+$", ""),
+                right = timeText,
+            }
         end
     end
 
-    return "AWC TBC"
+    return {
+        left = "Next AWC",
+        right = " TBC",
+    }
 end
 
 function RSTATS:GetNextAWCDisplay()
