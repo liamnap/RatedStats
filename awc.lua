@@ -74,29 +74,21 @@ function RSTATS:GetAWCBannerText()
 
         if now < event.start then
             return {
-                left = "Next AWC",
+                left = "Next AWC on",
                 right = " on " .. timeText,
             }
         end
 
         if now >= event.start and now <= event.finish then
-            local todayText = (event.todayText or "AWC Today at ")
-            local left, right = todayText:match("^(.-)( at .-)$")
-            if left and right then
-                return {
-                    left = left,
-                    right = right:gsub(" at .-$", "") and (" at " .. timeText),
-                }
-            end
             return {
-                left = todayText:gsub("%s+$", ""),
-                right = timeText,
+                left = (event.todayText or "AWC Today at "):gsub("%s+$", ""),
+                right = " " .. timeText,
             }
         end
     end
 
     return {
-        left = "Next AWC",
+        left = "Next AWC on",
         right = " TBC",
     }
 end
