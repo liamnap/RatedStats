@@ -5303,13 +5303,13 @@ local function CreateAWCBanner(parent)
     end
 
     banner.logo = banner:CreateTexture(nil, "ARTWORK")
-    banner.logo:SetSize(75, 75)
+    banner.logo:SetSize(100, 100)
     banner.logo:SetPoint("TOP", banner, "TOP", 0, 5)
     banner.logo:SetTexture("Interface\\AddOns\\RatedStats\\images\\AWC_MN.png")
 
     banner.label = banner:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     banner.label:SetFont(GetUnicodeSafeFont(), 12, "OUTLINE")
-    banner.label:SetPoint("TOP", banner.logo, "BOTTOM", 0, 6)
+    banner.label:SetPoint("TOP", banner.logo, "BOTTOM", 0, 10)
     banner.label:SetWidth(360)
     banner.label:SetJustifyH("CENTER")
     banner.label:SetText(RSTATS:ColorText("Next AWC:"))
