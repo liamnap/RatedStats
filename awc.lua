@@ -6,6 +6,7 @@ local function BuildAWCEvents()
             finish = time({ year = 2026, month = 9, day = 12, hour = 23, min = 59, sec = 59 }),
             preText = "Next AWC on 12 Sep 2026 at ",
             todayText = "AWC Today at ",
+            display = "BlizzCon - Sep 12-13, 2026 | Time TBC",
             timeByRegion = {
                 [1] = "TBC",
                 [2] = "TBC",
@@ -62,6 +63,28 @@ function RSTATS:GetAWCAnnouncement()
     end
 
     return nil
+end
+
+function RSTATS:GetAWCBannerText()
+    local now = time()
+    local region = (GetCurrentRegion and GetCurrentRegion()) or 3
+
+    for i, event in ipairs(self.AWCEvents or {}) do
+        local timeText = (event.timeByRegion and event.timeByRegion[region]) or "TBC"
+
+        if now < event.start then
+            if i == 1 then
+                return "Next AWC at " .. timeText
+            end
+            return "Next AWC at " .. timeText
+        end
+
+        if now >= event.start and now <= event.finish then
+            return (event.todayText or "AWC Today at ") .. timeText
+        end
+    end
+
+    return "AWC TBC"
 end
 
 function RSTATS:GetNextAWCDisplay()
