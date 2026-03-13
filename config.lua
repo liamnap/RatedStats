@@ -5309,7 +5309,7 @@ local function CreateAWCBanner(parent)
 
     banner.label = banner:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     banner.label:SetFont(GetUnicodeSafeFont(), 12, "OUTLINE")
-    banner.label:SetPoint("TOP", banner.logo, "BOTTOM", 0, 10)
+    banner.label:SetPoint("TOP", banner.logo, "BOTTOM", 0, 25)
     banner.label:SetWidth(360)
     banner.label:SetJustifyH("CENTER")
     banner.label:SetText(RSTATS:ColorText("Next AWC:"))
