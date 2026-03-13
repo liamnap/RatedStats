@@ -1707,13 +1707,10 @@ function Summary:Create(parentFrame)
     f.seasonNote3:SetFont(GetUnicodeSafeFont(), 10, "OUTLINE")
 
     f.graphStyleLabel = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    f.graphStyleLabel:SetPoint("TOPRIGHT", f, "TOPRIGHT", -140, -16)
     f.graphStyleLabel:SetFont(GetUnicodeSafeFont(), 10, "OUTLINE")
     f.graphStyleLabel:SetText("Graph")
 
     f.graphStyleDropdown = CreateFrame("Frame", "RatedStatsSummaryGraphStyleDropdown", f, "UIDropDownMenuTemplate")
-    f.graphStyleDropdown:ClearAllPoints()
-    f.graphStyleDropdown:SetPoint("LEFT", f.graphStyleLabel, "RIGHT", -8, -2)
     UIDropDownMenu_SetWidth(f.graphStyleDropdown, 120)
     UIDropDownMenu_SetText(f.graphStyleDropdown, GetSummaryGraphStyleText(GetSummaryGraphStyle()))
 
@@ -1807,6 +1804,16 @@ function Summary:Create(parentFrame)
             else
                 card:SetPoint("LEFT", self.cards[i - 1], "RIGHT", gap, 0)
             end
+        end
+
+        if self.graphStyleDropdown and self.cards and self.cards[1] then
+            self.graphStyleDropdown:ClearAllPoints()
+            self.graphStyleDropdown:SetPoint("TOPLEFT", self.cards[1], "BOTTOMLEFT", -16, 2)
+        end
+
+        if self.graphStyleLabel and self.graphStyleDropdown then
+            self.graphStyleLabel:ClearAllPoints()
+            self.graphStyleLabel:SetPoint("BOTTOMLEFT", self.graphStyleDropdown, "TOPLEFT", 20, -2)
         end
 
 		-- Anchor bottom deterministically from the computed card geometry.
