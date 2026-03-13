@@ -1808,7 +1808,7 @@ function Summary:Create(parentFrame)
 
         if self.graphStyleDropdown and self.cards and self.cards[1] then
             self.graphStyleDropdown:ClearAllPoints()
-            self.graphStyleDropdown:SetPoint("TOPLEFT", self.cards[1], "TOPLEFT", -10, 5)
+            self.graphStyleDropdown:SetPoint("TOPLEFT", self.cards[1], "TOPLEFT", -10, 15)
         end
 
         if self.graphStyleLabel and self.graphStyleDropdown then
