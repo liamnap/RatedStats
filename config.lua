@@ -5299,7 +5299,7 @@ local function CreateAWCBanner(parent)
         local parentWidth = parent:GetWidth() or 0
         local xOffset = math.floor(parentWidth * 0.40)
         banner:ClearAllPoints()
-        banner:SetPoint("TOP", parent, "TOP", xOffset, -88)
+        banner:SetPoint("TOP", parent, "TOP", xOffset, -60)
     end
 
     banner.logo = banner:CreateTexture(nil, "ARTWORK")
