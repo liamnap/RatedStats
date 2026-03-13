@@ -127,8 +127,11 @@ local function EnsureExportFrame()
 
     exportFrame.TitleText:SetText("Rated Stats - Export Data")
 
-    local info = exportFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    info:SetPoint("TOPLEFT", exportFrame.InsetBg, "TOPLEFT", 10, -8)
+    -- NOTE: In some UI load orders, passing an inherits/template string to CreateFontString
+    -- can result in an unset/invalid font, and the next SetText call can throw
+    -- "Wrong object type for function". Set the FontObject explicitly instead.
+    local info = exportFrame:CreateFontString(nil, "OVERLAY")
+    info:SetFontObject(GameFontHighlightSmall)    info:SetPoint("TOPLEFT", exportFrame.InsetBg, "TOPLEFT", 10, -8)
     info:SetJustifyH("LEFT")
     info:SetText("Select all (Ctrl+A) and copy (Ctrl+C). Paste into a file if you want to keep a backup.")
 
