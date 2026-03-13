@@ -5286,19 +5286,12 @@ local function CreateAWCBanner(parent)
     banner.logo:SetPoint("TOP", banner, "TOP", 0, 10)
     banner.logo:SetTexture("Interface\\AddOns\\RatedStats\\images\\AWC_MN.png")
 
-    banner.label = banner:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    banner.label:SetFont(GetUnicodeSafeFont(), 12, "OUTLINE")
-    banner.label:SetPoint("TOP", banner.logo, "BOTTOM", 0, 10)
-    banner.label:SetWidth(360)
-    banner.label:SetJustifyH("CENTER")
-    banner.label:SetText(RSTATS:ColorText("Next AWC:"))
-
     banner.text = banner:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     banner.text:SetFont(GetUnicodeSafeFont(), 11, "OUTLINE")
-    banner.text:SetPoint("TOP", banner.label, "BOTTOM", 0, 2)
+    banner.text:SetPoint("TOP", banner.logo, "BOTTOM", 0, 12)
     banner.text:SetWidth(360)
     banner.text:SetJustifyH("CENTER")
-    banner.text:SetText("|cffffffff" .. ((RSTATS.GetNextAWCDisplay and RSTATS:GetNextAWCDisplay()) or "TBC") .. "|r")
+    banner.text:SetText("|cffffffff" .. ((RSTATS.GetAWCBannerText and RSTATS:GetAWCBannerText()) or "AWC TBC") .. "|r")
 
     PositionAWCBanner()
 
