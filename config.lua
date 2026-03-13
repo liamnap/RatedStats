@@ -5264,27 +5264,6 @@ end
 -- Config functions continued
 ----------------------------------
 
-local function GetNextAWCDisplay()
-    local now = time()
-
-    local awcEvents = {
-        {
-            label = "BlizzCon",
-            start = time({ year = 2026, month = 9, day = 12, hour = 0, min = 0, sec = 0 }),
-            finish = time({ year = 2026, month = 9, day = 13, hour = 23, min = 59, sec = 59 }),
-            display = "BlizzCon - Sep 12-13, 2026 | Time TBC",
-        },
-    }
-
-    for _, event in ipairs(awcEvents) do
-        if now <= event.finish then
-            return event.display
-        end
-    end
-
-    return "TBC"
-end
-
 local function CreateAWCBanner(parent)
     if parent.AWCBanner then
         return parent.AWCBanner
@@ -5319,7 +5298,7 @@ local function CreateAWCBanner(parent)
     banner.text:SetPoint("TOP", banner.label, "BOTTOM", 0, 2)
     banner.text:SetWidth(360)
     banner.text:SetJustifyH("CENTER")
-    banner.text:SetText("|cffffffff" .. GetNextAWCDisplay() .. "|r")
+    banner.text:SetText("|cffffffff" .. ((RSTATS.GetNextAWCDisplay and RSTATS:GetNextAWCDisplay()) or "TBC") .. "|r")
 
     PositionAWCBanner()
 
