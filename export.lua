@@ -131,11 +131,18 @@ local function EnsureExportFrame()
     -- can result in an unset/invalid font, and the next SetText call can throw
     -- "Wrong object type for function". Set the FontObject explicitly instead.
     local info = exportFrame:CreateFontString(nil, "OVERLAY")
-    info:SetFontObject(GameFontHighlightSmall)    info:SetPoint("TOPLEFT", exportFrame.InsetBg, "TOPLEFT", 10, -8)
-    info:SetJustifyH("LEFT")
+    info:SetFontObject(GameFontHighlightSmall)
+    info:SetPoint("TOPLEFT", exportFrame.InsetBg, "TOPLEFT", 10, -8)
+    info:SetPoint("TOPRIGHT", exportFrame.InsetBg, "TOPRIGHT", -10, -8)
+    -- Some clients throw "Wrong object type for function" on SetJustifyH even though this is a FontString.
+    -- It is purely cosmetic, so guard it.
+    if info.SetJustifyH then
+        info:SetJustifyH("LEFT")
+    end
     info:SetText("Select all (Ctrl+A) and copy (Ctrl+C). Paste into a file if you want to keep a backup.")
 
-    local scroll = CreateFrame("ScrollFrame", nil, exportFrame.InsetBg, "UIPanelScrollFrameTemplate")
+    -- Parent the scroll frame to the main frame (InsetBg is a texture in this template).
+    local scroll = CreateFrame("ScrollFrame", nil, exportFrame, "UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT", exportFrame.InsetBg, "TOPLEFT", 8, -30)
     scroll:SetPoint("BOTTOMRIGHT", exportFrame.InsetBg, "BOTTOMRIGHT", -30, 10)
 
