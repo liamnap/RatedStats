@@ -5270,20 +5270,20 @@ local function CreateAWCBanner(parent)
     end
 
     local banner = CreateFrame("Frame", nil, parent)
-    banner:SetSize(180, 64)
-    banner:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -38, -42)
+    banner:SetSize(320, 92)
+    banner:SetPoint("TOP", parent, "TOP", 520, -52)
     banner:SetFrameStrata("HIGH")
     banner:SetFrameLevel(10)
 
     banner.logo = banner:CreateTexture(nil, "ARTWORK")
-    banner.logo:SetSize(140, 24)
+    banner.logo:SetSize(220, 40)
     banner.logo:SetPoint("TOP", banner, "TOP", 0, 0)
     banner.logo:SetTexture("Interface\\AddOns\\RatedStats\\images\\AWC_MN.png")
 
     banner.text = banner:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    banner.text:SetFont(GetUnicodeSafeFont(), 9, "")
+    banner.text:SetFont(GetUnicodeSafeFont(), 11, "OUTLINE")
     banner.text:SetPoint("TOP", banner.logo, "BOTTOM", 0, -6)
-    banner.text:SetWidth(180)
+    banner.text:SetWidth(320)
     banner.text:SetJustifyH("CENTER")
     banner.text:SetText(RSTATS:ColorText("Next AWC: BlizzCon - Sep 12-13, 2026 | Time TBC"))
 
