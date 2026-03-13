@@ -5299,7 +5299,7 @@ local function CreateAWCBanner(parent)
     banner:SetFrameLevel(10)
 
     banner.logo = banner:CreateTexture(nil, "ARTWORK")
-    banner.logo:SetSize(260, 52)
+    banner.logo:SetSize(520, 52)
     banner.logo:SetPoint("TOP", banner, "TOP", 0, 0)
     banner.logo:SetTexture("Interface\\AddOns\\RatedStats\\images\\AWC_MN.png")
 
