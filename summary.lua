@@ -403,16 +403,23 @@ local function DrawCandles(frame, candles, times, xMinFixed, xMaxFixed, yMinFixe
             local yLow = mapY(c.low)
             local yClose = mapY(c.close)
 
+            local r, g, b
+            if c.close >= c.open then
+                r, g, b = 0.10, 0.85, 0.20
+            else
+                r, g, b = 0.90, 0.20, 0.20
+            end
+
             local wick = frame:CreateLine(nil, "ARTWORK")
             wick:SetThickness(1)
-            wick:SetColorTexture(1, 0.82, 0.2, 0.95)
+            wick:SetColorTexture(r, g, b, 0.95)
             wick:SetStartPoint("BOTTOMLEFT", frame, x, yLow)
             wick:SetEndPoint("BOTTOMLEFT", frame, x, yHigh)
             table.insert(frame._lines, wick)
 
             local body = frame:CreateLine(nil, "ARTWORK")
             body:SetThickness(candleHalfWidth * 2)
-            body:SetColorTexture(1, 0.82, 0.2, 0.95)
+            body:SetColorTexture(r, g, b, 0.95)
             body:SetStartPoint("BOTTOMLEFT", frame, x, yOpen)
             body:SetEndPoint("BOTTOMLEFT", frame, x, yClose)
             table.insert(frame._lines, body)
