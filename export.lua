@@ -155,21 +155,26 @@ local function GetDurationSeconds(entry)
         sClean = sClean:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
         sClean = sClean:gsub("%z", "")                -- nulls
         sClean = sClean:gsub("[%c]", " ")             -- all control chars -> space
+        -- Non-breaking space and other UTF-8 whitespace often shows up; normalize it to regular space.
+        sClean = sClean:gsub("\194\160", " ")         -- U+00A0 in UTF-8
         sClean = sClean:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
 
         print("duration(clean) =", sClean)
 
-        local d = ParseDurationStringToSeconds(sClean)
-        print("ParseDurationStringToSeconds ->", d)
-
-        if not d then
-            -- Your DB commonly stores "X Min Y Sec"
-            local min = tonumber(sClean:match("(%d+)%s*[Mm]in")) or 0
-            local sec = tonumber(sClean:match("(%d+)%s*[Ss]ec")) or 0
-            local total = (min * 60) + sec
-            if total > 0 then d = total end
-            print("fallback min/sec ->", d)
+        -- Parse strictly from the cleaned string (anchored). This avoids the "244" bug.
+        local lower = sClean:lower()
+        local min, sec = lower:match("^(%d+)%s*min%s*(%d+)%s*sec$")
+        local d
+        if min and sec then
+            d = (tonumber(min) * 60) + tonumber(sec)
+        else
+            -- Also allow "MM:SS"
+            local mm, ss = sClean:match("^(%d+):(%d+)$")
+            if mm and ss then
+                d = (tonumber(mm) * 60) + tonumber(ss)
+            end
         end
+        print("STRICT parsed ->", d)
 
         d = tonumber(d)
         print("final parsed d ->", d)
