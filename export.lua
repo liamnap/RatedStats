@@ -26,21 +26,15 @@ local function CleanCSVField(v)
     return v
 end
 
-local function NormalizeMapName(mapName)
-    if mapName == nil then return "" end
-    mapName = tostring(mapName)
-
-    -- mapShortCodes is defined in config.lua (global). It maps: FullName -> ShortCode.
-    -- We want: ShortCode -> FullName for REFlex-style exports.
-    if type(mapShortCodes) == "table" then
-        for full, short in pairs(mapShortCodes) do
-            if short == mapName then
-                return full
-            end
-        end
+local function GetMapExportValue(entry)
+    if type(entry) ~= \"table\" then return \"\" end
+    local id = entry.mapID or entry.mapId or entry.map or entry.map_id
+    if id ~= nil then
+        local n = tonumber(id)
+        if n then return tostring(n) end
     end
-
-    return mapName
+    -- Fallback to whatever we stored historically
+    return tostring(entry.mapName or \"\")
 end
 
 local function ParseDurationStringToSeconds(s)
@@ -180,13 +174,13 @@ local function BuildArenaTeamCSV(entry, wantFriendly)
     local out = {}
 
     -- Prefer explicit team indices for non-SS arenas/BGs
-    -- Prefer explicit team indices for non-SS arenas/BGs.
-    -- If entry.myTeamIndex isn't stored for this match, derive it from our own player stat.
+
     local myStat = GetMyPlayerStat(entry)
     local myTeamIndex = entry.myTeamIndex
     if myTeamIndex == nil and myStat and myStat.teamIndex ~= nil then
         myTeamIndex = myStat.teamIndex
     end
+
     local haveTeamIndex = (myTeamIndex ~= nil)
 
     for _, p in ipairs(entry.playerStats) do
@@ -336,7 +330,7 @@ local function BuildREFlexCSV(modeKey, specFilter)
                 if okSpec then
 
                 local ts = ToNumber(entry.timestamp or entry.endTime)
-                local map = CleanCSVField(NormalizeMapName(entry.mapName or ""))
+                local map = CleanCSVField(GetMapExportValue(entry))
                 local duration = GetDurationSeconds(entry)
 
                 local victory = VictoryString(modeKey, entry)
@@ -360,7 +354,7 @@ local function BuildREFlexCSV(modeKey, specFilter)
                 local prestige = s and ToNumber(s.honorLevel) or 0
 
                 -- We do not track brawls/mercenary in Rated Stats history currently.
-                local isRated = "true"
+                local isRated = tostring((type(entry) == "table" and entry.isRated) ~= nil and entry.isRated or true)
                 local isBrawl = "false"
                 local isMerc = "false"
 
@@ -378,7 +372,8 @@ local function BuildREFlexCSV(modeKey, specFilter)
 
         -- REFlex uses d.PlayersNum (2/3). It does NOT export Solo Shuffle at all.
         -- We still allow SS export for your filter buttons; PlayersNumber is set to 6 and Victory is "nil".
-        local playersNum = ({ SoloShuffle = 6, ["2v2"] = 2, ["3v3"] = 3 })[modeKey] or 0
+        local playersNum = 0 -- REFlex writes total players in the match (e.g. 4 for 2v2, 6 for 3v3)
+        -- We compute it per-entry below.
 
         for _, entry in ipairs(data) do
             if type(entry) == "table" and not IsInitialEntry(entry) then
@@ -389,10 +384,12 @@ local function BuildREFlexCSV(modeKey, specFilter)
                 if okSpec then
 
                 local ts = ToNumber(entry.timestamp or entry.endTime)
-                local map = CleanCSVField(NormalizeMapName(entry.mapName or ""))
+                local map = CleanCSVField(GetMapExportValue(entry))
 
                 local teamComp = BuildArenaTeamCSV(entry, true)
                 local enemyComp = BuildArenaTeamCSV(entry, false)
+
+                local playersNum = (type(entry.playerStats) == "table" and #entry.playerStats) or 0
 
                 local duration = GetDurationSeconds(entry)
                 local victory = VictoryString(modeKey, entry)
@@ -409,7 +406,7 @@ local function BuildREFlexCSV(modeKey, specFilter)
                 local enemyMMR = ToNumber(entry.enemyMMR)
 
                 local spec = CleanCSVField(s and s.spec or entry.specName or "")
-                local isRated = "true"
+                local isRated = tostring((type(entry) == "table" and entry.isRated) ~= nil and entry.isRated or true)
 
                 table.insert(out,
                     ts .. ";" .. map .. ";" .. playersNum .. ";" .. CleanCSVField(teamComp) .. ";" .. CleanCSVField(enemyComp) .. ";" ..
@@ -555,6 +552,7 @@ local function EnsureExportFrame()
     UpdateButtonStates()
 
     local scroll = CreateFrame("ScrollFrame", nil, exportFrame, "UIPanelScrollFrameTemplate")
+local scroll = CreateFrame("ScrollFrame", nil, exportFrame, "UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT", exportFrame.InsetBg, "TOPLEFT", 8, -62)
     scroll:SetPoint("BOTTOMRIGHT", exportFrame.InsetBg, "BOTTOMRIGHT", -30, 10)
 
