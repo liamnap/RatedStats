@@ -150,13 +150,22 @@ local function GetDurationSeconds(entry)
 
     -- 1) If we have a formatted string (what the UI shows), parse and trust it.
     if type(entry.duration) == "string" then
-        local d = ParseDurationStringToSeconds(entry.duration)
+        -- Sanitize once (strip WoW formatting + control chars) and use the cleaned value for ALL parsing
+        local sClean = entry.duration
+        sClean = sClean:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+        sClean = sClean:gsub("%z", "")                -- nulls
+        sClean = sClean:gsub("[%c]", " ")             -- all control chars -> space
+        sClean = sClean:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+
+        print("duration(clean) =", sClean)
+
+        local d = ParseDurationStringToSeconds(sClean)
         print("ParseDurationStringToSeconds ->", d)
 
         if not d then
             -- Your DB commonly stores "X Min Y Sec"
-            local min = tonumber(entry.duration:match("(%d+)%s*[Mm]in")) or 0
-            local sec = tonumber(entry.duration:match("(%d+)%s*[Ss]ec")) or 0
+            local min = tonumber(sClean:match("(%d+)%s*[Mm]in")) or 0
+            local sec = tonumber(sClean:match("(%d+)%s*[Ss]ec")) or 0
             local total = (min * 60) + sec
             if total > 0 then d = total end
             print("fallback min/sec ->", d)
