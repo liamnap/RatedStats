@@ -93,8 +93,7 @@ local function GetMapExportValue(entry)
     return tostring(id or 0)
 end
 
-local function ParseDurationStringToSeconds
-(s)
+local function ParseDurationStringToSeconds(s)
     if type(s) ~= "string" then return nil end
 
     -- Handle "MM:SS" / "HH:MM:SS"
@@ -142,6 +141,13 @@ local function GetDurationSeconds(entry)
             d = entry.duration
         elseif type(entry.duration) == "string" then
             d = ParseDurationStringToSeconds(entry.duration)
+            if not d then
+                -- Your DB commonly stores "X Min Y Sec"
+                local min = tonumber(entry.duration:match("(%d+)%s*[Mm]in")) or 0
+                local sec = tonumber(entry.duration:match("(%d+)%s*[Ss]ec")) or 0
+                local total = (min * 60) + sec
+                if total > 0 then d = total end
+            end
         end
     end
 
