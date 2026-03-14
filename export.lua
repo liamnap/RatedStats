@@ -129,27 +129,30 @@ end
 local function GetDurationSeconds(entry)
     if type(entry) ~= "table" then return 0 end
 
-    -- Prefer numeric fields first
+    -- 1) If we have a formatted string (what the UI shows), parse and trust it.
+    if type(entry.duration) == "string" then
+        local d = ParseDurationStringToSeconds(entry.duration)
+        if not d then
+            -- Your DB commonly stores "X Min Y Sec"
+            local min = tonumber(entry.duration:match("(%d+)%s*[Mm]in")) or 0
+            local sec = tonumber(entry.duration:match("(%d+)%s*[Ss]ec")) or 0
+            local total = (min * 60) + sec
+            if total > 0 then d = total end
+        end
+        d = tonumber(d)
+        if d and d > 0 then
+            return math.floor(d + 0.5)
+        end
+        -- if parsing fails, fall through to numeric fields
+    end
+
+    -- 2) Otherwise fall back to numeric fields
     local d =
         tonumber(entry.durationSeconds) or
         tonumber(entry.durationSec) or
         tonumber(entry.matchDuration) or
-        tonumber(entry.durationRaw)
-
-    if not d then
-        if type(entry.duration) == "number" then
-            d = entry.duration
-        elseif type(entry.duration) == "string" then
-            d = ParseDurationStringToSeconds(entry.duration)
-            if not d then
-                -- Your DB commonly stores "X Min Y Sec"
-                local min = tonumber(entry.duration:match("(%d+)%s*[Mm]in")) or 0
-                local sec = tonumber(entry.duration:match("(%d+)%s*[Ss]ec")) or 0
-                local total = (min * 60) + sec
-                if total > 0 then d = total end
-            end
-        end
-    end
+        tonumber(entry.durationRaw) or
+        tonumber(entry.duration)
 
     d = tonumber(d)
     if not d or d <= 0 then return 0 end
