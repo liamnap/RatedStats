@@ -26,26 +26,73 @@ local function CleanCSVField(v)
     return v
 end
 
-local function GetMapExportValue(entry)
-    if type(entry) ~= "table" then return "" end
+-- Map export: match REFlex CSV "Map" column (numeric map ID)
+local _mapCodeToID
+local _mapNameToID
 
-    -- We store short map codes (e.g. "NPG") in history for arenas/BGs.
-    -- mapShortCodes (in config.lua) maps FullName -> ShortCode.
-    -- For export, convert ShortCode back to FullName so it looks like REFlex UI.
-    local mapName = entry.mapName
-    if mapName ~= nil then
-        mapName = tostring(mapName)
-        if type(mapShortCodes) == "table" then
-            for full, short in pairs(mapShortCodes) do
-                if short == mapName then
-                    return tostring(full)
+local function BuildMapLookups()
+    if _mapCodeToID and _mapNameToID then return end
+    _mapCodeToID = {}
+    _mapNameToID = {}
+
+    if type(RSTATS) == "table" and type(RSTATS.MapList) == "table" then
+        for id, v in pairs(RSTATS.MapList) do
+            if type(id) == "number" and type(v) == "table" then
+                if v.code and v.code ~= "" then
+                    _mapCodeToID[tostring(v.code)] = id
+                end
+                if v.name and v.name ~= "" then
+                    _mapNameToID[tostring(v.name)] = id
+                end
+                if v.short and v.short ~= "" then
+                    _mapNameToID[tostring(v.short)] = id
                 end
             end
         end
-        return mapName
+    end
+end
+
+local function ResolveMapID(entry)
+    if type(entry) ~= "table" then return 0 end
+    local mapName = entry.mapName
+    if mapName == nil then return 0 end
+
+    -- Already numeric?
+    local n = tonumber(mapName)
+    if n then return n end
+
+    BuildMapLookups()
+
+    local key = tostring(mapName)
+
+    -- 1) Arena code match (NPG/EC/TR/COC/etc)
+    local id = _mapCodeToID[key]
+    if id then return id end
+
+    -- 2) Full name match (BGs tend to store full names)
+    id = _mapNameToID[key]
+    if id then return id end
+
+    -- 3) If mapShortCodes exists (FullName -> ShortCode), expand ShortCode back to FullName then map.
+    if type(mapShortCodes) == "table" then
+        for full, short in pairs(mapShortCodes) do
+            if tostring(short) == key then
+                id = _mapNameToID[tostring(full)]
+                if id then return id end
+                break
+            end
+        end
     end
 
-    return ""
+    return 0
+end
+
+local function GetMapExportValue(entry)
+    local id = ResolveMapID(entry)
+    if not id or id <= 0 then
+        return "0"
+    end
+    return tostring(id)
 end
 
 local function ParseDurationStringToSeconds(s)
@@ -185,23 +232,16 @@ local function BuildArenaTeamCSV(entry, wantFriendly)
     local out = {}
 
     -- Prefer explicit team indices for non-SS arenas/BGs
-
-    local myStat = GetMyPlayerStat(entry)
-    local myTeamIndex = entry.myTeamIndex
-    if myTeamIndex == nil and myStat and myStat.teamIndex ~= nil then
-        myTeamIndex = myStat.teamIndex
-    end
-
-    local haveTeamIndex = (myTeamIndex ~= nil)
+    local haveTeamIndex = (entry.myTeamIndex ~= nil)
 
     for _, p in ipairs(entry.playerStats) do
         if type(p) == "table" and p.name and p.name ~= "-" then
             local isFriendly
 
-            if entry.isSoloShuffle and p.isFriendly ~= nil then
+            if p.isFriendly ~= nil then
                 isFriendly = p.isFriendly
             elseif haveTeamIndex and p.teamIndex ~= nil then
-                isFriendly = (p.teamIndex == myTeamIndex)
+                isFriendly = (p.teamIndex == entry.myTeamIndex)
             else
                 isFriendly = false
             end
@@ -365,7 +405,7 @@ local function BuildREFlexCSV(modeKey, specFilter)
                 local prestige = s and ToNumber(s.honorLevel) or 0
 
                 -- We do not track brawls/mercenary in Rated Stats history currently.
-                local isRated = tostring((type(entry) == "table" and entry.isRated) ~= nil and entry.isRated or true)
+                local isRated = "true"
                 local isBrawl = "false"
                 local isMerc = "false"
 
@@ -383,8 +423,7 @@ local function BuildREFlexCSV(modeKey, specFilter)
 
         -- REFlex uses d.PlayersNum (2/3). It does NOT export Solo Shuffle at all.
         -- We still allow SS export for your filter buttons; PlayersNumber is set to 6 and Victory is "nil".
-        local playersNum = 0 -- REFlex writes total players in the match (e.g. 4 for 2v2, 6 for 3v3)
-        -- We compute it per-entry below.
+        local playersNum = ({ SoloShuffle = 6, ["2v2"] = 2, ["3v3"] = 3 })[modeKey] or 0
 
         for _, entry in ipairs(data) do
             if type(entry) == "table" and not IsInitialEntry(entry) then
@@ -399,8 +438,6 @@ local function BuildREFlexCSV(modeKey, specFilter)
 
                 local teamComp = BuildArenaTeamCSV(entry, true)
                 local enemyComp = BuildArenaTeamCSV(entry, false)
-
-                local playersNum = (type(entry.playerStats) == "table" and #entry.playerStats) or 0
 
                 local duration = GetDurationSeconds(entry)
                 local victory = VictoryString(modeKey, entry)
@@ -417,7 +454,7 @@ local function BuildREFlexCSV(modeKey, specFilter)
                 local enemyMMR = ToNumber(entry.enemyMMR)
 
                 local spec = CleanCSVField(s and s.spec or entry.specName or "")
-                local isRated = tostring((type(entry) == "table" and entry.isRated) ~= nil and entry.isRated or true)
+                local isRated = "true"
 
                 table.insert(out,
                     ts .. ";" .. map .. ";" .. playersNum .. ";" .. CleanCSVField(teamComp) .. ";" .. CleanCSVField(enemyComp) .. ";" ..
@@ -563,7 +600,6 @@ local function EnsureExportFrame()
     UpdateButtonStates()
 
     local scroll = CreateFrame("ScrollFrame", nil, exportFrame, "UIPanelScrollFrameTemplate")
-local scroll = CreateFrame("ScrollFrame", nil, exportFrame, "UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT", exportFrame.InsetBg, "TOPLEFT", 8, -62)
     scroll:SetPoint("BOTTOMRIGHT", exportFrame.InsetBg, "BOTTOMRIGHT", -30, 10)
 
