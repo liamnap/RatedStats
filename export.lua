@@ -165,14 +165,13 @@ local function GetDurationSeconds(entry)
 		local nums = {}
 		for n in sClean:gmatch("(%d+)") do
 			nums[#nums+1] = tonumber(n)
-			if #nums >= 3 then break end
 		end
 		
 		local d
         if #nums >= 2 then
-            -- Use the LAST two numbers (minutes, seconds).
-            -- Some strings contain an extra stray number (we've observed "2 Min 21 Sec" => 2,4,21).
-            local min = nums[#nums - 1]
+            -- Use FIRST and LAST numbers as minutes/seconds.
+            -- We consistently see a stray middle number (e.g. 2,4,21 or 2,4,24).
+            local min = nums[1]
             local sec = nums[#nums]
             d = (min * 60) + sec
 		elseif #nums == 1 then
