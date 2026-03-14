@@ -161,28 +161,45 @@ local function GetDurationSeconds(entry)
 
         print("duration(clean) =", sClean)
 
-        -- Parse strictly from the cleaned string (anchored). This avoids the "244" bug.
-		local nums = {}
-		for n in sClean:gmatch("(%d+)") do
-			nums[#nums+1] = tonumber(n)
-		end
-		
-		local d
-		if #nums == 3 then
-			if nums[2] == 4 then
-				-- Your weird format: minutes, 4, seconds
-				d = (nums[1] * 60) + nums[3]
-			else
-				-- Normal hr/min/sec
-				d = (nums[1] * 3600) + (nums[2] * 60) + nums[3]
-			end
-		elseif #nums == 2 then
-			d = (nums[1] * 60) + nums[2]
-		elseif #nums == 1 then
-			d = nums[1]
-		end
-		
-		print("NUM parsed ->", d, "nums=", nums[1], nums[2], nums[3])
+        -- Parse from numbers only (your strings contain a consistent stray middle number: e.g. 2,4,21).
+        local nums = {}
+        for n in sClean:gmatch("(%d+)") do
+            nums[#nums+1] = tonumber(n)
+        end
+
+        print("NUMS extracted:", "#=" .. tostring(#nums), "vals=", nums[1], nums[2], nums[3], nums[4])
+
+        local d = nil
+
+        if #nums == 3 then
+            if nums[2] == 4 then
+                -- minutes, STRAY(4), seconds
+                local min = nums[1]
+                local stray = nums[2]
+                local sec = nums[3]
+                d = (min * 60) + sec
+                print(("MATH (min,STRAY,sec): (%d*60)+%d (ignored %d) => %d"):format(min, sec, stray, d))
+            else
+                -- hours, minutes, seconds
+                local hr = nums[1]
+                local min = nums[2]
+                local sec = nums[3]
+                d = (hr * 3600) + (min * 60) + sec
+                print(("MATH (hr,min,sec): (%d*3600)+(%d*60)+%d => %d"):format(hr, min, sec, d))
+            end
+        elseif #nums == 2 then
+            local min = nums[1]
+            local sec = nums[2]
+            d = (min * 60) + sec
+            print(("MATH (min,sec): (%d*60)+%d => %d"):format(min, sec, d))
+        elseif #nums == 1 then
+            d = nums[1]
+            print(("MATH (sec only): %d => %d"):format(nums[1], d))
+        else
+            print("MATH: no numbers found in duration string")
+        end
+
+        print("NUM parsed ->", d)
 
         d = tonumber(d)
         print("final parsed d ->", d)
