@@ -169,9 +169,12 @@ local function GetDurationSeconds(entry)
 		end
 		
 		local d
-		if #nums >= 2 then
-			-- "X Min Y Sec" style (minutes, seconds)
-			d = (nums[1] * 60) + nums[2]
+        if #nums >= 2 then
+            -- Use the LAST two numbers (minutes, seconds).
+            -- Some strings contain an extra stray number (we've observed "2 Min 21 Sec" => 2,4,21).
+            local min = nums[#nums - 1]
+            local sec = nums[#nums]
+            d = (min * 60) + sec
 		elseif #nums == 1 then
 			-- "45 Sec" or similar (just seconds)
 			d = nums[1]
