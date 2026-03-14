@@ -162,19 +162,22 @@ local function GetDurationSeconds(entry)
         print("duration(clean) =", sClean)
 
         -- Parse strictly from the cleaned string (anchored). This avoids the "244" bug.
-        local lower = sClean:lower()
-        local min, sec = lower:match("^(%d+)%s*min%s*(%d+)%s*sec$")
-        local d
-        if min and sec then
-            d = (tonumber(min) * 60) + tonumber(sec)
-        else
-            -- Also allow "MM:SS"
-            local mm, ss = sClean:match("^(%d+):(%d+)$")
-            if mm and ss then
-                d = (tonumber(mm) * 60) + tonumber(ss)
-            end
-        end
-        print("STRICT parsed ->", d)
+		local nums = {}
+		for n in sClean:gmatch("(%d+)") do
+			nums[#nums+1] = tonumber(n)
+			if #nums >= 3 then break end
+		end
+		
+		local d
+		if #nums >= 2 then
+			-- "X Min Y Sec" style (minutes, seconds)
+			d = (nums[1] * 60) + nums[2]
+		elseif #nums == 1 then
+			-- "45 Sec" or similar (just seconds)
+			d = nums[1]
+		end
+		
+		print("NUM parsed ->", d, "nums=", nums[1], nums[2], nums[3])
 
         d = tonumber(d)
         print("final parsed d ->", d)
