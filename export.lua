@@ -168,14 +168,17 @@ local function GetDurationSeconds(entry)
 		end
 		
 		local d
-        if #nums >= 2 then
-            -- Use FIRST and LAST numbers as minutes/seconds.
-            -- We consistently see a stray middle number (e.g. 2,4,21 or 2,4,24).
-            local min = nums[1]
-            local sec = nums[#nums]
-            d = (min * 60) + sec
+		if #nums == 3 then
+			if nums[2] == 4 then
+				-- Your weird format: minutes, 4, seconds
+				d = (nums[1] * 60) + nums[3]
+			else
+				-- Normal hr/min/sec
+				d = (nums[1] * 3600) + (nums[2] * 60) + nums[3]
+			end
+		elseif #nums == 2 then
+			d = (nums[1] * 60) + nums[2]
 		elseif #nums == 1 then
-			-- "45 Sec" or similar (just seconds)
 			d = nums[1]
 		end
 		
