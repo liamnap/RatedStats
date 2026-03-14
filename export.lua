@@ -1,7 +1,12 @@
 -- Rated Stats: Export / Wipe utilities
 -- Export window provides REFlex-compatible CSV headings and lets users filter by bracket.
+-- Headings + field semantics are taken from REFlex's DumpCSV() implementation.
 
 local function GetPlayerKey()
+    return UnitName("player") .. "-" .. GetRealmName()
+end
+
+local function GetPlayerFullName()
     return UnitName("player") .. "-" .. GetRealmName()
 end
 
@@ -9,19 +14,6 @@ local function ToNumber(v)
     local n = tonumber(v)
     if n then return n end
     return 0
-end
-
-local function IsWin(winLoss)
-    return winLoss == "W" or winLoss == true or winLoss == 1
-end
-
-local function VictoryString(entry)
-    -- REFlex: for Solo Shuffle, Victory is literally "nil" in CSV.
-    if type(entry) == "table" and entry.isSoloShuffle then
-        return "nil"
-    end
-    local wl = type(entry) == "table" and (entry.friendlyWinLoss or entry.winLoss) or nil
-    return tostring(IsWin(wl))
 end
 
 local function CleanCSVField(v)
@@ -34,98 +26,193 @@ local function CleanCSVField(v)
     return v
 end
 
-local function GetDurationSeconds(entry)
-    if type(entry) ~= "table" then return 0 end
-    local n = tonumber(entry.matchDuration) or tonumber(entry.durationSeconds) or tonumber(entry.durationRaw) or tonumber(entry.duration)
-    if n then return n end
-    return 0
-end
-
-local function GetMyPlayerStat(entry)
-    if type(entry) ~= "table" then return nil end
-    local ps = entry.playerStats
-    if type(ps) ~= "table" then return nil end
-    local myGUID = UnitGUID and UnitGUID("player") or nil
-    local myKey = GetPlayerKey()
-    for _, p in ipairs(ps) do
-        if type(p) == "table" then
-            if myGUID and p.guid and p.guid == myGUID then return p end
-            if p.name and p.name == myKey then return p end
-        end
-    end
-    return nil
-end
-
-local CLASS_TOKEN_BY_LOCALIZED
-local function BuildClassTokenMap()
-    if CLASS_TOKEN_BY_LOCALIZED then return end
-    CLASS_TOKEN_BY_LOCALIZED = {}
-    if type(LOCALIZED_CLASS_NAMES_MALE) == "table" then
-        for token, loc in pairs(LOCALIZED_CLASS_NAMES_MALE) do
-            CLASS_TOKEN_BY_LOCALIZED[loc] = token
-        end
-    end
-    if type(LOCALIZED_CLASS_NAMES_FEMALE) == "table" then
-        for token, loc in pairs(LOCALIZED_CLASS_NAMES_FEMALE) do
-            CLASS_TOKEN_BY_LOCALIZED[loc] = token
-        end
-    end
-end
-
-local function ClassTokenFromLocalized(loc)
-    BuildClassTokenMap()
-    if not loc then return "" end
-    return CLASS_TOKEN_BY_LOCALIZED[loc] or tostring(loc)
-end
-
 local function NormalizeMapName(mapName)
-    -- Your DB often stores short arena codes (NPG/EC/COC/etc). REFlex uses readable names.
-    if not mapName then return "" end
+    if mapName == nil then return "" end
     mapName = tostring(mapName)
+
+    -- mapShortCodes is defined in config.lua (global). It maps: FullName -> ShortCode.
+    -- We want: ShortCode -> FullName for REFlex-style exports.
     if type(mapShortCodes) == "table" then
-        -- Build reverse on the fly (small table).
         for full, short in pairs(mapShortCodes) do
             if short == mapName then
                 return full
             end
         end
     end
+
     return mapName
 end
 
-local function FormatComp(players)
-    -- REFlex comp tokens: CLASS-SPEC-NAME, comma separated.
-    if type(players) ~= "table" then return "" end
-    local out = {}
-    for _, p in ipairs(players) do
-        if type(p) == "table" then
-            local cls = ClassTokenFromLocalized(p.class)
-            local spec = p.spec and tostring(p.spec) or ""
-            local name = p.name and tostring(p.name) or ""
-            table.insert(out, cls .. "-" .. spec .. "-" .. name)
+local function ParseDurationStringToSeconds(s)
+    if type(s) ~= "string" then return nil end
+
+    -- Handle "MM:SS" / "HH:MM:SS"
+    if s:match("^%d+:%d+:%d+$") then
+        local h, m, sec = s:match("^(%d+):(%d+):(%d+)$")
+        if h and m and sec then
+            return (tonumber(h) * 3600) + (tonumber(m) * 60) + tonumber(sec)
+        end
+    elseif s:match("^%d+:%d+$") then
+        local m, sec = s:match("^(%d+):(%d+)$")
+        if m and sec then
+            return (tonumber(m) * 60) + tonumber(sec)
         end
     end
-    table.sort(out)
-    return table.concat(out, ",")
+
+    -- Handle Blizzard SecondsToTime style: "1 Hr 2 Min 3 Sec" / "2 Min 10 Sec" / "45 Sec"
+    local lower = s:lower()
+    local h = lower:match("(%d+)%s*hr") or lower:match("(%d+)%s*hour")
+    local m = lower:match("(%d+)%s*min")
+    local sec = lower:match("(%d+)%s*sec")
+
+    if h or m or sec then
+        local total = 0
+        if h then total = total + (tonumber(h) * 3600) end
+        if m then total = total + (tonumber(m) * 60) end
+        if sec then total = total + tonumber(sec) end
+        if total > 0 then return total end
+    end
+
+    return nil
 end
 
-local function GetArenaComps(entry)
-    if type(entry) ~= "table" or type(entry.playerStats) ~= "table" then
-        return "", ""
+local function GetDurationSeconds(entry)
+    if type(entry) ~= "table" then return 0 end
+
+    -- Prefer numeric fields first
+    local d =
+        tonumber(entry.durationSeconds) or
+        tonumber(entry.durationSec) or
+        tonumber(entry.matchDuration) or
+        tonumber(entry.durationRaw)
+
+    if not d then
+        if type(entry.duration) == "number" then
+            d = entry.duration
+        elseif type(entry.duration) == "string" then
+            d = ParseDurationStringToSeconds(entry.duration)
+        end
     end
-    local me = GetMyPlayerStat(entry)
-    local myTeamIndex = entry.myTeamIndex or (me and me.teamIndex) or nil
-    local team, enemy = {}, {}
-    for _, p in ipairs(entry.playerStats) do
-        if type(p) == "table" then
-            if myTeamIndex ~= nil and p.teamIndex == myTeamIndex then
-                table.insert(team, p)
-            else
-                table.insert(enemy, p)
+
+    d = tonumber(d)
+    if not d or d <= 0 then return 0 end
+
+    -- Some APIs return ms; matches will never be > 60,000 seconds, so treat big numbers as ms.
+    if d > 60000 then d = d / 1000 end
+    return math.floor(d + 0.5)
+end
+
+local function VictoryString(modeKey, entry)
+    -- REFlex uses tostring(boolean) => "true"/"false", and for Solo Shuffle returns nil => "nil".
+    if modeKey == "SoloShuffle" then
+        return "nil"
+    end
+
+    local wl = (type(entry) == "table" and (entry.friendlyWinLoss or entry.winLoss))
+    if wl == "W" then return "true" end
+    if wl == "L" then return "false" end
+
+    -- If it isn't W/L (e.g. "I"/"Initial"), REFlex doesn't have that concept; treat as false.
+    return "false"
+end
+
+
+local function GetSpecString(entry, s)
+    local spec = (s and s.spec) or (type(entry) == "table" and entry.specName) or ""
+    return tostring(spec or "")
+end
+
+local function GetMyPlayerStat(entry)
+    if type(entry) ~= "table" or type(entry.playerStats) ~= "table" then return nil end
+
+    local myGUID = UnitGUID("player")
+    local myName = GetPlayerFullName()
+
+    -- 1) Exact GUID match
+    if myGUID then
+        for _, p in ipairs(entry.playerStats) do
+            if type(p) == "table" and p.guid and p.guid == myGUID then
+                return p
             end
         end
     end
-    return FormatComp(team), FormatComp(enemy)
+
+    -- 2) Exact Name-Realm match
+    for _, p in ipairs(entry.playerStats) do
+        if type(p) == "table" and p.name and p.name == myName then
+            return p
+        end
+    end
+
+    -- 3) First friendly (best-effort)
+    for _, p in ipairs(entry.playerStats) do
+        if type(p) == "table" and p.isFriendly then
+            return p
+        end
+    end
+
+    return entry.playerStats[1]
+end
+
+local function ClassNameToToken(className)
+    if not className or className == "" then return "" end
+
+    -- Invert Blizzard tables (localized -> token)
+    if type(LOCALIZED_CLASS_NAMES_MALE) == "table" then
+        for token, loc in pairs(LOCALIZED_CLASS_NAMES_MALE) do
+            if loc == className then return token end
+        end
+    end
+    if type(LOCALIZED_CLASS_NAMES_FEMALE) == "table" then
+        for token, loc in pairs(LOCALIZED_CLASS_NAMES_FEMALE) do
+            if loc == className then return token end
+        end
+    end
+
+    -- Last resort: return whatever we have
+    return tostring(className)
+end
+
+local function BuildArenaTeamCSV(entry, wantFriendly)
+    -- Match REFlex format: "CLASS-SPEC-NAME" comma-separated, sorted.
+    if type(entry) ~= "table" or type(entry.playerStats) ~= "table" then return "" end
+
+    local out = {}
+
+    -- Prefer explicit team indices for non-SS arenas/BGs
+    -- Prefer explicit team indices for non-SS arenas/BGs.
+    -- If entry.myTeamIndex isn't stored for this match, derive it from our own player stat.
+    local myStat = GetMyPlayerStat(entry)
+    local myTeamIndex = entry.myTeamIndex
+    if myTeamIndex == nil and myStat and myStat.teamIndex ~= nil then
+        myTeamIndex = myStat.teamIndex
+    end
+    local haveTeamIndex = (myTeamIndex ~= nil)
+
+    for _, p in ipairs(entry.playerStats) do
+        if type(p) == "table" and p.name and p.name ~= "-" then
+            local isFriendly
+
+            if p.isFriendly ~= nil then
+                isFriendly = p.isFriendly
+            elseif haveTeamIndex and p.teamIndex ~= nil then
+                isFriendly = (p.teamIndex == myTeamIndex)
+            else
+                isFriendly = false
+            end
+
+            local pick = wantFriendly and isFriendly or (not wantFriendly and not isFriendly)
+            if pick then
+                local classToken = ClassNameToToken(p.class)
+                local specName = tostring(p.spec or "")
+                local name = tostring(p.name)
+                table.insert(out, classToken .. "-" .. specName .. "-" .. name)
+            end
+        end
+    end
+
+    table.sort(out)
+    return table.concat(out, ",")
 end
 
 local function GetHistoryForExport(modeKey)
@@ -140,7 +227,7 @@ local function GetHistoryForExport(modeKey)
     local pdata = db[key]
     if type(pdata) ~= "table" then return nil end
 
-    -- If available, reuse the addon helper for spec-aware history (SS / SoloRBG).
+    -- Reuse the addon helper for spec-aware history (SS / SoloRBG) when available.
     if RSTATS and RSTATS.GetHistoryForTab then
         local tabID = ({
             SoloShuffle = 1,
@@ -168,74 +255,114 @@ local function GetHistoryForExport(modeKey)
     })[modeKey]
 end
 
-local function GetArenaComps(entry)
-    local friendly = {}
-    local enemy = {}
 
-    local teamFaction = entry.teamFaction
-    if not teamFaction and type(entry.playerStats) == "table" and entry.playerStats[1] and entry.playerStats[1].faction then
-        teamFaction = entry.playerStats[1].faction
-    end
+local function IsInitialEntry(entry)
+    if type(entry) ~= "table" then return true end
+    if entry.isInitial then return true end
+    if entry.matchType == "Initial" then return true end
+    if entry.map == "Initial" then return true end
+    if entry.bracket == "Initial" then return true end
+    return false
+end
+local function GetFilteredEntries(modeKey, specFilter)
+    local data = GetHistoryForExport(modeKey)
+    if type(data) ~= "table" then return nil end
 
-    if type(entry.playerStats) == "table" then
-        for _, ps in ipairs(entry.playerStats) do
-            if ps and ps.name and ps.name ~= "-" then
-                local spec = ps.spec or ""
-                local token = spec .. "-" .. ps.name
-                if teamFaction and ps.faction == teamFaction then
-                    table.insert(friendly, token)
-                else
-                    table.insert(enemy, token)
-                end
+    local out = {}
+    for _, entry in ipairs(data) do
+        if type(entry) == "table" and not IsInitialEntry(entry) then
+            local s = GetMyPlayerStat(entry)
+            local specRaw = GetSpecString(entry, s)
+            if not specFilter or specFilter == "ALL" or specRaw == specFilter then
+                table.insert(out, entry)
             end
         end
     end
-
-    table.sort(friendly)
-    table.sort(enemy)
-
-    return table.concat(friendly, ","), table.concat(enemy, ",")
+    return out
 end
 
-local function BuildREFlexCSV(modeKey)
+local function HasRows(modeKey, specFilter)
+    local data = GetFilteredEntries(modeKey, specFilter)
+    return (type(data) == "table" and #data > 0)
+end
+
+local function GetSpecsForMode(modeKey)
+    local data = GetFilteredEntries(modeKey, "ALL")
+    local seen = {}
+    local specs = {}
+    if type(data) == "table" then
+        for _, entry in ipairs(data) do
+            local s = GetMyPlayerStat(entry)
+            local specRaw = GetSpecString(entry, s)
+            if specRaw and specRaw ~= "" and not seen[specRaw] then
+                seen[specRaw] = true
+                table.insert(specs, specRaw)
+            end
+        end
+    end
+    table.sort(specs)
+    return specs
+end
+
+
+local function BuildREFlexCSV(modeKey, specFilter)
     local data = GetHistoryForExport(modeKey)
+
+    -- Headers are EXACTLY what REFlex writes in DumpCSV().
+    local headerBG = "Timestamp;Map;Duration;Victory;KillingBlows;HonorKills;Deaths;Damage;Healing;Honor;RatingChange;MMR;EnemyMMR;Specialization;PrestigeLevel;isRated;isBrawl;isMercenary\n"
+    local headerArena = "Timestamp;Map;PlayersNumber;TeamComposition;EnemyComposition;Duration;Victory;KillingBlows;Damage;Healing;Honor;RatingChange;MMR;EnemyMMR;Specialization;isRated\n"
+
     if type(data) ~= "table" then
-        return "Timestamp;Map;Duration;Victory;KillingBlows;HonorKills;Deaths;Damage;Healing;Honor;RatingChange;MMR;EnemyMMR;Specialization;PrestigeLevel;isRated;isBrawl;isMercenary\n"
+        -- Return a valid header even if there is no data.
+        if modeKey == "RBG" or modeKey == "SoloRBG" then
+            return headerBG
+        else
+            return headerArena
+        end
     end
 
     local isBG = (modeKey == "RBG" or modeKey == "SoloRBG")
-
     local out = {}
 
     if isBG then
-        table.insert(out, "Timestamp;Map;Duration;Victory;KillingBlows;HonorKills;Deaths;Damage;Healing;Honor;RatingChange;MMR;EnemyMMR;Specialization;PrestigeLevel;isRated;isBrawl;isMercenary\n")
+        table.insert(out, headerBG)
+
         for _, entry in ipairs(data) do
-            if type(entry) == "table" and not entry.isInitial then
-                local ps = GetMyPlayerStat(entry)
+            if type(entry) == "table" and not IsInitialEntry(entry) then
+                local s = GetMyPlayerStat(entry)
+
+                local specRaw = GetSpecString(entry, s)
+                local okSpec = (not specFilter) or (specFilter == "ALL") or (specRaw == specFilter)
+                if okSpec then
 
                 local ts = ToNumber(entry.timestamp or entry.endTime)
                 local map = CleanCSVField(NormalizeMapName(entry.mapName or ""))
-
                 local duration = GetDurationSeconds(entry)
-                local victory = VictoryString(entry)
 
-                local kb = ps and ToNumber(ps.killingBlows) or 0
-                local hk = ps and ToNumber(ps.honorableKills) or 0
-                local deaths = ps and ToNumber(ps.deaths) or 0
-                local dmg = ps and ToNumber(ps.damage) or 0
-                local heal = ps and ToNumber(ps.healing) or 0
+                local victory = VictoryString(modeKey, entry)
 
-                local honor = ToNumber(entry.honor)
-                local ratingChange = ToNumber(ps and ps.ratingChange or entry.friendlyRatingChange)
-                local mmr = ToNumber(entry.friendlyMMR or entry.mmr)
+                local kb = s and ToNumber(s.killingBlows) or 0
+                local hk = s and ToNumber(s.honorableKills) or 0
+                local deaths = s and ToNumber(s.deaths) or 0
+                local dmg = s and ToNumber(s.damage) or 0
+                local heal = s and ToNumber(s.healing) or 0
+
+                -- Rated Stats does not currently store honor gained as a per-match field like REFlex.
+                local honor = 0
+
+                local ratingChange = s and ToNumber(s.ratingChange) or 0
+
+                -- REFlex prints 0 if not rated; we always export numeric.
+                local mmr = ToNumber(entry.friendlyMMR)
                 local enemyMMR = ToNumber(entry.enemyMMR)
 
-                local spec = CleanCSVField(entry.specName or "")
-                local prestige = ToNumber(entry.prestigeLevel)
+                local spec = CleanCSVField(s and s.spec or entry.specName or "")
+                local prestige = s and ToNumber(s.honorLevel) or 0
 
-                local isRated = 1
-                local isBrawl = 0
-                local isMerc = 0
+                -- We do not track brawls/mercenary in Rated Stats history currently.
+                local isRated = "true"
+                local isBrawl = "false"
+                local isMerc = "false"
 
                 table.insert(out,
                     ts .. ";" .. map .. ";" .. duration .. ";" .. victory .. ";" ..
@@ -243,41 +370,53 @@ local function BuildREFlexCSV(modeKey)
                     ratingChange .. ";" .. mmr .. ";" .. enemyMMR .. ";" .. spec .. ";" .. prestige .. ";" ..
                     isRated .. ";" .. isBrawl .. ";" .. isMerc .. "\n"
                 )
+                end
             end
         end
     else
-        table.insert(out, "Timestamp;Map;PlayersNumber;TeamComposition;EnemyComposition;Duration;Victory;KillingBlows;Damage;Healing;Honor;RatingChange;MMR;EnemyMMR;Specialization;isRated\n")
+        table.insert(out, headerArena)
+
+        -- REFlex uses d.PlayersNum (2/3). It does NOT export Solo Shuffle at all.
+        -- We still allow SS export for your filter buttons; PlayersNumber is set to 6 and Victory is "nil".
         local playersNum = ({ SoloShuffle = 6, ["2v2"] = 2, ["3v3"] = 3 })[modeKey] or 0
 
         for _, entry in ipairs(data) do
-            if type(entry) == "table" and not entry.isInitial then
-                local ps = GetMyPlayerStat(entry)
+            if type(entry) == "table" and not IsInitialEntry(entry) then
+                local s = GetMyPlayerStat(entry)
+
+                local specRaw = GetSpecString(entry, s)
+                local okSpec = (not specFilter) or (specFilter == "ALL") or (specRaw == specFilter)
+                if okSpec then
 
                 local ts = ToNumber(entry.timestamp or entry.endTime)
                 local map = CleanCSVField(NormalizeMapName(entry.mapName or ""))
 
-                local teamComp, enemyComp = GetArenaComps(entry)
+                local teamComp = BuildArenaTeamCSV(entry, true)
+                local enemyComp = BuildArenaTeamCSV(entry, false)
 
                 local duration = GetDurationSeconds(entry)
-                local victory = VictoryString(entry)
+                local victory = VictoryString(modeKey, entry)
 
-                local kb = ps and ToNumber(ps.killingBlows) or 0
-                local dmg = ps and ToNumber(ps.damage) or 0
-                local heal = ps and ToNumber(ps.healing) or 0
+                local kb = s and ToNumber(s.killingBlows) or 0
+                local dmg = s and ToNumber(s.damage) or 0
+                local heal = s and ToNumber(s.healing) or 0
 
-                local honor = ToNumber(entry.honor)
-                local ratingChange = ToNumber(ps and ps.ratingChange or entry.friendlyRatingChange)
-                local mmr = ToNumber(entry.friendlyMMR or entry.mmr)
+                -- Rated Stats does not currently store honor gained as a per-match field like REFlex.
+                local honor = 0
+
+                local ratingChange = s and ToNumber(s.ratingChange) or 0
+                local mmr = ToNumber(entry.friendlyMMR)
                 local enemyMMR = ToNumber(entry.enemyMMR)
 
-                local spec = CleanCSVField(entry.specName or "")
-                local isRated = 1
+                local spec = CleanCSVField(s and s.spec or entry.specName or "")
+                local isRated = "true"
 
                 table.insert(out,
                     ts .. ";" .. map .. ";" .. playersNum .. ";" .. CleanCSVField(teamComp) .. ";" .. CleanCSVField(enemyComp) .. ";" ..
                     duration .. ";" .. victory .. ";" .. kb .. ";" .. dmg .. ";" .. heal .. ";" .. honor .. ";" ..
                     ratingChange .. ";" .. mmr .. ";" .. enemyMMR .. ";" .. spec .. ";" .. isRated .. "\n"
                 )
+                end
             end
         end
     end
@@ -287,6 +426,7 @@ end
 
 local exportFrame
 local selectedModeKey = "SoloShuffle"
+local selectedSpecKey = "ALL"
 
 local function EnsureExportFrame()
     if exportFrame then return end
@@ -299,7 +439,7 @@ local function EnsureExportFrame()
 
     exportFrame.TitleText:SetText("Rated Stats - Export Data (REFlex CSV)")
 
-    -- Mode buttons (top row inside inset)
+    -- Spec buttons (row 1) + Mode buttons (row 2)
     local modes = {
         { key = "SoloShuffle", label = "SS" },
         { key = "2v2", label = "2v2" },
@@ -307,6 +447,62 @@ local function EnsureExportFrame()
         { key = "RBG", label = "RBG" },
         { key = "SoloRBG", label = "SoloRBG" },
     }
+
+    local function SetButtonGrey(b, grey)
+        if not b then return end
+        if grey then
+            b:SetAlpha(0.40)
+            b:SetEnabled(true)
+        else
+            b:SetAlpha(1.0)
+            b:SetEnabled(true)
+        end
+    end
+
+    local function RefreshExportText()
+        if exportFrame and exportFrame.EditBox then
+            exportFrame.EditBox:SetText(BuildREFlexCSV(selectedModeKey, selectedSpecKey))
+            exportFrame.EditBox:HighlightText()
+        end
+    end
+
+    local function RebuildSpecButtons()
+        if not exportFrame then return end
+        exportFrame.SpecButtons = exportFrame.SpecButtons or {}
+
+        -- Hide old buttons
+        for _, b in ipairs(exportFrame.SpecButtons) do
+            b:Hide()
+            b:SetParent(nil)
+        end
+        wipe(exportFrame.SpecButtons)
+
+        local specs = GetSpecsForMode(selectedModeKey)
+        local labels = { { key = "ALL", label = "All" } }
+        for _, specName in ipairs(specs) do
+            table.insert(labels, { key = specName, label = specName })
+        end
+
+        local prev
+        for i = 1, #labels do
+            local sp = labels[i]
+            local b = CreateFrame("Button", nil, exportFrame, "UIPanelButtonTemplate")
+            b:SetSize(120, 22)
+            if prev then
+                b:SetPoint("TOPLEFT", prev, "TOPRIGHT", 6, 0)
+            else
+                b:SetPoint("TOPLEFT", exportFrame.InsetBg, "TOPLEFT", 10, -8)
+            end
+            b:SetText(sp.label)
+            b:SetScript("OnClick", function()
+                selectedSpecKey = sp.key
+                RefreshExportText()
+                if exportFrame.UpdateButtonStates then exportFrame.UpdateButtonStates() end
+            end)
+            table.insert(exportFrame.SpecButtons, b)
+            prev = b
+        end
+    end
 
     local prev
     exportFrame.ModeButtons = {}
@@ -318,22 +514,48 @@ local function EnsureExportFrame()
         if prev then
             b:SetPoint("TOPLEFT", prev, "TOPRIGHT", 6, 0)
         else
-            b:SetPoint("TOPLEFT", exportFrame.InsetBg, "TOPLEFT", 10, -8)
+            -- Mode row is below spec buttons row
+            b:SetPoint("TOPLEFT", exportFrame.InsetBg, "TOPLEFT", 10, -34)
         end
         b:SetText(m.label)
         b:SetScript("OnClick", function()
             selectedModeKey = m.key
-            if exportFrame and exportFrame.EditBox then
-                exportFrame.EditBox:SetText(BuildREFlexCSV(selectedModeKey))
-                exportFrame.EditBox:HighlightText()
-            end
+            -- When changing mode, rebuild spec list (spec availability differs per bracket)
+            selectedSpecKey = "ALL"
+            RebuildSpecButtons()
+            RefreshExportText()
+            if exportFrame.UpdateButtonStates then exportFrame.UpdateButtonStates() end
         end)
         exportFrame.ModeButtons[m.key] = b
         prev = b
     end
 
+    local function UpdateButtonStates()
+        -- Grey out mode buttons that have no rows for the selected spec
+        for _, m in ipairs(modes) do
+            local b = exportFrame.ModeButtons[m.key]
+            SetButtonGrey(b, not HasRows(m.key, selectedSpecKey))
+        end
+
+        -- Grey out spec buttons that have no rows for the selected mode
+        if exportFrame.SpecButtons then
+            for _, b in ipairs(exportFrame.SpecButtons) do
+                local label = b:GetText()
+                local key = (label == "All") and "ALL" or label
+                SetButtonGrey(b, not HasRows(selectedModeKey, key))
+            end
+        end
+    end
+
+    exportFrame.UpdateButtonStates = UpdateButtonStates
+    exportFrame.RebuildSpecButtons = RebuildSpecButtons
+    exportFrame.RefreshExportText = RefreshExportText
+
+    RebuildSpecButtons()
+    UpdateButtonStates()
+
     local scroll = CreateFrame("ScrollFrame", nil, exportFrame, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", exportFrame.InsetBg, "TOPLEFT", 8, -36)
+    scroll:SetPoint("TOPLEFT", exportFrame.InsetBg, "TOPLEFT", 8, -62)
     scroll:SetPoint("BOTTOMRIGHT", exportFrame.InsetBg, "BOTTOMRIGHT", -30, 10)
 
     local edit = CreateFrame("EditBox", nil, scroll)
@@ -348,8 +570,9 @@ local function EnsureExportFrame()
     exportFrame.EditBox = edit
 
     exportFrame:SetScript("OnShow", function()
-        exportFrame.EditBox:SetText(BuildREFlexCSV(selectedModeKey))
-        exportFrame.EditBox:HighlightText()
+        if exportFrame.RebuildSpecButtons then exportFrame.RebuildSpecButtons() end
+        if exportFrame.UpdateButtonStates then exportFrame.UpdateButtonStates() end
+        if exportFrame.RefreshExportText then exportFrame.RefreshExportText() end
     end)
 
     exportFrame.EditBox:SetScript("OnMouseDown", function(self, button)
