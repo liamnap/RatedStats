@@ -128,9 +128,6 @@ local function GetArenaComps(entry)
     return FormatComp(team), FormatComp(enemy)
 end
 
-return v
-end
-
 local function GetHistoryForExport(modeKey)
     if type(LoadData) == "function" then
         LoadData()
