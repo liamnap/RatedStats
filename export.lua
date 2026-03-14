@@ -129,17 +129,26 @@ end
 local function GetDurationSeconds(entry)
     if type(entry) ~= "table" then return 0 end
 
+    print("---- GetDurationSeconds ----")
+    print("ts=", entry.timestamp or entry.endTime, "mapName=", entry.mapName, "durationType=", type(entry.duration), "duration=", entry.duration)
+
     -- 1) If we have a formatted string (what the UI shows), parse and trust it.
     if type(entry.duration) == "string" then
         local d = ParseDurationStringToSeconds(entry.duration)
+        print("ParseDurationStringToSeconds ->", d)
+
         if not d then
             -- Your DB commonly stores "X Min Y Sec"
             local min = tonumber(entry.duration:match("(%d+)%s*[Mm]in")) or 0
             local sec = tonumber(entry.duration:match("(%d+)%s*[Ss]ec")) or 0
             local total = (min * 60) + sec
             if total > 0 then d = total end
+            print("fallback min/sec ->", d)
         end
+
         d = tonumber(d)
+        print("final parsed d ->", d)
+
         if d and d > 0 then
             return math.floor(d + 0.5)
         end
@@ -154,10 +163,18 @@ local function GetDurationSeconds(entry)
         tonumber(entry.durationRaw) or
         tonumber(entry.duration)
 
+    print("numeric fallback fields:",
+        "durationSeconds=", entry.durationSeconds,
+        "durationSec=", entry.durationSec,
+        "matchDuration=", entry.matchDuration,
+        "durationRaw=", entry.durationRaw,
+        "duration=", entry.duration,
+        "=> d=", d
+    )
+
     d = tonumber(d)
     if not d or d <= 0 then return 0 end
 
-    -- Some APIs return ms; matches will never be > 60,000 seconds, so treat big numbers as ms.
     if d > 60000 then d = d / 1000 end
     return math.floor(d + 0.5)
 end
