@@ -27,14 +27,14 @@ local function CleanCSVField(v)
 end
 
 local function GetMapExportValue(entry)
-    if type(entry) ~= \"table\" then return \"\" end
+    if type(entry) ~= "table" then return "" end
     local id = entry.mapID or entry.mapId or entry.map or entry.map_id
     if id ~= nil then
         local n = tonumber(id)
         if n then return tostring(n) end
     end
     -- Fallback to whatever we stored historically
-    return tostring(entry.mapName or \"\")
+    return tostring(entry.mapName or "")
 end
 
 local function ParseDurationStringToSeconds(s)
