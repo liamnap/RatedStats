@@ -93,60 +93,8 @@ local function GetMapExportValue(entry)
     return tostring(id or 0)
 end
 
-local function ParseDurationStringToSeconds(s)
-    if type(s) ~= "string" then return nil end
-
-    -- Strip WoW color codes like |cffffffff and |r
-    s = s:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
-
-    -- Normalize whitespace
-    s = s:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
-
-    local lower = s:lower()
-
-    -- Exact "X min Y sec" (your common case)
-    local min, sec = lower:match("^(%d+)%s*min%s*(%d+)%s*sec$")
-    if min and sec then
-        return (tonumber(min) * 60) + tonumber(sec)
-    end
-
-    -- Allow "X min" only
-    min = lower:match("^(%d+)%s*min$")
-    if min then
-        return tonumber(min) * 60
-    end
-
-    -- Allow "Y sec" only
-    sec = lower:match("^(%d+)%s*sec$")
-    if sec then
-        return tonumber(sec)
-    end
-
-    -- "X hr Y min Z sec" (optional)
-    local hr
-    hr, min, sec = lower:match("^(%d+)%s*hr%s*(%d+)%s*min%s*(%d+)%s*sec$")
-    if hr and min and sec then
-        return (tonumber(hr) * 3600) + (tonumber(min) * 60) + tonumber(sec)
-    end
-
-    -- "MM:SS" / "HH:MM:SS"
-    local h, m, s2 = s:match("^(%d+):(%d+):(%d+)$")
-    if h and m and s2 then
-        return (tonumber(h) * 3600) + (tonumber(m) * 60) + tonumber(s2)
-    end
-    m, s2 = s:match("^(%d+):(%d+)$")
-    if m and s2 then
-        return (tonumber(m) * 60) + tonumber(s2)
-    end
-
-    return nil
-end
-
 local function GetDurationSeconds(entry)
     if type(entry) ~= "table" then return 0 end
-
-    print("---- GetDurationSeconds ----")
-    print("ts=", entry.timestamp or entry.endTime, "mapName=", entry.mapName, "durationType=", type(entry.duration), "duration=", entry.duration)
 
     -- 1) If we have a formatted string (what the UI shows), parse and trust it.
     if type(entry.duration) == "string" then
@@ -159,15 +107,11 @@ local function GetDurationSeconds(entry)
         sClean = sClean:gsub("\194\160", " ")         -- U+00A0 in UTF-8
         sClean = sClean:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
 
-        print("duration(clean) =", sClean)
-
         -- Parse from numbers only (your strings contain a consistent stray middle number: e.g. 2,4,21).
         local nums = {}
         for n in sClean:gmatch("(%d+)") do
             nums[#nums+1] = tonumber(n)
         end
-
-        print("NUMS extracted:", "#=" .. tostring(#nums), "vals=", nums[1], nums[2], nums[3], nums[4])
 
         local d = nil
 
@@ -184,18 +128,13 @@ local function GetDurationSeconds(entry)
             end
             sec = sec or nums[#nums]
             d = (min * 60) + sec
-            print(("MATH (min,sec): (%d*60)+%d => %d  (ignored stray 4s)"):format(min, sec, d))
         elseif #nums == 1 then
             d = nums[1]
-            print(("MATH (sec only): %d => %d"):format(nums[1], d))
         else
-            print("MATH: no numbers found in duration string")
         end
 
-        print("NUM parsed ->", d)
 
         d = tonumber(d)
-        print("final parsed d ->", d)
 
         if d and d > 0 then
             return math.floor(d + 0.5)
@@ -210,15 +149,6 @@ local function GetDurationSeconds(entry)
         tonumber(entry.matchDuration) or
         tonumber(entry.durationRaw) or
         tonumber(entry.duration)
-
-    print("numeric fallback fields:",
-        "durationSeconds=", entry.durationSeconds,
-        "durationSec=", entry.durationSec,
-        "matchDuration=", entry.matchDuration,
-        "durationRaw=", entry.durationRaw,
-        "duration=", entry.duration,
-        "=> d=", d
-    )
 
     d = tonumber(d)
     if not d or d <= 0 then return 0 end
