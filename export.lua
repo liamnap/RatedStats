@@ -28,13 +28,24 @@ end
 
 local function GetMapExportValue(entry)
     if type(entry) ~= "table" then return "" end
-    local id = entry.mapID or entry.mapId or entry.map or entry.map_id
-    if id ~= nil then
-        local n = tonumber(id)
-        if n then return tostring(n) end
+
+    -- We store short map codes (e.g. "NPG") in history for arenas/BGs.
+    -- mapShortCodes (in config.lua) maps FullName -> ShortCode.
+    -- For export, convert ShortCode back to FullName so it looks like REFlex UI.
+    local mapName = entry.mapName
+    if mapName ~= nil then
+        mapName = tostring(mapName)
+        if type(mapShortCodes) == "table" then
+            for full, short in pairs(mapShortCodes) do
+                if short == mapName then
+                    return tostring(full)
+                end
+            end
+        end
+        return mapName
     end
-    -- Fallback to whatever we stored historically
-    return tostring(entry.mapName or "")
+
+    return ""
 end
 
 local function ParseDurationStringToSeconds(s)
@@ -187,7 +198,7 @@ local function BuildArenaTeamCSV(entry, wantFriendly)
         if type(p) == "table" and p.name and p.name ~= "-" then
             local isFriendly
 
-            if p.isFriendly ~= nil then
+            if entry.isSoloShuffle and p.isFriendly ~= nil then
                 isFriendly = p.isFriendly
             elseif haveTeamIndex and p.teamIndex ~= nil then
                 isFriendly = (p.teamIndex == myTeamIndex)
