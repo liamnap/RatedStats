@@ -94,50 +94,51 @@ local function GetMapExportValue(entry)
 end
 
 local function ParseDurationStringToSeconds(s)
-    if type(s) ~= "string" then
-        print("ParseDurationStringToSeconds: non-string", type(s))
-        return nil
-    end
+    if type(s) ~= "string" then return nil end
 
-    print("ParseDurationStringToSeconds IN:", s)
+    -- Strip WoW color codes like |cffffffff and |r
+    s = s:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
 
-    -- Handle "MM:SS" / "HH:MM:SS"
-    if s:match("^%d+:%d+:%d+$") then
-        local h, m, sec = s:match("^(%d+):(%d+):(%d+)$")
-        print("HH:MM:SS match:", h, m, sec)
-        if h and m and sec then
-            local out = (tonumber(h) * 3600) + (tonumber(m) * 60) + tonumber(sec)
-            print("HH:MM:SS out:", out)
-            return out
-        end
-    elseif s:match("^%d+:%d+$") then
-        local m, sec = s:match("^(%d+):(%d+)$")
-        print("MM:SS match:", m, sec)
-        if m and sec then
-            local out = (tonumber(m) * 60) + tonumber(sec)
-            print("MM:SS out:", out)
-            return out
-        end
-    end
+    -- Normalize whitespace
+    s = s:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
 
-    -- Handle Blizzard SecondsToTime style: "1 Hr 2 Min 3 Sec" / "2 Min 10 Sec" / "45 Sec"
     local lower = s:lower()
-    local h = lower:match("(%d+)%s*hr") or lower:match("(%d+)%s*hour")
-    local m = lower:match("(%d+)%s*min")
-    local sec = lower:match("(%d+)%s*sec")
 
-    print("TOKENS:", "h=", h, "m=", m, "sec=", sec)
-
-    if h or m or sec then
-        local total = 0
-        if h then total = total + (tonumber(h) * 3600) end
-        if m then total = total + (tonumber(m) * 60) end
-        if sec then total = total + tonumber(sec) end
-        print("TOTAL:", total)
-        if total > 0 then return total end
+    -- Exact "X min Y sec" (your common case)
+    local min, sec = lower:match("^(%d+)%s*min%s*(%d+)%s*sec$")
+    if min and sec then
+        return (tonumber(min) * 60) + tonumber(sec)
     end
 
-    print("ParseDurationStringToSeconds OUT: nil")
+    -- Allow "X min" only
+    min = lower:match("^(%d+)%s*min$")
+    if min then
+        return tonumber(min) * 60
+    end
+
+    -- Allow "Y sec" only
+    sec = lower:match("^(%d+)%s*sec$")
+    if sec then
+        return tonumber(sec)
+    end
+
+    -- "X hr Y min Z sec" (optional)
+    local hr
+    hr, min, sec = lower:match("^(%d+)%s*hr%s*(%d+)%s*min%s*(%d+)%s*sec$")
+    if hr and min and sec then
+        return (tonumber(hr) * 3600) + (tonumber(min) * 60) + tonumber(sec)
+    end
+
+    -- "MM:SS" / "HH:MM:SS"
+    local h, m, s2 = s:match("^(%d+):(%d+):(%d+)$")
+    if h and m and s2 then
+        return (tonumber(h) * 3600) + (tonumber(m) * 60) + tonumber(s2)
+    end
+    m, s2 = s:match("^(%d+):(%d+)$")
+    if m and s2 then
+        return (tonumber(m) * 60) + tonumber(s2)
+    end
+
     return nil
 end
 
