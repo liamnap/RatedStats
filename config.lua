@@ -3396,6 +3396,8 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
             scoreText = ""
         end
         if type(match.duration) == "number" then
+            -- Preserve raw seconds for export/logic, but format for display.
+            if match.durationSeconds == nil then match.durationSeconds = match.duration end
             match.duration = SecondsToTime(match.duration)
         end
 		
