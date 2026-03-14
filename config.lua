@@ -550,41 +550,37 @@ local function GetShortMapName(mapName)
 end
 
 RSTATS.MapList = {
-    [30] = GetRealZoneText(30),
-    [2107] = GetRealZoneText(2107),
-    [1191] = GetRealZoneText(1191),
-    [1691] = GetRealZoneText(1691),
-    [2245] = GetRealZoneText(2245),
-    [1105] = GetRealZoneText(1105),
-    [566] = GetRealZoneText(566),
-    [968] = GetRealZoneText(566),
-    [628] = GetRealZoneText(628),
-    [727] = GetRealZoneText(727),
-    [607] = GetRealZoneText(607),
-    [1035] = GetRealZoneText(1035),
-    [761] = GetRealZoneText(761),
-    [726] = GetRealZoneText(726),
-    [2106] = GetRealZoneText(2106),
-    [1280] = GetRealZoneText(1280),
-    [1803] = GetRealZoneText(1803),
-    [2118] = GetRealZoneText(2118),
-    [1552] = GetShortMapName(GetRealZoneText(1552)),
-    [1504] = GetShortMapName(GetRealZoneText(1504)),
-    [562] = GetShortMapName(GetRealZoneText(1672)),
-    [1672] = GetShortMapName(GetRealZoneText(1672)),
-    [2547] = GetShortMapName(GetRealZoneText(2547)),
-    [2373] = GetShortMapName(GetRealZoneText(2373)),
-    [617] = GetShortMapName(GetRealZoneText(617)),
-    [559] = GetShortMapName(GetRealZoneText(1505)),
-    [1505] = GetShortMapName(GetRealZoneText(1505)),
-    [572] = GetShortMapName(GetRealZoneText(572)),
-    [1134] = GetShortMapName(GetRealZoneText(1134)),
-    [980] = GetShortMapName(GetRealZoneText(980)),
-    [1911] = GetShortMapName(GetRealZoneText(1911)),
-    [1825] = GetShortMapName(GetRealZoneText(1825)),
-    [2167] = GetShortMapName(GetRealZoneText(2167)),
-    [2509] = GetShortMapName(GetRealZoneText(2509)),
-    [2563] = GetShortMapName(GetRealZoneText(2563))
+    -- Battlegrounds / PvP maps
+--    [566]  = { name = GetRealZoneText(566),  short = GetRealZoneText(566),  code = "EOTS" }, -- Eye of the Storm
+    [726]  = { name = GetRealZoneText(726),  short = GetRealZoneText(726),  code = "TP"   }, -- Twin Peaks
+    [727]  = { name = GetRealZoneText(727),  short = GetRealZoneText(727),  code = "SSM"  }, -- Silvershard Mines
+    [761]  = { name = GetRealZoneText(761),  short = GetRealZoneText(761),  code = "TBFG" }, -- The Battle for Gilneas
+    [968]  = { name = GetRealZoneText(968),  short = GetRealZoneText(968),  code = "EOTS" }, -- Rated Eye of the Storm
+--    [1105] = { name = GetRealZoneText(1105), short = GetRealZoneText(1105), code = "DWG"  }, -- Deepwind Gorge
+    [1803] = { name = GetRealZoneText(1803), short = GetRealZoneText(1803), code = "SS"   }, -- Seething Shore
+    [2106] = { name = GetRealZoneText(2106), short = GetRealZoneText(2106), code = "WSG"  }, -- Warsong Gulch
+    [2107] = { name = GetRealZoneText(2107), short = GetRealZoneText(2107), code = "AB"   }, -- Arathi Basin
+    [2245] = { name = GetRealZoneText(2245), short = GetRealZoneText(2245), code = "DWG"  }, -- Deepwind Gorge
+    [2656] = { name = GetRealZoneText(2656), short = GetRealZoneText(2656), code = "DHR"  }, -- Deephaul Ravine
+
+    -- Arenas (include your REFlex-style codes)
+    [559]  = { name = GetRealZoneText(559),  short = GetShortMapName(GetRealZoneText(559)),  code = nil    }, -- Nagrand Arena (old)
+    [562]  = { name = GetRealZoneText(562),  short = GetShortMapName(GetRealZoneText(562)),  code = nil    }, -- Zul'Dblade's Edge Arena (old)
+    [572]  = { name = GetRealZoneText(572),  short = GetShortMapName(GetRealZoneText(572)),  code = "RoL"  }, -- Ruins of Lordaeron
+    [617]  = { name = GetRealZoneText(617),  short = GetShortMapName(GetRealZoneText(617)),  code = "DS"   }, -- Dalaran Sewers
+    [980]  = { name = GetRealZoneText(980),  short = GetShortMapName(GetRealZoneText(980)),  code = "TA"   }, -- Tol'viron Arena
+    [1134] = { name = GetRealZoneText(1134), short = GetShortMapName(GetRealZoneText(1134)), code = "TTP"  }, -- The Tiger's Peak
+    [1191] = { name = GetRealZoneText(1191), short = GetShortMapName(GetRealZoneText(1191)), code = "M"    }, -- Mugambala
+    [1504] = { name = GetRealZoneText(1504), short = GetShortMapName(GetRealZoneText(1504)), code = "BRHA" }, -- Black Rook Hold Arena
+    [1505] = { name = GetRealZoneText(1505), short = GetShortMapName(GetRealZoneText(1505)), code = "NA"   }, -- Nagrand Arena
+    [1552] = { name = GetRealZoneText(1552), short = GetShortMapName(GetRealZoneText(1552)), code = "AF"   }, -- Ashamane's Fall
+    [1672] = { name = GetRealZoneText(1672), short = GetShortMapName(GetRealZoneText(1672)), code = "BEA"  }, -- Blade's Edge Arena
+    [1825] = { name = GetRealZoneText(1825), short = GetShortMapName(GetRealZoneText(1825)), code = "HP"   }, -- Hook Point
+    [2373] = { name = GetRealZoneText(2373), short = GetShortMapName(GetRealZoneText(2373)), code = "ED"   }, -- Empyrean Domain
+    [2509] = { name = GetRealZoneText(2509), short = GetShortMapName(GetRealZoneText(2509)), code = "MC"   }, -- Maldraxxus Coliseum
+    [2547] = { name = GetRealZoneText(2547), short = GetShortMapName(GetRealZoneText(2547)), code = "EC"   }, -- Enigma Crucible
+    [2563] = { name = GetRealZoneText(2563), short = GetShortMapName(GetRealZoneText(2563)), code = "NPG"  }, -- Nokhudon Proving Grounds
+    [2759] = { name = GetRealZoneText(2759), short = GetShortMapName(GetRealZoneText(2759)), code = "COC"  }, -- Cage of Carnage
 }
 
 -- Register events to dynamically track raid leader
