@@ -96,32 +96,28 @@ end
 local function ParseDurationStringToSeconds(s)
     if type(s) ~= "string" then return nil end
 
-    -- Handle "MM:SS" / "HH:MM:SS"
-    if s:match("^%d+:%d+:%d+$") then
-        local h, m, sec = s:match("^(%d+):(%d+):(%d+)$")
-        if h and m and sec then
-            return (tonumber(h) * 3600) + (tonumber(m) * 60) + tonumber(sec)
-        end
-    elseif s:match("^%d+:%d+$") then
-        local m, sec = s:match("^(%d+):(%d+)$")
-        if m and sec then
-            return (tonumber(m) * 60) + tonumber(sec)
-        end
+    -- Fast path: "HH:MM:SS"
+    local h, m, sec = s:match("^(%d+):(%d+):(%d+)$")
+    if h and m and sec then
+        return (tonumber(h) * 3600) + (tonumber(m) * 60) + tonumber(sec)
     end
 
-    -- Handle Blizzard SecondsToTime style: "1 Hr 2 Min 3 Sec" / "2 Min 10 Sec" / "45 Sec"
+    -- Fast path: "MM:SS"
+    m, sec = s:match("^(%d+):(%d+)$")
+    if m and sec then
+        return (tonumber(m) * 60) + tonumber(sec)
+    end
+
+    -- Blizzard SecondsToTime-ish: "X Hr Y Min Z Sec", "Y Min Z Sec", "Z Sec"
+    -- Match the number immediately before each unit, then convert to numbers immediately.
     local lower = s:lower()
-    local h = lower:match("(%d+)%s*hr") or lower:match("(%d+)%s*hour")
-    local m = lower:match("(%d+)%s*min")
-    local sec = lower:match("(%d+)%s*sec")
 
-    if h or m or sec then
-        local total = 0
-        if h then total = total + (tonumber(h) * 3600) end
-        if m then total = total + (tonumber(m) * 60) end
-        if sec then total = total + tonumber(sec) end
-        if total > 0 then return total end
-    end
+    local hr  = tonumber(lower:match("(%d+)%s*hr")) or tonumber(lower:match("(%d+)%s*hour")) or 0
+    local min = tonumber(lower:match("(%d+)%s*min")) or 0
+    local se  = tonumber(lower:match("(%d+)%s*sec")) or 0
+
+    local total = (hr * 3600) + (min * 60) + se
+    if total > 0 then return total end
 
     return nil
 end
