@@ -171,27 +171,20 @@ local function GetDurationSeconds(entry)
 
         local d = nil
 
-        if #nums == 3 then
-            if nums[2] == 4 then
-                -- minutes, STRAY(4), seconds
-                local min = nums[1]
-                local stray = nums[2]
-                local sec = nums[3]
-                d = (min * 60) + sec
-                print(("MATH (min,STRAY,sec): (%d*60)+%d (ignored %d) => %d"):format(min, sec, stray, d))
-            else
-                -- hours, minutes, seconds
-                local hr = nums[1]
-                local min = nums[2]
-                local sec = nums[3]
-                d = (hr * 3600) + (min * 60) + sec
-                print(("MATH (hr,min,sec): (%d*3600)+(%d*60)+%d => %d"):format(hr, min, sec, d))
-            end
-        elseif #nums == 2 then
+        if #nums >= 2 then
+            -- Your strings contain stray "4" digits. Minutes is the first number.
+            -- Seconds is the last number that is not 4 (fallback to last if all are 4).
             local min = nums[1]
-            local sec = nums[2]
+            local sec = nil
+            for i = #nums, 1, -1 do
+                if nums[i] ~= 4 then
+                    sec = nums[i]
+                    break
+                end
+            end
+            sec = sec or nums[#nums]
             d = (min * 60) + sec
-            print(("MATH (min,sec): (%d*60)+%d => %d"):format(min, sec, d))
+            print(("MATH (min,sec): (%d*60)+%d => %d  (ignored stray 4s)"):format(min, sec, d))
         elseif #nums == 1 then
             d = nums[1]
             print(("MATH (sec only): %d => %d"):format(nums[1], d))
