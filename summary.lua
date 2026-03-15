@@ -2573,17 +2573,6 @@ function Summary:Refresh()
         local winsSeries, crSeries, mmrSeries, times, crCandles, crCandleTimes, mmrCandles, mmrCandleTimes =
             BuildSeasonMatchSeries(history, seasonStart, seasonFinish)
 
-        print(string.format(
-            "RatedStats Summary: %s spec history=%d seasonMatches=%d winsSeries=%d times=%d seasonStart=%s seasonFinish=%s",
-            tostring(bracket.name),
-            #(history or {}),
-            #(seasonMatches or {}),
-            #(winsSeries or {}),
-            #(times or {}),
-            tostring(seasonStart),
-            tostring(seasonFinish)
-        ))
-
         local last25Delta, last25Count = GetLast25CRDelta(history)
 
         local last25Text = ""
