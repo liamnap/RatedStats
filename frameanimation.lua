@@ -3,6 +3,8 @@ local RSTATS = _G.RSTATS
 
 if not RSTATS then return end
 
+local hasPlayedMenuIntroThisSession = false
+
 local function GetTodayKey()
     return date("%Y-%m-%d")
 end
@@ -27,7 +29,7 @@ function RSTATS:CreateDailyMenuIntro(menu)
 
     menu.DailyIntro.Image = menu.DailyIntro:CreateTexture(nil, "ARTWORK")
     menu.DailyIntro.Image:SetAllPoints()
-    menu.DailyIntro.Image:SetTexture("Interface\\AddOns\\RatedStats\\images\\faction_vs")
+    menu.DailyIntro.Image:SetTexture("Interface\\AddOns\\RatedStats\\images\\faction_vs.png")
 
     menu.DailyIntro.Flash = menu.DailyIntro:CreateTexture(nil, "OVERLAY")
     menu.DailyIntro.Flash:SetAllPoints()
@@ -64,14 +66,11 @@ function RSTATS:PlayDailyMenuIntro(menu)
         return
     end
 
-    Database.settings = Database.settings or {}
-
-    local todayKey = GetTodayKey()
-    if Database.settings.lastMenuIntroDate == todayKey then
+    if hasPlayedMenuIntroThisSession then
         return
     end
 
-    Database.settings.lastMenuIntroDate = todayKey
+    hasPlayedMenuIntroThisSession = true
 
     if menu.DailyIntro.anim and menu.DailyIntro.anim:IsPlaying() then
         menu.DailyIntro.anim:Stop()
