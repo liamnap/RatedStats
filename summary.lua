@@ -151,6 +151,34 @@ local function GetActiveOrPreviousSeason()
     return best, best ~= nil
 end
 
+local function BuildSeasonSummary(matches)
+    local win, loss, draw = 0, 0, 0
+
+    for _, match in ipairs(matches or {}) do
+        local wl = tostring(match and match.friendlyWinLoss or "")
+        if wl:find("W") then
+            win = win + 1
+        elseif wl:find("L") then
+            loss = loss + 1
+        elseif wl:find("D") or wl:find("~") then
+            draw = draw + 1
+        end
+    end
+
+    local total = win + loss + draw
+    local winrate = 0
+    if total > 0 then
+        winrate = math.floor(((win / total) * 100) + 0.5)
+    end
+
+    return {
+        win = win,
+        loss = loss,
+        draw = draw,
+        winrate = winrate,
+    }
+end
+
 local function GetSummarySeasonRange()
     local s, isEndedSeason = GetActiveOrPreviousSeason()
     if not s then return nil, nil, "", false end
@@ -2539,9 +2567,7 @@ function Summary:Refresh()
 		end
 
         -- Use existing stats engine for win/loss/draw + winrate
-        local summary = Stats and Stats.CalculateSummary(seasonMatches, history, bracket.bracketID) or {
-            win = 0, loss = 0, draw = 0, winrate = 0,
-        }
+        local summary = BuildSeasonSummary(seasonMatches)
 
         -- Build the 3 graph series (this was missing, so graphs never draw)
         local winsSeries, crSeries, mmrSeries, times, crCandles, crCandleTimes, mmrCandles, mmrCandleTimes =
