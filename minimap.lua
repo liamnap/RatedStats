@@ -115,27 +115,25 @@ function RSTATS:InitializeMinimapIcon()
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine(string.format("|cff%sShift+Right-click|r for Settings", COLOR_HEX))
 
-		function CurrencyTracker:GetCurrencySummary()
-			local honorInfo = C_CurrencyInfo.GetCurrencyInfo(HONOR_CURRENCY_ID)
-			local conquestInfo = C_CurrencyInfo.GetCurrencyInfo(CONQUEST_CURRENCY_ID)
-		
-			local honorCurrent = honorInfo and (tonumber(honorInfo.quantity) or 0) or 0
-			local honorWeekly = honorInfo and (tonumber(honorInfo.quantityEarnedThisWeek) or 0) or 0
-			local honorSeason = honorInfo and (tonumber(honorInfo.totalEarned) or 0) or 0
-		
-			local conquestCurrent = conquestInfo and (tonumber(conquestInfo.quantity) or 0) or 0
-			local conquestWeekly = conquestInfo and (tonumber(conquestInfo.quantityEarnedThisWeek) or 0) or 0
-			local conquestSeason = conquestInfo and (tonumber(conquestInfo.totalEarned) or 0) or 0
-		
-			return {
-				honorCurrent = honorCurrent,
-				honorWeekly = honorWeekly,
-				honorSeason = honorSeason,
-				conquestCurrent = conquestCurrent,
-				conquestWeekly = conquestWeekly,
-				conquestSeason = conquestSeason,
-			}
-		end
+        if RSTATS.CurrencyTracker and RSTATS.CurrencyTracker.GetCurrencySummary then
+            local currency = RSTATS.CurrencyTracker:GetCurrencySummary()
+
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine("Honor and Conquest Tracking", 1, 0.82, 0)
+            GameTooltip:AddDoubleLine(
+                "Honor",
+                string.format("%d / %d / %d", currency.honorCurrent, currency.honorWeekly, currency.honorSeason),
+                1, 1, 1,
+                1, 1, 1
+            )
+            GameTooltip:AddDoubleLine(
+                "Conquest",
+                string.format("%d / %d / %d", currency.conquestCurrent, currency.conquestWeekly, currency.conquestSeason),
+                1, 1, 1,
+                1, 1, 1
+            )
+            GameTooltip:AddLine("Current / Week / Season", 0.7, 0.7, 0.7)
+        end
         
         GameTooltip:Show()
     end)
