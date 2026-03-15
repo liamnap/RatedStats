@@ -4,6 +4,7 @@ local RSTATS = _G.RSTATS
 if not RSTATS then return end
 
 local hasPlayedMenuIntroThisSession = false
+local hasPendingNewGameBanner = false
 
 local function GetTodayKey()
     return date("%Y-%m-%d")
@@ -80,4 +81,96 @@ function RSTATS:PlayDailyMenuIntro(menu)
     menu.DailyIntro:Show()
     PlaySound(10030, "Master")
     menu.DailyIntro.anim:Play()
+end
+
+function RSTATS:CreateNewGameBanner(menu)
+    if not menu or menu.NewGameBanner then
+        return
+    end
+
+    menu.NewGameBanner = CreateFrame("Frame", nil, menu)
+    menu.NewGameBanner:SetSize(220, 28)
+    menu.NewGameBanner:SetPoint("TOPRIGHT", menu, "TOPRIGHT", -92, -34)
+    menu.NewGameBanner:SetFrameStrata("DIALOG")
+    menu.NewGameBanner:SetFrameLevel(menu:GetFrameLevel() + 40)
+    menu.NewGameBanner:EnableMouse(false)
+    menu.NewGameBanner:SetAlpha(0)
+    menu.NewGameBanner:Hide()
+
+    menu.NewGameBanner.Text = menu.NewGameBanner:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    menu.NewGameBanner.Text:SetPoint("RIGHT", menu.NewGameBanner, "RIGHT", 0, 0)
+    menu.NewGameBanner.Text:SetJustifyH("RIGHT")
+    menu.NewGameBanner.Text:SetText("New Game Added")
+    menu.NewGameBanner.Text:SetTextColor(1, 0.82, 0, 1)
+
+    menu.NewGameBanner.Glow = menu.NewGameBanner:CreateTexture(nil, "BACKGROUND")
+    menu.NewGameBanner.Glow:SetPoint("TOPLEFT", menu.NewGameBanner.Text, "TOPLEFT", -10, 6)
+    menu.NewGameBanner.Glow:SetPoint("BOTTOMRIGHT", menu.NewGameBanner.Text, "BOTTOMRIGHT", 10, -6)
+    menu.NewGameBanner.Glow:SetColorTexture(1, 0.82, 0, 0.10)
+    menu.NewGameBanner.Glow:SetBlendMode("ADD")
+
+    menu.NewGameBanner.anim = menu.NewGameBanner:CreateAnimationGroup()
+
+    local fadeIn = menu.NewGameBanner.anim:CreateAnimation("Alpha")
+    fadeIn:SetOrder(1)
+    fadeIn:SetFromAlpha(0)
+    fadeIn:SetToAlpha(1)
+    fadeIn:SetDuration(0.15)
+
+    local hold = menu.NewGameBanner.anim:CreateAnimation("Alpha")
+    hold:SetOrder(2)
+    hold:SetFromAlpha(1)
+    hold:SetToAlpha(1)
+    hold:SetDuration(2.00)
+
+    local fadeOut = menu.NewGameBanner.anim:CreateAnimation("Alpha")
+    fadeOut:SetOrder(3)
+    fadeOut:SetFromAlpha(1)
+    fadeOut:SetToAlpha(0)
+    fadeOut:SetDuration(1.25)
+
+    menu.NewGameBanner.anim:SetScript("OnFinished", function()
+        menu.NewGameBanner:Hide()
+
+    end)
+end
+
+function RSTATS:PlayNewGameBanner(menu)
+    if not menu or not menu.NewGameBanner then
+        return
+    end
+
+    if menu.NewGameBanner.anim and menu.NewGameBanner.anim:IsPlaying() then
+        menu.NewGameBanner.anim:Stop()
+    end
+
+    menu.NewGameBanner:SetAlpha(0)
+    menu.NewGameBanner:Show()
+    menu.NewGameBanner.anim:Play()
+end
+
+function RSTATS:NotifyNewGameAdded()
+    hasPendingNewGameBanner = true
+
+    if UIConfig and UIConfig:IsShown() then
+        if not UIConfig.NewGameBanner then
+            RSTATS:CreateNewGameBanner(UIConfig)
+        end
+
+        if UIConfig.NewGameBanner and not UIConfig.NewGameBanner.anim:IsPlaying() then
+            hasPendingNewGameBanner = false
+            RSTATS:PlayNewGameBanner(UIConfig)
+        end
+    end
+end
+
+function RSTATS:FlushQueuedNewGameBanner(menu)
+    if not menu or not menu.NewGameBanner then
+        return
+    end
+
+    if hasPendingNewGameBanner and not menu.NewGameBanner.anim:IsPlaying() then
+        hasPendingNewGameBanner = false
+        RSTATS:PlayNewGameBanner(menu)
+    end
 end
