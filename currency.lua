@@ -216,7 +216,7 @@ function CurrencyTracker:Create(parent)
     f.title:SetFont(GetUnicodeSafeFont(), 8, "OUTLINE")
     f.title:SetWidth(90)
     f.title:SetJustifyH("LEFT")
-    f.title:SetPoint("TOPLEFT", f, "TOPLEFT", 64, -18)
+    f.title:SetPoint("TOPLEFT", f, "TOPLEFT", 64, -20)
     f.title:SetText("Honor and Conquest")
 
     f.totalsLabel = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -227,10 +227,10 @@ function CurrencyTracker:Create(parent)
     f.totalsLabel:SetText("Current / Week / Season")
 
     f.honorBar = CreateTrackedBar(f, 93, 15, "TOPLEFT", f, "TOPLEFT", 62, -30, 0.85, 0.18, 0.18)
-    SetStatusBarMask(f.honorBar, "UI-HUD-UnitFrame-Player-PortraitOn-Bar-Health-Mask", "TOPLEFT", 0, 4)
+    SetStatusBarMask(f.honorBar, "UI-HUD-UnitFrame-Player-PortraitOn-Bar-Health-Mask", "TOPLEFT", -1, 3)
 
     f.conquestBar = CreateTrackedBar(f, 93, 8, "TOPLEFT", f, "TOPLEFT", 62, -47, 1.00, 0.82, 0.00)
-    SetStatusBarMask(f.conquestBar, "UI-HUD-UnitFrame-Player-PortraitOn-Bar-Mana-Mask", "TOPLEFT", 0, 2)
+    SetStatusBarMask(f.conquestBar, "UI-HUD-UnitFrame-Player-PortraitOn-Bar-Mana-Mask", "TOPLEFT", -1, 1)
 
     self.frame = f
     self:Refresh()
