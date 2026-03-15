@@ -13,6 +13,7 @@ core.lua
 filters.lua
 gettalents.lua
 stats.lua
+currency.lua
 config.lua
 minimap.lua
 settings.lua
@@ -20,5 +21,4 @@ addfriend.lua
 summary.lua
 export.lua
 awc.lua
-currency.lua
 init.lua
