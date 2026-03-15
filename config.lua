@@ -104,6 +104,9 @@ function Config:Toggle()
 
     -- ✅ If we're showing the menu now, check for historyTable growth
     if wasHidden then
+        if RSTATS and RSTATS.PlayDailyMenuIntro then
+            RSTATS:PlayDailyMenuIntro(menu)
+        end
         local tabID = PanelTemplates_GetSelectedTab(RSTATS.UIConfig)
 
         -- If spec/talents changed while the window was closed, force a rebuild on open.
@@ -5345,6 +5348,10 @@ function Config:CreateMenu()
 	UIConfig.BG:SetPoint("BOTTOMRIGHT", UIConfig, "BOTTOMRIGHT", -8,   8)
     UIConfig.BG:SetTexture(bgPath)
     UIConfig.BG:SetAlpha(0.4)
+
+    if RSTATS and RSTATS.CreateDailyMenuIntro then
+        RSTATS:CreateDailyMenuIntro(UIConfig)
+    end
 
     -- Portrait
     local portrait = UIConfig.PortraitContainer:CreateTexture(nil, "ARTWORK")
