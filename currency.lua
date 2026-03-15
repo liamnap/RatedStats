@@ -6,6 +6,28 @@ local CurrencyTracker = RSTATS.CurrencyTracker
 local HONOR_CURRENCY_ID = 1792
 local CONQUEST_CURRENCY_ID = 1602
 
+function CurrencyTracker:GetCurrencySummary()
+    local honorInfo = C_CurrencyInfo.GetCurrencyInfo(HONOR_CURRENCY_ID)
+    local conquestInfo = C_CurrencyInfo.GetCurrencyInfo(CONQUEST_CURRENCY_ID)
+
+    local honorCurrent = honorInfo and (tonumber(honorInfo.quantity) or 0) or 0
+    local honorWeekly = honorInfo and (tonumber(honorInfo.quantityEarnedThisWeek) or 0) or 0
+    local honorSeason = honorInfo and (tonumber(honorInfo.totalEarned) or 0) or 0
+
+    local conquestCurrent = conquestInfo and (tonumber(conquestInfo.quantity) or 0) or 0
+    local conquestWeekly = conquestInfo and (tonumber(conquestInfo.quantityEarnedThisWeek) or 0) or 0
+    local conquestSeason = conquestInfo and (tonumber(conquestInfo.totalEarned) or 0) or 0
+
+    return {
+        honorCurrent = honorCurrent,
+        honorWeekly = honorWeekly,
+        honorSeason = honorSeason,
+        conquestCurrent = conquestCurrent,
+        conquestWeekly = conquestWeekly,
+        conquestSeason = conquestSeason,
+    }
+end
+
 local function GetPlayerKey()
     return UnitName("player") .. "-" .. GetRealmName()
 end
