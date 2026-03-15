@@ -117,22 +117,29 @@ function RSTATS:InitializeMinimapIcon()
 
         if RSTATS.CurrencyTracker and RSTATS.CurrencyTracker.GetCurrencySummary then
             local currency = RSTATS.CurrencyTracker:GetCurrencySummary()
+            local honorIcon = currency.honorIconFileID and ("|T" .. currency.honorIconFileID .. ":14:14:0:0|t ") or ""
+            local conquestIcon = currency.conquestIconFileID and ("|T" .. currency.conquestIconFileID .. ":14:14:0:0|t ") or ""
 
             GameTooltip:AddLine(" ")
-            GameTooltip:AddLine("Honor and Conquest Tracking", 1, 0.82, 0)
+            GameTooltip:AddLine(string.format("|cff%s%s|r", COLOR_HEX, "Honor and Conquest Tracking"))
             GameTooltip:AddDoubleLine(
-                "Honor",
+                honorIcon .. string.format("|cff%s%s|r", COLOR_HEX, "Honor"),
                 string.format("%d / %d / %d", currency.honorCurrent, currency.honorWeekly, currency.honorSeason),
                 1, 1, 1,
                 1, 1, 1
             )
             GameTooltip:AddDoubleLine(
-                "Conquest",
+                conquestIcon .. string.format("|cff%s%s|r", COLOR_HEX, "Conquest"),
                 string.format("%d / %d / %d", currency.conquestCurrent, currency.conquestWeekly, currency.conquestSeason),
                 1, 1, 1,
                 1, 1, 1
             )
-            GameTooltip:AddLine("Current / Week / Season", 0.7, 0.7, 0.7)
+            GameTooltip:AddDoubleLine(
+                " ",
+                "Current / Weekly / Total",
+                1, 1, 1,
+                0.7, 0.7, 0.7
+            )
         end
         
         GameTooltip:Show()
