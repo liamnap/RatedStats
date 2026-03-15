@@ -107,6 +107,11 @@ function Config:Toggle()
         if RSTATS and RSTATS.PlayDailyMenuIntro then
             RSTATS:PlayDailyMenuIntro(menu)
         end
+
+        if RSTATS and RSTATS.FlushQueuedNewGameBanner then
+            RSTATS:FlushQueuedNewGameBanner(menu)
+        end
+
         local tabID = PanelTemplates_GetSelectedTab(RSTATS.UIConfig)
 
         -- If spec/talents changed while the window was closed, force a rebuild on open.
@@ -2747,6 +2752,9 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
         -- Skip table insert for now, let the 20second delay handle it
     else
         table.insert(historyTable, 1, entry)
+        if RSTATS and RSTATS.NotifyNewGameAdded then
+            RSTATS:NotifyNewGameAdded()
+        end
         -- Spec view is runtime-cached. Bust cache so switching spec shows this row immediately.
         if (categoryID == 7 or categoryID == 9) and RSTATS.__SpecHistoryCache then
             local key = (categoryID == 7 and "SoloShuffleHistoryBySpec") or "SoloRBGHistoryBySpec"
@@ -2893,6 +2901,9 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             }
 
             table.insert(historyTable, 1, ssRoundData)
+            if RSTATS and RSTATS.NotifyNewGameAdded then
+                RSTATS:NotifyNewGameAdded()
+            end
             -- Bust runtime spec cache for SS so the new round appears under the right spec immediately.
             if RSTATS.__SpecHistoryCache then
                 local bucket = RSTATS.__SpecHistoryCache["SoloShuffleHistoryBySpec"]
@@ -5351,6 +5362,10 @@ function Config:CreateMenu()
 
     if RSTATS and RSTATS.CreateDailyMenuIntro then
         RSTATS:CreateDailyMenuIntro(UIConfig)
+    end
+
+    if RSTATS and RSTATS.CreateNewGameBanner then
+        RSTATS:CreateNewGameBanner(UIConfig)
     end
 
     -- Portrait
