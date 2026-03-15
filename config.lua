@@ -5359,6 +5359,9 @@ function Config:CreateMenu()
     Config:CreateSearchBox(UIConfig)
     Config:CreateFilterMenu(UIConfig)
     CreateAWCBanner(UIConfig)
+    if RSTATS.CurrencyTracker and RSTATS.CurrencyTracker.Create then
+        RSTATS.CurrencyTracker:Create(UIConfig)
+    end
 
 	local statsBar = CreateFrame("Frame", "RatedStatsMatchStatsBar", UIConfig)
 	statsBar:SetSize(800, 24)
