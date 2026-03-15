@@ -173,33 +173,52 @@ end
 
 local function GetLatestPostMMRFromHistory(history)
     if not history or #history == 0 then return nil end
+
     local me = GetPlayerFullName()
-    local bestT, bestMMR
+    local latest
 
     for _, match in ipairs(history) do
-        local t = match.endTime or match.timestamp
-        if t then
-            -- Arena-safe: match-level team MMR (you store friendlyMMR on the match entry)
-            local matchMMR = tonumber(match.friendlyMMR) or tonumber(match.mmr)
-            if matchMMR and matchMMR > 0 and (not bestT or t > bestT) then
-                bestT, bestMMR = t, matchMMR
-            end
+        local isMissed = match and (match.isMissedGame or match.winLoss == "Missed Game" or match.friendlyWinLoss == "Missed Game")
+        local isInitial = match and match.isInitial
 
-            -- Fallback: playerStats postmatchMMR (works fine in SS/RBG where it exists)
-            if match.playerStats then
-                for _, ps in ipairs(match.playerStats) do
-                    if ps.name == me then
-                        local mmr = tonumber(ps.postmatchMMR)
-                        if mmr and mmr > 0 and (not bestT or t > bestT) then
-                            bestT, bestMMR = t, mmr
-                        end
-                        break
-                    end
+        if not isMissed and not isInitial then
+            if not latest then
+                latest = match
+            else
+                local latestID = tonumber(latest.matchID) or 0
+                local matchID  = tonumber(match.matchID) or 0
+                local latestT  = tonumber(latest.endTime or latest.timestamp) or 0
+                local matchT   = tonumber(match.endTime or match.timestamp) or 0
+
+                if matchID > latestID or (matchID == latestID and matchT > latestT) then
+                    latest = match
                 end
             end
         end
     end
-    return bestMMR
+
+    if not latest then
+        return nil
+    end
+
+    if latest.playerStats then
+        for _, ps in ipairs(latest.playerStats) do
+            if ps.name == me then
+                local mmr = tonumber(ps.postmatchMMR)
+                if mmr and mmr > 0 then
+                    return mmr
+                end
+                break
+            end
+        end
+    end
+
+    local teamMMR = tonumber(latest.friendlyMMR) or tonumber(latest.mmr)
+    if teamMMR and teamMMR > 0 then
+        return teamMMR
+    end
+
+    return nil
 end
 
 local function GetLast25CRDelta(history)
@@ -2540,17 +2559,14 @@ function Summary:Refresh()
                 return tonumber(cr) or 0
             end)(),
             currentMMR = (function()
-                -- Always prefer last stored post-match MMR from our match history.
+                -- Prefer the latest real match in history:
+                -- playerStats.postmatchMMR -> friendlyMMR/mmr
                 local last = GetLatestPostMMRFromHistory(history)
-                if last and tonumber(last) and tonumber(last) > 0 then
-                    return tonumber(last)
+                if last and last > 0 then
+                    return last
                 end
 
-                -- Next fallback: DB cached MMR (legacy/current fields).
-                local mmr = tonumber(perChar[bracket.mmrKey]) or 0
-                if mmr > 0 then return mmr end
-
-                -- Final fallback (initial seed only / no usable history yet): live API.
+                -- No real match yet (usually initial seed only), so use live/API.
                 local live = select(10, GetPersonalRatedInfo(bracket.bracketID))
                 return tonumber(live) or 0
             end)(),
