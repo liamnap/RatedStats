@@ -27,7 +27,7 @@ function RSTATS:CreateDailyMenuIntro(menu)
 
     menu.DailyIntro.Image = menu.DailyIntro:CreateTexture(nil, "ARTWORK")
     menu.DailyIntro.Image:SetAllPoints()
-    menu.DailyIntro.Image:SetTexture("Interface\\AddOns\\RatedStats\\images\\faction_vs")
+    menu.DailyIntro.Image:SetTexture("Interface\\AddOns\\RatedStats\\images\\faction_vs.png")
 
     menu.DailyIntro.Flash = menu.DailyIntro:CreateTexture(nil, "OVERLAY")
     menu.DailyIntro.Flash:SetAllPoints()
