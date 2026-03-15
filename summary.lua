@@ -125,7 +125,7 @@ end
 
 local function GetActiveOrPreviousSeason()
     local seasons = _G.RatedStatsSeasons
-    if type(seasons) ~= "table" then return nil end
+    if type(seasons) ~= "table" then return nil, false end
 
     local now = time()
 
@@ -134,7 +134,7 @@ local function GetActiveOrPreviousSeason()
         local st = tonumber(s.start)
         local en = tonumber(s.finish)
         if st and en and now >= st and now <= en then
-            return s
+            return s, false
         end
     end
 
@@ -148,13 +148,13 @@ local function GetActiveOrPreviousSeason()
         end
     end
 
-    return best
+    return best, best ~= nil
 end
 
 local function GetSummarySeasonRange()
-    local s = GetActiveOrPreviousSeason()
-    if not s then return nil, nil, "" end
-    return tonumber(s.start), tonumber(s.finish), tostring(s.label or "")
+    local s, isEndedSeason = GetActiveOrPreviousSeason()
+    if not s then return nil, nil, "", false end
+    return tonumber(s.start), tonumber(s.finish), tostring(s.label or ""), isEndedSeason
 end
 
 local function GetCurrentSeasonLabel()
@@ -171,54 +171,48 @@ local function GetCurrentSeasonLabel()
     return label or ""
 end
 
-local function GetLatestPostMMRFromHistory(history)
-    if not history or #history == 0 then return nil end
+local function GetLatestSeasonPlayerSnapshot(history, seasonStart, seasonFinish)
+    if not history or #history == 0 then return nil, nil end
 
     local me = GetPlayerFullName()
-    local latest
+    local latestMatch, latestID, latestT
 
     for _, match in ipairs(history) do
         local isMissed = match and (match.isMissedGame or match.winLoss == "Missed Game" or match.friendlyWinLoss == "Missed Game")
         local isInitial = match and match.isInitial
+        local matchT = tonumber(match and (match.endTime or match.timestamp)) or 0
 
-        if not isMissed and not isInitial then
-            if not latest then
-                latest = match
-            else
-                local latestID = tonumber(latest.matchID) or 0
-                local matchID  = tonumber(match.matchID) or 0
-                local latestT  = tonumber(latest.endTime or latest.timestamp) or 0
-                local matchT   = tonumber(match.endTime or match.timestamp) or 0
+        if not isMissed and not isInitial and matchT > 0 then
+            if (not seasonStart or matchT >= seasonStart) and (not seasonFinish or matchT < seasonFinish) then
+                local matchID = tonumber(match.matchID) or 0
 
-                if matchID > latestID or (matchID == latestID and matchT > latestT) then
-                    latest = match
+                if not latestMatch or matchID > latestID or (matchID == latestID and matchT > latestT) then
+                    latestMatch = match
+                    latestID = matchID
+                    latestT = matchT
                 end
             end
         end
     end
 
-    if not latest then
-        return nil
+    if not latestMatch then
+        return nil, nil
     end
 
-    if latest.playerStats then
-        for _, ps in ipairs(latest.playerStats) do
+    local cr = tonumber(latestMatch.cr)
+    local mmr = tonumber(latestMatch.friendlyMMR) or tonumber(latestMatch.mmr)
+
+    if latestMatch.playerStats then
+        for _, ps in ipairs(latestMatch.playerStats) do
             if ps.name == me then
-                local mmr = tonumber(ps.postmatchMMR)
-                if mmr and mmr > 0 then
-                    return mmr
-                end
+                cr = tonumber(ps.newrating) or cr
+                mmr = tonumber(ps.postmatchMMR) or mmr
                 break
             end
         end
     end
 
-    local teamMMR = tonumber(latest.friendlyMMR) or tonumber(latest.mmr)
-    if teamMMR and teamMMR > 0 then
-        return teamMMR
-    end
-
-    return nil
+    return cr, mmr
 end
 
 local function GetLast25CRDelta(history)
@@ -2454,17 +2448,21 @@ function Summary:Refresh()
     local totalKBs = 0
     local longestStreak = 0
     local currentStreak = 0
-    local seasonStart, seasonFinish, seasonLabel = GetSummarySeasonRange()
+    local seasonStart, seasonFinish, seasonLabel, isEndedSeason = GetSummarySeasonRange()
     local me = GetPlayerFullName()
 
     -- Header season info
-    if self.frame and self.frame.header then
-        local label = (seasonLabel and seasonLabel ~= "" and seasonLabel) or GetCurrentSeasonLabel()
-        if label ~= "" then
-            self.frame.header:SetText("PvP Summary - " .. label)
-        else
-            self.frame.header:SetText("PvP Summary")
-        end
+	if self.frame and self.frame.header then
+		local label = (seasonLabel and seasonLabel ~= "" and seasonLabel) or GetCurrentSeasonLabel()
+		if label ~= "" then
+			if isEndedSeason then
+				self.frame.header:SetText("PvP Summary - " .. label .. " (End of Season)")
+			else
+				self.frame.header:SetText("PvP Summary - " .. label)
+			end
+		else
+			self.frame.header:SetText("PvP Summary")
+		end
 
         if self.frame.seasonNote2 then
             if seasonStart then
@@ -2523,20 +2521,22 @@ function Summary:Refresh()
         end
         local seasonMatches = {}
 
-        if seasonStart and seasonFinish then
-            for _, m in ipairs(history) do
-                if m.endTime and m.endTime >= seasonStart and m.endTime < seasonFinish then
-                    table.insert(seasonMatches, m)
-                end
-            end
-
-            local overallHistory = (bracket.bracketID == 7 or bracket.bracketID == 9) and historyAll or history
-            for _, m in ipairs(overallHistory) do
-                if m.endTime and m.endTime >= seasonStart and m.endTime < seasonFinish then
-                    table.insert(overallSeasonMatches, m)
-                end
-            end
-        end
+		if seasonStart and seasonFinish then
+			for _, m in ipairs(history) do
+				local t = tonumber(m.endTime or m.timestamp)
+				if t and t >= seasonStart and t < seasonFinish then
+					table.insert(seasonMatches, m)
+				end
+			end
+		
+			local overallHistory = (bracket.bracketID == 7 or bracket.bracketID == 9) and historyAll or history
+			for _, m in ipairs(overallHistory) do
+				local t = tonumber(m.endTime or m.timestamp)
+				if t and t >= seasonStart and t < seasonFinish then
+					table.insert(overallSeasonMatches, m)
+				end
+			end
+		end
 
         -- Use existing stats engine for win/loss/draw + winrate
         local summary = Stats and Stats.CalculateSummary(seasonMatches, history, bracket.bracketID) or {
@@ -2554,22 +2554,24 @@ function Summary:Refresh()
 
         local cardData = {
             name = bracket.name,
-            currentCR = (function()
-                local cr = select(1, GetPersonalRatedInfo(bracket.bracketID))
-                return tonumber(cr) or 0
-            end)(),
-            currentMMR = (function()
-                -- Prefer the latest real match in history:
-                -- playerStats.postmatchMMR -> friendlyMMR/mmr
-                local last = GetLatestPostMMRFromHistory(history)
-                if last and last > 0 then
-                    return last
-                end
-
-                -- No real match yet (usually initial seed only), so use live/API.
-                local live = select(10, GetPersonalRatedInfo(bracket.bracketID))
-                return tonumber(live) or 0
-            end)(),
+			currentCR = (function()
+				local lastCR = select(1, GetLatestSeasonPlayerSnapshot(history, seasonStart, seasonFinish))
+				if lastCR and lastCR > 0 then
+					return lastCR
+				end
+			
+				local cr = select(1, GetPersonalRatedInfo(bracket.bracketID))
+				return tonumber(cr) or 0
+			end)(),
+			currentMMR = (function()
+				local _, lastMMR = GetLatestSeasonPlayerSnapshot(history, seasonStart, seasonFinish)
+				if lastMMR and lastMMR > 0 then
+					return lastMMR
+				end
+			
+				local live = select(10, GetPersonalRatedInfo(bracket.bracketID))
+				return tonumber(live) or 0
+			end)(),
 
             win = summary.win or 0,
             loss = summary.loss or 0,
