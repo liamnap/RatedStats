@@ -20,4 +20,5 @@ addfriend.lua
 summary.lua
 export.lua
 awc.lua
+currency.lua
 init.lua
