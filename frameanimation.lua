@@ -78,5 +78,6 @@ function RSTATS:PlayDailyMenuIntro(menu)
 
     menu.DailyIntro:SetAlpha(0)
     menu.DailyIntro:Show()
+    PlaySoundFile("Sound\\Spells\\bloodlust_player_cast_head.wav", "Master")
     menu.DailyIntro.anim:Play()
 end
