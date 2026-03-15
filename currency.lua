@@ -9,22 +9,23 @@ local CONQUEST_CURRENCY_ID = 1602
 function CurrencyTracker:GetCurrencySummary()
     local honorInfo = C_CurrencyInfo.GetCurrencyInfo(HONOR_CURRENCY_ID)
     local conquestInfo = C_CurrencyInfo.GetCurrencyInfo(CONQUEST_CURRENCY_ID)
-
     local honorCurrent = honorInfo and (tonumber(honorInfo.quantity) or 0) or 0
     local honorWeekly = honorInfo and (tonumber(honorInfo.quantityEarnedThisWeek) or 0) or 0
     local honorSeason = honorInfo and (tonumber(honorInfo.totalEarned) or 0) or 0
-
+    local honorIconFileID = honorInfo and honorInfo.iconFileID or nil
     local conquestCurrent = conquestInfo and (tonumber(conquestInfo.quantity) or 0) or 0
     local conquestWeekly = conquestInfo and (tonumber(conquestInfo.quantityEarnedThisWeek) or 0) or 0
     local conquestSeason = conquestInfo and (tonumber(conquestInfo.totalEarned) or 0) or 0
-
+    local conquestIconFileID = conquestInfo and conquestInfo.iconFileID or nil
     return {
         honorCurrent = honorCurrent,
         honorWeekly = honorWeekly,
         honorSeason = honorSeason,
+        honorIconFileID = honorIconFileID,
         conquestCurrent = conquestCurrent,
         conquestWeekly = conquestWeekly,
         conquestSeason = conquestSeason,
+        conquestIconFileID = conquestIconFileID,
     }
 end
 
