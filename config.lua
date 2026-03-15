@@ -4819,18 +4819,11 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
     local activeSpecID = useSpec and GetActiveSpecID() or nil
 
     -- Live rating: updates immediately when the player swaps spec.
+        -- Live/API is only the fallback when we do not yet have a real match row.
     do
         local crLive, mmrLive = GetCRandMMR(categoryID)
         currentCR  = tonumber(crLive)  or 0
         currentMMR = tonumber(mmrLive) or 0
-
-        -- IMPORTANT:
-        -- For SS (7) + RBGB (9) we do NOT want to "lock in" the live/API MMR,
-        -- because it can be misleading. These brackets should prefer the last
-        -- stored post-match MMR from our history (playerStats / friendlyMMR).
-        if categoryID == 7 or categoryID == 9 then
-            currentMMR = 0
-        end
     end
 
     local categoryMappings = {
@@ -4860,53 +4853,52 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
                 end
             end
 
-            -- Never let placeholder "Missed Game" rows drive Current CR/MMR display.
+            -- Never let placeholder rows drive Current CR/MMR display.
             local isMissed = entry and (entry.isMissedGame or entry.winLoss == "Missed Game" or entry.friendlyWinLoss == "Missed Game")
-            if ok and (not isMissed) and entry.matchID and (not highestMatchID or entry.matchID > highestMatchID) then
+            local isInitial = entry and entry.isInitial
+            if ok and (not isMissed) and (not isInitial) and entry.matchID and (not highestMatchID or entry.matchID > highestMatchID) then
                 highestMatchID = entry.matchID
                 highestMatchEntry = entry
             end
         end
     end
 
-    -- 2) If we found an entry with the highest matchID, get the stats from that match
+    -- 2) If we found the latest real match, prefer its MMR over the live/API value:
+    --    playerStats.postmatchMMR -> friendlyMMR -> mmr
     if highestMatchEntry then
-        -- Only use history as a fallback. Live CR is the truth for spec-based ratings.
+        -- CR behaviour stays as-is: only use history if live CR is unavailable.
         if (categoryID ~= 7 and categoryID ~= 9) and (not currentCR or currentCR == 0) then
             currentCR = tonumber(highestMatchEntry.cr) or currentCR
         end
-        local teamMMR = tonumber(highestMatchEntry.friendlyMMR)
-        if teamMMR and teamMMR > 0 then
-            if not currentMMR or currentMMR <= 0 then currentMMR = teamMMR end
-        else
-            if not currentMMR or currentMMR <= 0 then currentMMR = tonumber(highestMatchEntry.mmr) or currentMMR end
-        end
 
-        local isArena = (categoryID == 1 or categoryID == 2)
+        local resolvedMMR = nil
 
         if highestMatchEntry.playerStats then
             for _, stats in ipairs(highestMatchEntry.playerStats) do
                 if stats.name == playerName then
+                    local cr = tonumber(stats.newrating)
+                    if (not currentCR or currentCR == 0) and cr then
+                        currentCR = cr
+                    end
+
                     local mmr = tonumber(stats.postmatchMMR)
-                    local cr  = tonumber(stats.newrating)
-                    -- Again: do not override a valid live CR/MMR.
-                    if (not currentCR or currentCR == 0) and cr then currentCR = cr end
-                    -- For SS/RBGB: ALWAYS prefer playerStats.postmatchMMR when available.
-                    if (categoryID == 7 or categoryID == 9) and mmr and mmr > 0 then
-                        currentMMR = mmr
-                    elseif (not currentMMR or currentMMR <= 0) and mmr and mmr > 0 then
-                        currentMMR = mmr
+                    if mmr and mmr > 0 then
+                        resolvedMMR = mmr
                     end
                     break
                 end
             end
         end
-        if isArena then
-            local teamMMR2 = tonumber(highestMatchEntry.friendlyMMR)
-            local curMMR   = tonumber(currentMMR)
-            if teamMMR2 and teamMMR2 > 0 and (not curMMR or curMMR <= 0) then
-                currentMMR = teamMMR2
+
+        if not resolvedMMR or resolvedMMR <= 0 then
+            local teamMMR = tonumber(highestMatchEntry.friendlyMMR) or tonumber(highestMatchEntry.mmr)
+            if teamMMR and teamMMR > 0 then
+                resolvedMMR = teamMMR
             end
+        end
+
+        if resolvedMMR and resolvedMMR > 0 then
+            currentMMR = resolvedMMR
         end
     end
     
