@@ -190,7 +190,7 @@ function CurrencyTracker:Create(parent)
 
     local f = CreateFrame("Frame", "RatedStatsCurrencyTrackerFrame", parent)
     f:SetSize(174, 75)
-    f:SetPoint("TOPLEFT", parent, "TOPLEFT", 29, -74)
+    f:SetPoint("TOPLEFT", parent, "TOPLEFT", 29, -84)
     f:SetFrameStrata(parent:GetFrameStrata())
     f:SetFrameLevel((parent:GetFrameLevel() or 1) + 20)
 
