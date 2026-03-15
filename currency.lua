@@ -227,10 +227,10 @@ function CurrencyTracker:Create(parent)
     f.totalsLabel:SetText("Current / Week / Season")
 
     f.honorBar = CreateTrackedBar(f, 93, 15, "TOPLEFT", f, "TOPLEFT", 62, -32, 0.85, 0.18, 0.18)
-    SetStatusBarMask(f.honorBar, "UI-HUD-UnitFrame-Player-PortraitOn-Bar-Health-Mask", "TOPLEFT", 0, 4)
+    SetStatusBarMask(f.honorBar, "UI-HUD-UnitFrame-Player-PortraitOn-Bar-Health-Mask", "TOPLEFT", 2, 6)
 
     f.conquestBar = CreateTrackedBar(f, 93, 8, "TOPLEFT", f, "TOPLEFT", 62, -48, 1.00, 0.82, 0.00)
-    SetStatusBarMask(f.conquestBar, "UI-HUD-UnitFrame-Player-PortraitOn-Bar-Mana-Mask", "TOPLEFT", 0, 2)
+    SetStatusBarMask(f.conquestBar, "UI-HUD-UnitFrame-Player-PortraitOn-Bar-Mana-Mask", "TOPLEFT", 2, 6)
 
     self.frame = f
     self:Refresh()
