@@ -137,9 +137,9 @@ local function CreateTrackedBar(parent, width, height, point, relativeTo, relati
     bar.bg:SetColorTexture(0, 0, 0, 0.45)
 
     bar.text = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    bar.text:SetFont(GetUnicodeSafeFont(), 8, "OUTLINE")
+    bar.text:SetFont(GetUnicodeSafeFont(), 6, "OUTLINE")
     bar.text:SetPoint("CENTER", bar, "CENTER", 0, 0)
-    bar.text:SetWidth(width - 6)
+    bar.text:SetWidth(width - 4)
     bar.text:SetJustifyH("CENTER")
 
     return bar
@@ -189,7 +189,7 @@ function CurrencyTracker:Create(parent)
     end
 
     local f = CreateFrame("Frame", "RatedStatsCurrencyTrackerFrame", parent)
-    f:SetSize(232, 100)
+    f:SetSize(116, 50)
     f:SetPoint("TOPLEFT", parent, "TOPLEFT", 24, -52)
     f:SetFrameStrata(parent:GetFrameStrata())
     f:SetFrameLevel((parent:GetFrameLevel() or 1) + 20)
@@ -204,32 +204,33 @@ function CurrencyTracker:Create(parent)
     f.portraitMask = f.container:CreateMaskTexture(nil, "BACKGROUND", nil, 2)
     f.portraitMask:SetAtlas("UI-HUD-UnitFrame-Player-Portrait-Mask", true)
     f.portraitMask:SetSize(30, 30)
-    f.portraitMask:SetPoint("TOPLEFT", 24, -19)
+    f.portraitMask:SetPoint("TOPLEFT", 12, -10)
     f.portrait:AddMaskTexture(f.portraitMask)
 
     f.frameTexture = f.container:CreateTexture(nil, "BACKGROUND", nil, 3)
     f.frameTexture:SetAtlas("UI-HUD-UnitFrame-Player-PortraitOn", true)
+    f.frameTexture:SetScale(0.5)
     f.frameTexture:SetPoint("CENTER", f, "CENTER", 0, 0)
 
     f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    f.title:SetFont(GetUnicodeSafeFont(), 9, "OUTLINE")
-    f.title:SetWidth(118)
+    f.title:SetFont(GetUnicodeSafeFont(), 8, "OUTLINE")
+    f.title:SetWidth(60)
     f.title:SetJustifyH("LEFT")
-    f.title:SetPoint("TOPLEFT", f, "TOPLEFT", 88, -27)
-    f.title:SetText("Honor and Conquest Tracking")
+    f.title:SetPoint("TOPLEFT", f, "TOPLEFT", 44, -14)
+    f.title:SetText("Honor / Conquest")
 
     f.totalsLabel = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    f.totalsLabel:SetFont(GetUnicodeSafeFont(), 8, "OUTLINE")
-    f.totalsLabel:SetWidth(124)
+    f.totalsLabel:SetFont(GetUnicodeSafeFont(), 7, "OUTLINE")
+    f.totalsLabel:SetWidth(62)
     f.totalsLabel:SetJustifyH("CENTER")
-    f.totalsLabel:SetPoint("TOPLEFT", f, "TOPLEFT", 85, -15)
+    f.totalsLabel:SetPoint("TOPLEFT", f, "TOPLEFT", 42, -6)
     f.totalsLabel:SetText("Current / Week / Season")
 
-    f.honorBar = CreateTrackedBar(f, 124, 20, "TOPLEFT", f, "TOPLEFT", 85, -40, 0.85, 0.18, 0.18)
-    SetStatusBarMask(f.honorBar, "UI-HUD-UnitFrame-Player-PortraitOn-Bar-Health-Mask", "TOPLEFT", -2, 6)
+    f.honorBar = CreateTrackedBar(f, 62, 10, "TOPLEFT", f, "TOPLEFT", 42, -20, 0.85, 0.18, 0.18)
+    SetStatusBarMask(f.honorBar, "UI-HUD-UnitFrame-Player-PortraitOn-Bar-Health-Mask", "TOPLEFT", -1, 3)
 
-    f.conquestBar = CreateTrackedBar(f, 124, 10, "TOPLEFT", f, "TOPLEFT", 85, -61, 1.00, 0.82, 0.00)
-    SetStatusBarMask(f.conquestBar, "UI-HUD-UnitFrame-Player-PortraitOn-Bar-Mana-Mask", "TOPLEFT", -2, 2)
+    f.conquestBar = CreateTrackedBar(f, 62, 10, "TOPLEFT", f, "TOPLEFT", 42, -35, 1.00, 0.82, 0.00)
+    SetStatusBarMask(f.conquestBar, "UI-HUD-UnitFrame-Player-PortraitOn-Bar-Mana-Mask", "TOPLEFT", -1, 2)
 
     self.frame = f
     self:Refresh()
