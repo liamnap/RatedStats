@@ -138,7 +138,7 @@ local function CreateTrackedBar(parent, width, height, point, relativeTo, relati
 
     bar.text = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     bar.text:SetFont(GetUnicodeSafeFont(), 6, "OUTLINE")
-    bar.text:SetPoint("CENTER", bar, "CENTER", 0, 1)
+    bar.text:SetPoint("CENTER", bar, "CENTER", 0, 0)
     bar.text:SetWidth(width - 6)
     bar.text:SetJustifyH("CENTER")
 
