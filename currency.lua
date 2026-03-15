@@ -198,12 +198,12 @@ function CurrencyTracker:Create(parent)
     f.container:SetAllPoints()
 
     f.portrait = f.container:CreateTexture(nil, "BACKGROUND", nil, 1)
-    f.portrait:SetSize(60, 60)
+    f.portrait:SetSize(30, 30)
     f.portrait:SetPoint("TOPLEFT", 24, -19)
 
     f.portraitMask = f.container:CreateMaskTexture(nil, "BACKGROUND", nil, 2)
     f.portraitMask:SetAtlas("UI-HUD-UnitFrame-Player-Portrait-Mask", true)
-    f.portraitMask:SetSize(60, 60)
+    f.portraitMask:SetSize(30, 30)
     f.portraitMask:SetPoint("TOPLEFT", 24, -19)
     f.portrait:AddMaskTexture(f.portraitMask)
 
