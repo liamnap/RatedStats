@@ -152,14 +152,15 @@ end
 function RSTATS:NotifyNewGameAdded()
     hasPendingNewGameBanner = true
 
-    if UIConfig and UIConfig:IsShown() then
-        if not UIConfig.NewGameBanner then
-            RSTATS:CreateNewGameBanner(UIConfig)
+    local menu = RSTATS and RSTATS.UIConfig
+    if menu and menu:IsShown() then
+        if not menu.NewGameBanner then
+            RSTATS:CreateNewGameBanner(menu)
         end
 
-        if UIConfig.NewGameBanner and not UIConfig.NewGameBanner.anim:IsPlaying() then
+        if menu.NewGameBanner and not menu.NewGameBanner.anim:IsPlaying() then
             hasPendingNewGameBanner = false
-            RSTATS:PlayNewGameBanner(UIConfig)
+            RSTATS:PlayNewGameBanner(menu)
         end
     end
 end
