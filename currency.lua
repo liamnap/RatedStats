@@ -251,7 +251,9 @@ function CurrencyTracker:HandleCapReminder()
         if IsCurrencyCapped(info) then
             db.currencyCapReminderCounter[currencyID] = (db.currencyCapReminderCounter[currencyID] or 0) + 1
 
-            if db.currencyCapReminderCounter[currencyID] % 5 == 0 then
+            local counter = db.currencyCapReminderCounter[currencyID]
+
+            if counter == 1 or counter % 5 == 0 then
                 print(
                     RSTATS:ColorText("Rated Stats: ")
                     .. "|cffffffff"
