@@ -11,19 +11,25 @@ end
 -- Tab ID based map lists
 local MapListsByTab = {
 	[1] = { -- Solo Shuffle
-		"NPG", "M", "HP", "BEA",
-		"ED", "NA", "TTP", "DS",
-		"ROL", "AF", "COC"
+		"RoL", "DS", "TA", "TTP",
+		"M", "BRHA", "NA", "AF",
+		"BEA", "HP", "ED",
+		"MC", "EC", "NPG",
+		"COC"
 	},
 	[2] = { -- 2v2
-		"NPG", "M", "HP", "BEA",
-		"ED", "NA", "TTP", "DS",
-		"ROL", "AF", "COC"
+		"RoL", "DS", "TA", "TTP",
+		"M", "BRHA", "NA", "AF",
+		"BEA", "HP", "ED",
+		"MC", "EC", "NPG",
+		"COC"
 	},
 	[3] = { -- 3v3
-		"NPG", "M", "HP", "BEA",
-		"ED", "NA", "TTP", "DS",
-		"ROL", "AF", "COC"
+		"RoL", "DS", "TA", "TTP",
+		"M", "BRHA", "NA", "AF",
+		"BEA", "HP", "ED",
+		"MC", "EC", "NPG",
+		"COC"
 	},
 	[4] = { -- RBG
 		"Arathi Basin", "Battle for Gilneas", "Deepwind Gorge", "Eye of the Storm",

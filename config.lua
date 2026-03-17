@@ -104,6 +104,14 @@ function Config:Toggle()
 
     -- ✅ If we're showing the menu now, check for historyTable growth
     if wasHidden then
+        if RSTATS and RSTATS.PlayDailyMenuIntro then
+            RSTATS:PlayDailyMenuIntro(menu)
+        end
+
+        if RSTATS and RSTATS.FlushQueuedNewGameBanner then
+            RSTATS:FlushQueuedNewGameBanner(menu)
+        end
+
         local tabID = PanelTemplates_GetSelectedTab(RSTATS.UIConfig)
 
         -- If spec/talents changed while the window was closed, force a rebuild on open.
@@ -550,41 +558,37 @@ local function GetShortMapName(mapName)
 end
 
 RSTATS.MapList = {
-    [30] = GetRealZoneText(30),
-    [2107] = GetRealZoneText(2107),
-    [1191] = GetRealZoneText(1191),
-    [1691] = GetRealZoneText(1691),
-    [2245] = GetRealZoneText(2245),
-    [1105] = GetRealZoneText(1105),
-    [566] = GetRealZoneText(566),
-    [968] = GetRealZoneText(566),
-    [628] = GetRealZoneText(628),
-    [727] = GetRealZoneText(727),
-    [607] = GetRealZoneText(607),
-    [1035] = GetRealZoneText(1035),
-    [761] = GetRealZoneText(761),
-    [726] = GetRealZoneText(726),
-    [2106] = GetRealZoneText(2106),
-    [1280] = GetRealZoneText(1280),
-    [1803] = GetRealZoneText(1803),
-    [2118] = GetRealZoneText(2118),
-    [1552] = GetShortMapName(GetRealZoneText(1552)),
-    [1504] = GetShortMapName(GetRealZoneText(1504)),
-    [562] = GetShortMapName(GetRealZoneText(1672)),
-    [1672] = GetShortMapName(GetRealZoneText(1672)),
-    [2547] = GetShortMapName(GetRealZoneText(2547)),
-    [2373] = GetShortMapName(GetRealZoneText(2373)),
-    [617] = GetShortMapName(GetRealZoneText(617)),
-    [559] = GetShortMapName(GetRealZoneText(1505)),
-    [1505] = GetShortMapName(GetRealZoneText(1505)),
-    [572] = GetShortMapName(GetRealZoneText(572)),
-    [1134] = GetShortMapName(GetRealZoneText(1134)),
-    [980] = GetShortMapName(GetRealZoneText(980)),
-    [1911] = GetShortMapName(GetRealZoneText(1911)),
-    [1825] = GetShortMapName(GetRealZoneText(1825)),
-    [2167] = GetShortMapName(GetRealZoneText(2167)),
-    [2509] = GetShortMapName(GetRealZoneText(2509)),
-    [2563] = GetShortMapName(GetRealZoneText(2563))
+    -- Battlegrounds / PvP maps
+--    [566]  = { name = GetRealZoneText(566),  short = GetRealZoneText(566),  code = "EOTS" }, -- Eye of the Storm
+    [726]  = { name = GetRealZoneText(726),  short = GetRealZoneText(726),  code = "TP"   }, -- Twin Peaks
+    [727]  = { name = GetRealZoneText(727),  short = GetRealZoneText(727),  code = "SSM"  }, -- Silvershard Mines
+    [761]  = { name = GetRealZoneText(761),  short = GetRealZoneText(761),  code = "TBFG" }, -- The Battle for Gilneas
+    [968]  = { name = GetRealZoneText(968),  short = GetRealZoneText(968),  code = "EOTS" }, -- Rated Eye of the Storm
+--    [1105] = { name = GetRealZoneText(1105), short = GetRealZoneText(1105), code = "DWG"  }, -- Deepwind Gorge
+    [1803] = { name = GetRealZoneText(1803), short = GetRealZoneText(1803), code = "SS"   }, -- Seething Shore
+    [2106] = { name = GetRealZoneText(2106), short = GetRealZoneText(2106), code = "WSG"  }, -- Warsong Gulch
+    [2107] = { name = GetRealZoneText(2107), short = GetRealZoneText(2107), code = "AB"   }, -- Arathi Basin
+    [2245] = { name = GetRealZoneText(2245), short = GetRealZoneText(2245), code = "DWG"  }, -- Deepwind Gorge
+    [2656] = { name = GetRealZoneText(2656), short = GetRealZoneText(2656), code = "DHR"  }, -- Deephaul Ravine
+
+    -- Arenas (include your REFlex-style codes)
+    [559]  = { name = GetRealZoneText(559),  short = GetShortMapName(GetRealZoneText(559)),  code = nil    }, -- Nagrand Arena (old)
+    [562]  = { name = GetRealZoneText(562),  short = GetShortMapName(GetRealZoneText(562)),  code = nil    }, -- Zul'Dblade's Edge Arena (old)
+    [572]  = { name = GetRealZoneText(572),  short = GetShortMapName(GetRealZoneText(572)),  code = "RoL"  }, -- Ruins of Lordaeron
+    [617]  = { name = GetRealZoneText(617),  short = GetShortMapName(GetRealZoneText(617)),  code = "DS"   }, -- Dalaran Sewers
+    [980]  = { name = GetRealZoneText(980),  short = GetShortMapName(GetRealZoneText(980)),  code = "TA"   }, -- Tol'viron Arena
+    [1134] = { name = GetRealZoneText(1134), short = GetShortMapName(GetRealZoneText(1134)), code = "TTP"  }, -- The Tiger's Peak
+    [1191] = { name = GetRealZoneText(1191), short = GetShortMapName(GetRealZoneText(1191)), code = "M"    }, -- Mugambala
+    [1504] = { name = GetRealZoneText(1504), short = GetShortMapName(GetRealZoneText(1504)), code = "BRHA" }, -- Black Rook Hold Arena
+    [1505] = { name = GetRealZoneText(1505), short = GetShortMapName(GetRealZoneText(1505)), code = "NA"   }, -- Nagrand Arena
+    [1552] = { name = GetRealZoneText(1552), short = GetShortMapName(GetRealZoneText(1552)), code = "AF"   }, -- Ashamane's Fall
+    [1672] = { name = GetRealZoneText(1672), short = GetShortMapName(GetRealZoneText(1672)), code = "BEA"  }, -- Blade's Edge Arena
+    [1825] = { name = GetRealZoneText(1825), short = GetShortMapName(GetRealZoneText(1825)), code = "HP"   }, -- Hook Point
+    [2373] = { name = GetRealZoneText(2373), short = GetShortMapName(GetRealZoneText(2373)), code = "ED"   }, -- Empyrean Domain
+    [2509] = { name = GetRealZoneText(2509), short = GetShortMapName(GetRealZoneText(2509)), code = "MC"   }, -- Maldraxxus Coliseum
+    [2547] = { name = GetRealZoneText(2547), short = GetShortMapName(GetRealZoneText(2547)), code = "EC"   }, -- Enigma Crucible
+    [2563] = { name = GetRealZoneText(2563), short = GetShortMapName(GetRealZoneText(2563)), code = "NPG"  }, -- Nokhudon Proving Grounds
+    [2759] = { name = GetRealZoneText(2759), short = GetShortMapName(GetRealZoneText(2759)), code = "COC"  }, -- Cage of Carnage
 }
 
 -- Register events to dynamically track raid leader
@@ -2233,6 +2237,7 @@ local raceIcons = {
 	["Earthen"] = "|TInterface\\CHARACTERFRAME\\TemporaryPortrait-Male-Dwarf.blp:12:12:0:0:64:64:0:64:0:64|t",
     ["Goblin"] = "|TInterface\\Icons\\achievement_Goblinhead.blp:12:12:0:0:64:64:0:64:0:64|t",
     ["Gnome"] = "|TInterface\\Icons\\Achievement_Character_Gnome_Male.blp:12:12:0:0:64:64:0:64:0:64|t",
+    ["Haranir"] = "|TInterface\\Icons\\INV12_Haranir_Character_Creation_Male.blp:12:12:0:0:64:64:0:64:0:64|t",
     ["Highmountain Tauren"] = "|TInterface\\Icons\\INV_Misc_Head_Tauren_01.blp:12:12:0:0:64:64:0:64:0:64|t",
     ["Human"] = "|TInterface\\Icons\\Achievement_Character_Human_Male.blp:12:12:0:0:64:64:0:64:0:64|t",
     ["Kul Tiran"] = "|TInterface\\CHARACTERFRAME\\TemporaryPortrait-Male-KulTiran.blp:12:12:0:0:64:64:0:64:0:64|t", 
@@ -2272,72 +2277,82 @@ local classIcons = {
 
 local specIcons = {
     -- Death Knight
-    ["Blood"] = "|TInterface\\Icons\\Spell_Deathknight_BloodPresence:12:12:0:0:64:64:0:64:0:64|t",
-    ["Frost"] = "|TInterface\\Icons\\Spell_Deathknight_FrostPresence:12:12:0:0:64:64:0:64:0:64|t",
-    ["Unholy"] = "|TInterface\\Icons\\Spell_Deathknight_UnholyPresence:12:12:0:0:64:64:0:64:0:64|t",
+    ["Death Knight:Blood"] = "|TInterface\\Icons\\Spell_Deathknight_BloodPresence:12:12:0:0:64:64:0:64:0:64|t",
+    ["Death Knight:Frost"] = "|TInterface\\Icons\\Spell_Deathknight_FrostPresence:12:12:0:0:64:64:0:64:0:64|t",
+    ["Death Knight:Unholy"] = "|TInterface\\Icons\\Spell_Deathknight_UnholyPresence:12:12:0:0:64:64:0:64:0:64|t",
 
     -- Demon Hunter
-    ["Havoc"] = "|TInterface\\Icons\\Ability_DemonHunter_SpecDPS:12:12:0:0:64:64:0:64:0:64|t",
-    ["Vengeance"] = "|TInterface\\Icons\\Ability_DemonHunter_SpecTank:12:12:0:0:64:64:0:64:0:64|t",
+    ["Demon Hunter:Havoc"] = "|TInterface\\Icons\\Ability_DemonHunter_SpecDPS:12:12:0:0:64:64:0:64:0:64|t",
+    ["Demon Hunter:Vengeance"] = "|TInterface\\Icons\\Ability_DemonHunter_SpecTank:12:12:0:0:64:64:0:64:0:64|t",
+	["Demon Hunter:Devourer"] = "|TInterface\\Icons\\Classicon_DemonHunter_Void_64.blp:12:12:0:0:64:64:0:64:0:64|t",
 
     -- Druid
-    ["Balance"] = "|TInterface\\Icons\\Spell_Nature_StarFall:12:12:0:0:64:64:0:64:0:64|t",
-    ["Feral"] = "|TInterface\\Icons\\Ability_Druid_CatForm:12:12:0:0:64:64:0:64:0:64|t",
-    ["Guardian"] = "|TInterface\\Icons\\Ability_Racial_BearForm:12:12:0:0:64:64:0:64:0:64|t",
-    ["Restoration"] = "|TInterface\\Icons\\Spell_Nature_HealingTouch:12:12:0:0:64:64:0:64:0:64|t",
+    ["Druid:Balance"] = "|TInterface\\Icons\\Spell_Nature_StarFall:12:12:0:0:64:64:0:64:0:64|t",
+    ["Druid:Feral"] = "|TInterface\\Icons\\Ability_Druid_CatForm:12:12:0:0:64:64:0:64:0:64|t",
+    ["Druid:Guardian"] = "|TInterface\\Icons\\Ability_Racial_BearForm:12:12:0:0:64:64:0:64:0:64|t",
+    ["Druid:Restoration"] = "|TInterface\\Icons\\Spell_Nature_HealingTouch:12:12:0:0:64:64:0:64:0:64|t",
 
     -- Evoker
-    ["Devastation"] = "|TInterface\\Icons\\ClassIcon_Evoker_Devastation:12:12:0:0:64:64:0:64:0:64|t",
-    ["Preservation"] = "|TInterface\\Icons\\ClassIcon_Evoker_Preservation:12:12:0:0:64:64:0:64:0:64|t",
-    ["Augmentation"] = "|TInterface\\Icons\\ClassIcon_Evoker_Augmentation:12:12:0:0:64:64:0:64:0:64|t",
+    ["Evoker:Devastation"] = "|TInterface\\Icons\\ClassIcon_Evoker_Devastation:12:12:0:0:64:64:0:64:0:64|t",
+    ["Evoker:Preservation"] = "|TInterface\\Icons\\ClassIcon_Evoker_Preservation:12:12:0:0:64:64:0:64:0:64|t",
+    ["Evoker:Augmentation"] = "|TInterface\\Icons\\ClassIcon_Evoker_Augmentation:12:12:0:0:64:64:0:64:0:64|t",
 
     -- Hunter
-    ["Beast Mastery"] = "|TInterface\\Icons\\Ability_Hunter_BeastMastery:12:12:0:0:64:64:0:64:0:64|t",
-    ["Marksmanship"] = "|TInterface\\Icons\\Ability_Hunter_FocusedAim:12:12:0:0:64:64:0:64:0:64|t",
-    ["Survival"] = "|TInterface\\Icons\\Ability_Hunter_SurvivalInstincts:12:12:0:0:64:64:0:64:0:64|t",
+    ["Hunter:Beast Mastery"] = "|TInterface\\Icons\\Ability_Hunter_BeastMastery:12:12:0:0:64:64:0:64:0:64|t",
+    ["Hunter:Marksmanship"] = "|TInterface\\Icons\\Ability_Hunter_FocusedAim:12:12:0:0:64:64:0:64:0:64|t",
+    ["Hunter:Survival"] = "|TInterface\\Icons\\Ability_Hunter_SurvivalInstincts:12:12:0:0:64:64:0:64:0:64|t",
 
     -- Mage
-    ["Arcane"] = "|TInterface\\Icons\\Spell_Holy_MagicalSentry:12:12:0:0:64:64:0:64:0:64|t",
-    ["Fire"] = "|TInterface\\Icons\\Spell_Fire_FireBolt02:12:12:0:0:64:64:0:64:0:64|t",
-    ["Frost"] = "|TInterface\\Icons\\Spell_Frost_FrostBolt02:12:12:0:0:64:64:0:64:0:64|t",
+    ["Mage:Arcane"] = "|TInterface\\Icons\\Spell_Holy_MagicalSentry:12:12:0:0:64:64:0:64:0:64|t",
+    ["Mage:Fire"] = "|TInterface\\Icons\\Spell_Fire_FireBolt02:12:12:0:0:64:64:0:64:0:64|t",
+    ["Mage:Frost"] = "|TInterface\\Icons\\Spell_Frost_FrostBolt02:12:12:0:0:64:64:0:64:0:64|t",
 
     -- Monk
-    ["Brewmaster"] = "|TInterface\\Icons\\Spell_Monk_Brewmaster_Spec:12:12:0:0:64:64:0:64:0:64|t",
-    ["Mistweaver"] = "|TInterface\\Icons\\Spell_Monk_MistWeaver_Spec:12:12:0:0:64:64:0:64:0:64|t",
-    ["Windwalker"] = "|TInterface\\Icons\\Spell_Monk_WindWalker_Spec:12:12:0:0:64:64:0:64:0:64|t",
+    ["Monk:Brewmaster"] = "|TInterface\\Icons\\Spell_Monk_Brewmaster_Spec:12:12:0:0:64:64:0:64:0:64|t",
+    ["Monk:Mistweaver"] = "|TInterface\\Icons\\Spell_Monk_MistWeaver_Spec:12:12:0:0:64:64:0:64:0:64|t",
+    ["Monk:Windwalker"] = "|TInterface\\Icons\\Spell_Monk_WindWalker_Spec:12:12:0:0:64:64:0:64:0:64|t",
 
     -- Paladin
-    ["Holy"] = "|TInterface\\Icons\\Spell_Holy_HolyBolt:12:12:0:0:64:64:0:64:0:64|t",
-    ["Protection"] = "|TInterface\\Icons\\Ability_Paladin_ShieldoftheTemplar:12:12:0:0:64:64:0:64:0:64|t",
-    ["Retribution"] = "|TInterface\\Icons\\Spell_Holy_AuraOfLight:12:12:0:0:64:64:0:64:0:64|t",
+    ["Paladin:Holy"] = "|TInterface\\Icons\\Spell_Holy_HolyBolt:12:12:0:0:64:64:0:64:0:64|t",
+    ["Paladin:Protection"] = "|TInterface\\Icons\\Ability_Paladin_ShieldoftheTemplar:12:12:0:0:64:64:0:64:0:64|t",
+    ["Paladin:Retribution"] = "|TInterface\\Icons\\Spell_Holy_AuraOfLight:12:12:0:0:64:64:0:64:0:64|t",
 
     -- Priest
-    ["Discipline"] = "|TInterface\\Icons\\Spell_Holy_PowerWordShield:12:12:0:0:64:64:0:64:0:64|t",
-    ["Holy"] = "|TInterface\\Icons\\Spell_Holy_GuardianSpirit:12:12:0:0:64:64:0:64:0:64|t",
-    ["Shadow"] = "|TInterface\\Icons\\Spell_Shadow_ShadowWordPain:12:12:0:0:64:64:0:64:0:64|t",
+    ["Priest:Discipline"] = "|TInterface\\Icons\\Spell_Holy_PowerWordShield:12:12:0:0:64:64:0:64:0:64|t",
+    ["Priest:Holy"] = "|TInterface\\Icons\\Spell_Holy_GuardianSpirit:12:12:0:0:64:64:0:64:0:64|t",
+    ["Priest:Shadow"] = "|TInterface\\Icons\\Spell_Shadow_ShadowWordPain:12:12:0:0:64:64:0:64:0:64|t",
 
     -- Rogue
-    ["Assassination"] = "|TInterface\\Icons\\Ability_Rogue_DeadlyBrew:12:12:0:0:64:64:0:64:0:64|t",
-    ["Outlaw"] = "|TInterface\\Icons\\Ability_Rogue_Waylay:12:12:0:0:64:64:0:64:0:64|t",
-    ["Subtlety"] = "|TInterface\\Icons\\Ability_Stealth:12:12:0:0:64:64:0:64:0:64|t",
+    ["Rogue:Assassination"] = "|TInterface\\Icons\\Ability_Rogue_DeadlyBrew:12:12:0:0:64:64:0:64:0:64|t",
+    ["Rogue:Outlaw"] = "|TInterface\\Icons\\Ability_Rogue_Waylay:12:12:0:0:64:64:0:64:0:64|t",
+    ["Rogue:Subtlety"] = "|TInterface\\Icons\\Ability_Stealth:12:12:0:0:64:64:0:64:0:64|t",
 
     -- Shaman
-    ["Elemental"] = "|TInterface\\Icons\\Spell_Nature_Lightning:12:12:0:0:64:64:0:64:0:64|t",
-    ["Enhancement"] = "|TInterface\\Icons\\Spell_Shaman_ImprovedStormstrike:12:12:0:0:64:64:0:64:0:64|t",
-    ["Restoration"] = "|TInterface\\Icons\\Spell_Nature_MagicImmunity:12:12:0:0:64:64:0:64:0:64|t",
+    ["Shaman:Elemental"] = "|TInterface\\Icons\\Spell_Nature_Lightning:12:12:0:0:64:64:0:64:0:64|t",
+    ["Shaman:Enhancement"] = "|TInterface\\Icons\\Spell_Shaman_ImprovedStormstrike:12:12:0:0:64:64:0:64:0:64|t",
+    ["Shaman:Restoration"] = "|TInterface\\Icons\\Spell_Nature_MagicImmunity:12:12:0:0:64:64:0:64:0:64|t",
 
     -- Warlock
-    ["Affliction"] = "|TInterface\\Icons\\Spell_Shadow_DeathCoil:12:12:0:0:64:64:0:64:0:64|t",
-    ["Demonology"] = "|TInterface\\Icons\\Spell_Shadow_Metamorphosis:12:12:0:0:64:64:0:64:0:64|t",
-    ["Destruction"] = "|TInterface\\Icons\\Spell_Shadow_RainOfFire:12:12:0:0:64:64:0:64:0:64|t",
+    ["Warlock:Affliction"] = "|TInterface\\Icons\\Spell_Shadow_DeathCoil:12:12:0:0:64:64:0:64:0:64|t",
+    ["Warlock:Demonology"] = "|TInterface\\Icons\\Spell_Shadow_Metamorphosis:12:12:0:0:64:64:0:64:0:64|t",
+    ["Warlock:Destruction"] = "|TInterface\\Icons\\Spell_Shadow_RainOfFire:12:12:0:0:64:64:0:64:0:64|t",
 
     -- Warrior
-    ["Arms"] = "|TInterface\\Icons\\Ability_Warrior_SavageBlow:12:12:0:0:64:64:0:64:0:64|t",
-    ["Fury"] = "|TInterface\\Icons\\Ability_Warrior_InnerRage:12:12:0:0:64:64:0:64:0:64|t",
-    ["Protection"] = "|TInterface\\Icons\\Ability_Warrior_DefensiveStance:12:12:0:0:64:64:0:64:0:64|t",
+    ["Warrior:Arms"] = "|TInterface\\Icons\\Ability_Warrior_SavageBlow:12:12:0:0:64:64:0:64:0:64|t",
+    ["Warrior:Fury"] = "|TInterface\\Icons\\Ability_Warrior_InnerRage:12:12:0:0:64:64:0:64:0:64|t",
+    ["Warrior:Protection"] = "|TInterface\\Icons\\Ability_Warrior_DefensiveStance:12:12:0:0:64:64:0:64:0:64|t",
 
     ["-"] = "-"  -- This will preserve the hyphen in the text
 }
+
+local function GetSpecIcon(className, specName)
+    if not specName or specName == "-" then
+        return "-"
+    end
+
+    local key = (className or "") .. ":" .. specName
+    return specIcons[key] or specName
+end
 
 local function CreateIconWithTooltip(parentFrame, content, tooltipText, xOffset, yOffset, columnWidth, rowHeight, isAtlas)
     if isAtlas then
@@ -2737,6 +2752,9 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
         -- Skip table insert for now, let the 20second delay handle it
     else
         table.insert(historyTable, 1, entry)
+        if RSTATS and RSTATS.NotifyNewGameAdded then
+            RSTATS:NotifyNewGameAdded()
+        end
         -- Spec view is runtime-cached. Bust cache so switching spec shows this row immediately.
         if (categoryID == 7 or categoryID == 9) and RSTATS.__SpecHistoryCache then
             local key = (categoryID == 7 and "SoloShuffleHistoryBySpec") or "SoloRBGHistoryBySpec"
@@ -2883,6 +2901,9 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             }
 
             table.insert(historyTable, 1, ssRoundData)
+            if RSTATS and RSTATS.NotifyNewGameAdded then
+                RSTATS:NotifyNewGameAdded()
+            end
             -- Bust runtime spec cache for SS so the new round appears under the right spec immediately.
             if RSTATS.__SpecHistoryCache then
                 local bucket = RSTATS.__SpecHistoryCache["SoloShuffleHistoryBySpec"]
@@ -3389,6 +3410,8 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
             scoreText = ""
         end
         if type(match.duration) == "number" then
+            -- Preserve raw seconds for export/logic, but format for display.
+            if match.durationSeconds == nil then match.durationSeconds = match.duration end
             match.duration = SecondsToTime(match.duration)
         end
 		
@@ -4438,7 +4461,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 factionIcons[player.faction] or player.faction,
                 raceIcons[player.race] or player.race,
                 classIcons[player.class] or player.class,
-                specIcons[player.spec] or player.spec,
+                GetSpecIcon(player.class, player.spec),
                 roleIcons[player.role] or player.role,
                 FormatCRMMR(player),
                 player.killingBlows,
@@ -4455,7 +4478,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 factionIcons[player.faction] or player.faction,
                 raceIcons[player.race] or player.race,
                 classIcons[player.class] or player.class,
-                specIcons[player.spec] or player.spec,
+                GetSpecIcon(player.class, player.spec),
                 roleIcons[player.role] or player.role,
                 FormatCRMMR(player),
                 player.killingBlows,
@@ -4588,7 +4611,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 factionIcons[player.faction] or player.faction,
                 raceIcons[player.race] or player.race,
                 classIcons[player.class] or player.class,
-                specIcons[player.spec] or player.spec,
+                GetSpecIcon(player.class, player.spec),
                 roleIcons[player.role] or player.role,
                 FormatCRMMR(player),
                 player.killingBlows,
@@ -4605,7 +4628,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 factionIcons[player.faction] or player.faction,
                 raceIcons[player.race] or player.race,
                 classIcons[player.class] or player.class,
-                specIcons[player.spec] or player.spec,
+                GetSpecIcon(player.class, player.spec),
                 roleIcons[player.role] or player.role,
                 FormatCRMMR(player),
                 player.killingBlows,
@@ -4810,18 +4833,11 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
     local activeSpecID = useSpec and GetActiveSpecID() or nil
 
     -- Live rating: updates immediately when the player swaps spec.
+        -- Live/API is only the fallback when we do not yet have a real match row.
     do
         local crLive, mmrLive = GetCRandMMR(categoryID)
         currentCR  = tonumber(crLive)  or 0
         currentMMR = tonumber(mmrLive) or 0
-
-        -- IMPORTANT:
-        -- For SS (7) + RBGB (9) we do NOT want to "lock in" the live/API MMR,
-        -- because it can be misleading. These brackets should prefer the last
-        -- stored post-match MMR from our history (playerStats / friendlyMMR).
-        if categoryID == 7 or categoryID == 9 then
-            currentMMR = 0
-        end
     end
 
     local categoryMappings = {
@@ -4851,53 +4867,52 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
                 end
             end
 
-            -- Never let placeholder "Missed Game" rows drive Current CR/MMR display.
+            -- Never let placeholder rows drive Current CR/MMR display.
             local isMissed = entry and (entry.isMissedGame or entry.winLoss == "Missed Game" or entry.friendlyWinLoss == "Missed Game")
-            if ok and (not isMissed) and entry.matchID and (not highestMatchID or entry.matchID > highestMatchID) then
+            local isInitial = entry and entry.isInitial
+            if ok and (not isMissed) and (not isInitial) and entry.matchID and (not highestMatchID or entry.matchID > highestMatchID) then
                 highestMatchID = entry.matchID
                 highestMatchEntry = entry
             end
         end
     end
 
-    -- 2) If we found an entry with the highest matchID, get the stats from that match
+    -- 2) If we found the latest real match, prefer its MMR over the live/API value:
+    --    playerStats.postmatchMMR -> friendlyMMR -> mmr
     if highestMatchEntry then
-        -- Only use history as a fallback. Live CR is the truth for spec-based ratings.
+        -- CR behaviour stays as-is: only use history if live CR is unavailable.
         if (categoryID ~= 7 and categoryID ~= 9) and (not currentCR or currentCR == 0) then
             currentCR = tonumber(highestMatchEntry.cr) or currentCR
         end
-        local teamMMR = tonumber(highestMatchEntry.friendlyMMR)
-        if teamMMR and teamMMR > 0 then
-            if not currentMMR or currentMMR <= 0 then currentMMR = teamMMR end
-        else
-            if not currentMMR or currentMMR <= 0 then currentMMR = tonumber(highestMatchEntry.mmr) or currentMMR end
-        end
 
-        local isArena = (categoryID == 1 or categoryID == 2)
+        local resolvedMMR = nil
 
         if highestMatchEntry.playerStats then
             for _, stats in ipairs(highestMatchEntry.playerStats) do
                 if stats.name == playerName then
+                    local cr = tonumber(stats.newrating)
+                    if (not currentCR or currentCR == 0) and cr then
+                        currentCR = cr
+                    end
+
                     local mmr = tonumber(stats.postmatchMMR)
-                    local cr  = tonumber(stats.newrating)
-                    -- Again: do not override a valid live CR/MMR.
-                    if (not currentCR or currentCR == 0) and cr then currentCR = cr end
-                    -- For SS/RBGB: ALWAYS prefer playerStats.postmatchMMR when available.
-                    if (categoryID == 7 or categoryID == 9) and mmr and mmr > 0 then
-                        currentMMR = mmr
-                    elseif (not currentMMR or currentMMR <= 0) and mmr and mmr > 0 then
-                        currentMMR = mmr
+                    if mmr and mmr > 0 then
+                        resolvedMMR = mmr
                     end
                     break
                 end
             end
         end
-        if isArena then
-            local teamMMR2 = tonumber(highestMatchEntry.friendlyMMR)
-            local curMMR   = tonumber(currentMMR)
-            if teamMMR2 and teamMMR2 > 0 and (not curMMR or curMMR <= 0) then
-                currentMMR = teamMMR2
+
+        if not resolvedMMR or resolvedMMR <= 0 then
+            local teamMMR = tonumber(highestMatchEntry.friendlyMMR) or tonumber(highestMatchEntry.mmr)
+            if teamMMR and teamMMR > 0 then
+                resolvedMMR = teamMMR
             end
+        end
+
+        if resolvedMMR and resolvedMMR > 0 then
+            currentMMR = resolvedMMR
         end
     end
     
@@ -5253,6 +5268,43 @@ end
 -- Config functions continued
 ----------------------------------
 
+local function CreateAWCBanner(parent)
+    if parent.AWCBanner then
+        return parent.AWCBanner
+    end
+
+    local banner = CreateFrame("Frame", nil, parent)
+    banner:SetSize(360, 120)
+    banner:SetFrameStrata("HIGH")
+    banner:SetFrameLevel(10)
+
+    local function PositionAWCBanner()
+        local parentWidth = parent:GetWidth() or 0
+        local xOffset = math.floor(parentWidth * 0.40)
+        banner:ClearAllPoints()
+        banner:SetPoint("TOP", parent, "TOP", xOffset, -80)
+    end
+
+    banner.logo = banner:CreateTexture(nil, "ARTWORK")
+    banner.logo:SetSize(100, 100)
+    banner.logo:SetPoint("TOP", banner, "TOP", 0, 10)
+    banner.logo:SetTexture("Interface\\AddOns\\RatedStats\\images\\AWC_MN.png")
+
+    banner.text = banner:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    banner.text:SetFont(GetUnicodeSafeFont(), 11, "OUTLINE")
+    banner.text:SetPoint("TOP", banner.logo, "BOTTOM", 0, 12)
+    banner.text:SetWidth(360)
+    banner.text:SetJustifyH("CENTER")
+
+    local bannerData = (RSTATS.GetAWCBannerText and RSTATS:GetAWCBannerText()) or { left = "Next AWC", right = " TBC" }
+    banner.text:SetText(RSTATS:ColorText(bannerData.left) .. "|cffffffff" .. bannerData.right .. "|r")
+
+    PositionAWCBanner()
+
+    parent.AWCBanner = banner
+    return banner
+end
+
 function Config:CreateMenu()
     if UIConfig then return UIConfig end
 
@@ -5308,6 +5360,14 @@ function Config:CreateMenu()
     UIConfig.BG:SetTexture(bgPath)
     UIConfig.BG:SetAlpha(0.4)
 
+    if RSTATS and RSTATS.CreateDailyMenuIntro then
+        RSTATS:CreateDailyMenuIntro(UIConfig)
+    end
+
+    if RSTATS and RSTATS.CreateNewGameBanner then
+        RSTATS:CreateNewGameBanner(UIConfig)
+    end
+
     -- Portrait
     local portrait = UIConfig.PortraitContainer:CreateTexture(nil, "ARTWORK")
     portrait:SetTexture("Interface\\AddOns\\RatedStats\\RatedStats")
@@ -5317,9 +5377,13 @@ function Config:CreateMenu()
     portrait:SetDrawLayer("ARTWORK", -1)
     UIConfig.portrait = portrait
 
-    -- Example extra UI
+    -- Extra UI
     Config:CreateSearchBox(UIConfig)
     Config:CreateFilterMenu(UIConfig)
+    CreateAWCBanner(UIConfig)
+    if RSTATS.CurrencyTracker and RSTATS.CurrencyTracker.Create then
+        RSTATS.CurrencyTracker:Create(UIConfig)
+    end
 
 	local statsBar = CreateFrame("Frame", "RatedStatsMatchStatsBar", UIConfig)
 	statsBar:SetSize(800, 24)
@@ -5824,6 +5888,30 @@ function Config:CreateMenu()
     UIConfig.SettingsButton.Icon:SetTexCoord(0.10, 0.90, 0.10, 0.90)
     UIConfig.SettingsButton.Icon:SetVertexColor(1, 0.82, 0.2, 1) -- match the yellow-ish button glyphs
 
+    -- Export/Download button (next to Settings)
+    UIConfig.ExportButton = CreateFrame("Button", "RatedStatsExportButton", UIConfig)
+    UIConfig.ExportButton:SetSize(24, 24)
+    UIConfig.ExportButton:SetPoint("RIGHT", UIConfig.SettingsButton, "LEFT", 0, 0)
+    UIConfig.ExportButton:SetFrameStrata("DIALOG")
+    UIConfig.ExportButton:SetFrameLevel(UIConfig.CloseButton:GetFrameLevel())
+    UIConfig.ExportButton:SetHighlightAtlas("RedButton-Highlight", "ADD")
+
+    UIConfig.ExportButton.BG = UIConfig.ExportButton:CreateTexture(nil, "ARTWORK")
+    UIConfig.ExportButton.BG:SetAllPoints()
+    UIConfig.ExportButton.BG:SetAtlas("RedButton-Exit")
+
+    UIConfig.ExportButton.Cover = UIConfig.ExportButton:CreateTexture(nil, "OVERLAY")
+    UIConfig.ExportButton.Cover:SetPoint("TOPLEFT", 4, -4)
+    UIConfig.ExportButton.Cover:SetPoint("BOTTOMRIGHT", -4, 4)
+    UIConfig.ExportButton.Cover:SetColorTexture(0.33, 0.06, 0.06, 1)
+
+    UIConfig.ExportButton.Icon = UIConfig.ExportButton:CreateTexture(nil, "OVERLAY")
+    UIConfig.ExportButton.Icon:SetPoint("CENTER", 0, 0)
+    UIConfig.ExportButton.Icon:SetAtlas("StreamCinematic-DownloadIcon", false)
+    UIConfig.ExportButton.Icon:SetSize(22, 22)
+    UIConfig.ExportButton.Icon:SetTexCoord(0.10, 0.90, 0.10, 0.90)
+    UIConfig.ExportButton.Icon:SetVertexColor(1, 0.82, 0.2, 1)
+
     UIConfig.SettingsButton:SetScript("OnMouseDown", function(self)
         if self.BG then self.BG:SetAtlas("RedButton-exit-pressed") end
         if self.Icon then self.Icon:SetPoint("CENTER", 1, -1) end
@@ -5837,6 +5925,26 @@ function Config:CreateMenu()
         GameTooltip:SetText("Settings", 1, 1, 1)
         GameTooltip:AddLine("Open Rated Stats settings.", 0.8, 0.8, 0.8)
         GameTooltip:Show()
+    end)
+    UIConfig.ExportButton:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Export", 1, 1, 1)
+        GameTooltip:AddLine("Open the export window (copy to clipboard).", 0.8, 0.8, 0.8)
+        GameTooltip:Show()
+    end)
+    UIConfig.ExportButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    UIConfig.ExportButton:SetScript("OnMouseDown", function(self)
+        if self.BG then self.BG:SetAtlas("RedButton-exit-pressed") end
+        if self.Icon then self.Icon:SetPoint("CENTER", 1, -1) end
+    end)
+    UIConfig.ExportButton:SetScript("OnMouseUp", function(self)
+        if self.BG then self.BG:SetAtlas("RedButton-Exit") end
+        if self.Icon then self.Icon:SetPoint("CENTER", 0, 0) end
+    end)
+    UIConfig.ExportButton:SetScript("OnClick", function()
+        if RSTATS and RSTATS.OpenExportWindow then
+            RSTATS:OpenExportWindow()
+        end
     end)
     UIConfig.SettingsButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
     UIConfig.SettingsButton:SetScript("OnClick", function()

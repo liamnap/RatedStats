@@ -128,6 +128,93 @@ EventUtil.ContinueOnAddOnLoaded("RatedStats", function()
         Settings.CreateCheckbox(category, setting, "Will announce when a newer version is seen in your group (and when you have updated).")
     end
 
+    -- Tools: Export / Wipe (implemented as action-style checkboxes)
+    -- These settings are NOT meant to stay checked. Clicking them performs an action then resets back to false.
+    do
+        db.settings.toolsExport = false
+        local setting = Settings.RegisterAddOnSetting(
+            category,
+            "RSTATS_TOOLS_EXPORT",
+            "toolsExport",
+            db.settings,
+            Settings.VarType.Boolean,
+            "Export historical data",
+            false
+        )
+
+        local guard = false
+        setting:SetValueChangedCallback(function()
+            if guard then return end
+            if db.settings.toolsExport then
+                if RSTATS and RSTATS.OpenExportWindow then
+                    RSTATS:OpenExportWindow()
+                end
+                guard = true
+                db.settings.toolsExport = false
+                setting:SetValue(false)
+                guard = false
+            end
+        end)
+
+        Settings.CreateCheckbox(category, setting, "Opens an export window so you can copy your SavedVariables data out of the game.")
+    end
+
+    do
+        db.settings.toolsWipe = false
+        local setting = Settings.RegisterAddOnSetting(
+            category,
+            "RSTATS_TOOLS_WIPE",
+            "toolsWipe",
+            db.settings,
+            Settings.VarType.Boolean,
+            "Wipe database (this character)",
+            false
+        )
+
+        local guard = false
+        setting:SetValueChangedCallback(function()
+            if guard then return end
+            if db.settings.toolsWipe then
+                if RSTATS and RSTATS.ConfirmWipeDatabase then
+                    RSTATS:ConfirmWipeDatabase()
+                end
+                guard = true
+                db.settings.toolsWipe = false
+                setting:SetValue(false)
+                guard = false
+            end
+        end)
+
+        Settings.CreateCheckbox(category, setting, "Deletes all Rated Stats history for your current character.\n\nTo wipe all databases wipe from CurseForge or delete in the WTF Folder")
+    end
+
+    do
+        local optsSummaryGraph = Settings.CreateControlTextContainer()
+        optsSummaryGraph:Add(2, "Candlestick")
+        optsSummaryGraph:Add(1, "Points")
+
+        if type(db.settings.summaryGraphStyle) ~= "number" then
+            db.settings.summaryGraphStyle = 2
+        end
+
+        local setting = Settings.RegisterAddOnSetting(
+            category,
+            "RSTATS_SUMMARY_GRAPH_STYLE",
+            "summaryGraphStyle",
+            db.settings,
+            Settings.VarType.Number,
+            "Summary graph style",
+            2
+        )
+        Settings.CreateDropdown(category, setting, function() return optsSummaryGraph:GetData() end, nil)
+
+        setting:SetValueChangedCallback(function()
+            if RSTATS and RSTATS.Summary and RSTATS.Summary.frame and RSTATS.Summary.frame:IsShown() then
+                RSTATS.Summary:Refresh()
+            end
+        end)
+    end
+
     Settings.RegisterAddOnCategory(category)
 
     -- Achievements subcategory (only if the module is installed + enabled)
