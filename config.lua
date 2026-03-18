@@ -3386,7 +3386,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 	
 	-- Step 1: Measure headers
 	for i, text in ipairs(headers) do
-		tempFS:SetText(text)
+		tempFS:SetText(tostring(text or ""))
 		rawColumnWidths[i] = tempFS:GetStringWidth() + spacing
 	end
 
@@ -3430,23 +3430,23 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
             date("%a %d %b %Y - %H:%M:%S", match.endTime) or "N/A",
             (match.duration or "N/A"),
             "",
-            (match.teamFaction or "N/A"),
-            (match.friendlyRaidLeader or "N/A"),
-            (match.friendlyAvgCR or "N/A"),
-            (match.friendlyMMR or "N/A"),
+            tostring(match.teamFaction or "N/A"),
+            tostring(match.friendlyRaidLeader or "N/A"),
+            tostring(match.friendlyAvgCR or "N/A"),
+            tostring(match.friendlyMMR or "N/A"),
             FormatNumber(match.friendlyTotalDamage) or "N/A",
             FormatNumber(match.friendlyTotalHealing) or "N/A",
-            (match.friendlyRatingChange or "N/A"),
+            tostring(match.friendlyRatingChange or "N/A"),
             "",
             "",
-            (match.enemyFaction or "N/A"),
-            (match.enemyRaidLeader or "N/A"),
-            (match.enemyAvgCR or "N/A"),
-            (match.enemyMMR or "N/A"),
+            tostring(match.enemyFaction or "N/A"),
+            tostring(match.enemyRaidLeader or "N/A"),
+            tostring(match.enemyAvgCR or "N/A"),
+            tostring(match.enemyMMR or "N/A"),
             FormatNumber(match.enemyTotalDamage) or "N/A",
             FormatNumber(match.enemyTotalHealing) or "N/A",
-            (match.enemyRatingChange or "N/A"),
-			(match.note or "")
+            tostring(match.enemyRatingChange or "N/A"),
+			tostring(match.note or "")
         }
     end
 	
@@ -3454,7 +3454,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 	for _, match in ipairs(historyTable) do
 		local row = formatMatch(match)
 		for i, value in ipairs(row) do
-			tempFS:SetText(value or "")
+			tempFS:SetText(tostring(value or ""))
 			local w = tempFS:GetStringWidth() + spacing
 			if w > (rawColumnWidths[i] or 0) then
 				rawColumnWidths[i] = w
@@ -3527,7 +3527,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 			h:SetJustifyH("CENTER")
 			h:SetTextColor(1,1,1)
 			h:SetShadowOffset(1,-1)
-			h:SetText(name)
+			h:SetText(tostring(name or ""))
 			table.insert(headerTexts, h)
 		end
 		content.headerTexts = headerTexts
@@ -3616,7 +3616,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 				fs:SetPoint("TOPLEFT", matchFrame, "TOPLEFT", columnOffsets[j], -2)
 				fs:SetWidth(columnWidths[j] or 60)  -- Fallback in case
 				fs:SetWordWrap(false)  -- Optional: disable wrapping if you want single-line
-				fs:SetText(colText)
+				fs:SetText(tostring(colText or ""))
 				table.insert(matchFrame.fontStrings, fs)
 				table.insert(rowFontStrings, fs)
 	
