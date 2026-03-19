@@ -529,15 +529,12 @@ end
 
 -- Helper functions to get map names and colors
 local function GetMapName(mapID)
-    -- Try to get the name from RSTATS.MapList
     local map = RSTATS.MapList[mapID]
-    
-    -- If not found, fall back to the Blizzard API function GetRealZoneText
+
     if type(map) == "table" then
-        map = map.name
+        map = map.name or map.short or map.code
     end
-    
-    -- If still not found, return "Unknown Map" instead of "E..."
+
     if not map or map == "" then
         map = GetRealZoneText(mapID)
     end
