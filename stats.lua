@@ -106,8 +106,16 @@ function Stats.CalculateSummary(filteredMatches, fullMatchHistory, bracketID)
 
         -- Map stats
         if match.mapName then
-            local delta = match.friendlyWinLoss:find("W") and 1 or -1
-            mapStats[match.mapName] = (mapStats[match.mapName] or 0) + delta
+            local mapName = match.mapName
+
+            if type(mapName) == "table" then
+                mapName = mapName.name or mapName.short or mapName.code
+            end
+
+            if type(mapName) == "string" and mapName ~= "" then
+                local delta = match.friendlyWinLoss:find("W") and 1 or -1
+                mapStats[mapName] = (mapStats[mapName] or 0) + delta
+            end
         end
     end
 
