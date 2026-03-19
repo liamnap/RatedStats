@@ -189,7 +189,7 @@ function RSTATS:GetAWCAnnouncement()
 
         if now < event.start then
             if i == 1 and event.preText then
-                return event.preText .. timeText
+                return event.preText .. date("%d %b %Y", event.start) .. " at " .. timeText
             end
             return "Next AWC on " .. date("%d %b %Y", event.start) .. " at " .. timeText
         end
