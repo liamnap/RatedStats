@@ -533,15 +533,19 @@ local function GetMapName(mapID)
     local map = RSTATS.MapList[mapID]
     
     -- If not found, fall back to the Blizzard API function GetRealZoneText
-    if not map or map == "" then
-        map = GetRealZoneText(mapID)
+    if type(map) == "table" then
+        map = map.name
     end
     
     -- If still not found, return "Unknown Map" instead of "E..."
     if not map or map == "" then
+        map = GetRealZoneText(mapID)
+    end
+
+    if not map or map == "" then
         return "Unknown Map"
     end
-    
+
     return map
 end
 
