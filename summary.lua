@@ -228,13 +228,18 @@ local function GetLatestSeasonPlayerSnapshot(history, seasonStart, seasonFinish)
     end
 
     local cr = tonumber(latestMatch.cr)
-    local mmr = tonumber(latestMatch.friendlyMMR) or tonumber(latestMatch.mmr)
+    local mmr = tonumber(latestMatch.friendlyMMR)
+        or tonumber(latestMatch.postmatchMMR)
+        or tonumber(latestMatch.postMatchMMR)
+        or tonumber(latestMatch.mmr)
 
     if latestMatch.playerStats then
         for _, ps in ipairs(latestMatch.playerStats) do
             if ps.name == me then
                 cr = tonumber(ps.newrating) or cr
-                mmr = tonumber(ps.postmatchMMR) or mmr
+                mmr = tonumber(ps.postmatchMMR)
+                    or tonumber(ps.postMatchMMR)
+                    or mmr
                 break
             end
         end
@@ -1138,13 +1143,18 @@ local function BuildSeasonMatchSeries(history, seasonStart, seasonFinish)
             if wl:find("W") then winsCum = winsCum + 1 end
 
             local cr = tonumber(match.cr)
-            local mmr = tonumber(match.mmr)
+            local mmr = tonumber(match.friendlyMMR)
+                or tonumber(match.postmatchMMR)
+                or tonumber(match.postMatchMMR)
+                or tonumber(match.mmr)
 
             if match.playerStats then
                 for _, ps in ipairs(match.playerStats) do
                     if ps.name == playerName then
                         cr  = tonumber(ps.newrating) or cr
-                        mmr = tonumber(ps.postmatchMMR) or mmr
+                        mmr = tonumber(ps.postmatchMMR)
+                            or tonumber(ps.postMatchMMR)
+                            or mmr
                         break
                     end
                 end
