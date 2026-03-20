@@ -415,7 +415,7 @@ local function DrawCandles(frame, candles, times, xMinFixed, xMaxFixed, yMinFixe
     end
 
     local xStep = (n > 1) and (drawW / (n - 1)) or drawW
-    local candleHalfWidth = Clamp(math.floor(xStep * 0.22), 2, 6)
+    local candleHalfWidth = Clamp(math.floor(xStep * 0.10), 1, 3)
 
     local function mapX(i)
         if useTimeX then
@@ -1172,28 +1172,6 @@ local function BuildSeasonMatchSeries(history, seasonStart, seasonFinish)
         end
     end
 
-    -- Make the chart span the whole season on X (time-based),
-    -- and remain flat/zero until our first stored match.
-    if #times > 0 then
-        local firstWins = winsSeries[1] or 0
-        local firstCR   = crSeries[1] or 0
-        local firstMMR  = mmrSeries[1] or 0
-
-        local lastWins  = winsSeries[#winsSeries] or firstWins
-        local lastCR    = crSeries[#crSeries] or firstCR
-        local lastMMR   = mmrSeries[#mmrSeries] or firstMMR
-
-        table.insert(times, 1, seasonStart)
-        table.insert(winsSeries, 1, 0)           -- wins are genuinely 0 at season start
-        table.insert(crSeries, 1, firstCR)       -- CR/MMR: hold first observed value (not 0)
-        table.insert(mmrSeries, 1, firstMMR)
-
-        table.insert(times, seasonFinish)
-        table.insert(winsSeries, lastWins)
-        table.insert(crSeries, lastCR)
-        table.insert(mmrSeries, lastMMR)
-    end
-    
     for _, bucket in ipairs(orderedDays) do
         if bucket.cr then
             table.insert(crCandles, bucket.cr)
@@ -1266,12 +1244,12 @@ function Summary:_RenderCardGraph(card)
     local yMin, yMax
 
     if useCandles then
-        yMin, yMax = DrawCandles(
+         yMin, yMax = DrawCandles(
             card.spark,
             candles or {},
             candleTimes,
-            seasonStart,
-            seasonFinish,
+            nil,
+            nil,
             nil,
             nil,
             card._xInsetL or 0,
@@ -1282,8 +1260,8 @@ function Summary:_RenderCardGraph(card)
             card.spark,
             series or {},
             times,
-            seasonStart,
-            seasonFinish,
+            nil,
+            nil,
             nil,
             nil,
             card._xInsetL or 0,
@@ -1304,26 +1282,19 @@ function Summary:_RenderCardGraph(card)
     hv.graphStyle = graphStyle
     hv.xInsetL = card._xInsetL or 0
     hv.xInsetR = card._xInsetR or 0
-    if seasonStart and seasonFinish then
-        hv.xMin = seasonStart
-        hv.xMax = seasonFinish
-        hv.useTimeX = true
-    else
-        hv.xMin = nil
-        hv.xMax = nil
-        hv.useTimeX = false
-    end
+    hv.xMin = nil
+    hv.xMax = nil
+    hv.useTimeX = false
 
     if card.axisYMin then card.axisYMin:SetText(yMin and tostring(math.floor(yMin)) or "") end
     if card.axisYMax then card.axisYMax:SetText(yMax and tostring(math.floor(yMax)) or "") end
 
-    if seasonStart and seasonFinish then
-        if card.axisXStart then card.axisXStart:SetText(date("%d %b", seasonStart)) end
-        if card.axisXEnd then card.axisXEnd:SetText(date("%d %b", seasonFinish)) end
+    if useCandles and candleTimes and #candleTimes >= 1 then
+        if card.axisXStart then card.axisXStart:SetText(date("%d %b", candleTimes[1])) end
+        if card.axisXEnd then card.axisXEnd:SetText("") end
     elseif times and #times >= 1 then
-        local t1, t2 = times[1], times[#times]
-        if card.axisXStart then card.axisXStart:SetText(t1 and date("%d %b", t1) or "") end
-        if card.axisXEnd then card.axisXEnd:SetText(t2 and date("%d %b", t2) or "") end
+        if card.axisXStart then card.axisXStart:SetText(date("%d %b", times[1])) end
+        if card.axisXEnd then card.axisXEnd:SetText("") end
     else
         if card.axisXStart then card.axisXStart:SetText("") end
         if card.axisXEnd then card.axisXEnd:SetText("") end
