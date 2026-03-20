@@ -415,7 +415,7 @@ local function DrawCandles(frame, candles, times, xMinFixed, xMaxFixed, yMinFixe
     end
 
     local xStep = drawW / n
-    local candleHalfWidth = Clamp(math.floor(xStep * 0.16), 1, 4)
+    local candleHalfWidth = 1
 
     local function mapX(i)
         if useTimeX then
