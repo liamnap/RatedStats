@@ -326,18 +326,18 @@ local function DrawSpark(frame, values, times, xMinFixed, xMaxFixed, yMinFixed, 
 
     local n = #values
     local useTimeX = (type(times) == "table" and #times == n and xMinFixed and xMaxFixed and xMaxFixed > xMinFixed)
-    local xStep = drawW / (n - 1)
+    local xStep = drawW / n
 
     local function mapX(i)
         if useTimeX then
             local t = times[i]
-            if not t then return (i - 1) * xStep end
+            if not t then return xInsetL + ((i - 0.5) * xStep) end
             local u = (t - xMinFixed) / (xMaxFixed - xMinFixed)
             if u < 0 then u = 0 end
             if u > 1 then u = 1 end
             return xInsetL + (u * drawW)
         end
-        return xInsetL + ((i - 1) * xStep)
+        return xInsetL + ((i - 0.5) * xStep)
     end
 
     local function mapY(v)
@@ -414,21 +414,21 @@ local function DrawCandles(frame, candles, times, xMinFixed, xMaxFixed, yMinFixe
         yMax = yMin + 1
     end
 
-    local xStep = (n > 1) and (drawW / (n - 1)) or drawW
-    local candleHalfWidth = Clamp(math.floor(xStep * 0.10), 1, 3)
+    local xStep = drawW / n
+    local candleHalfWidth = Clamp(math.floor(xStep * 0.16), 1, 4)
 
     local function mapX(i)
         if useTimeX then
             local t = times[i]
             if not t then
-                return xInsetL + ((i - 1) * xStep)
+                return xInsetL + ((i - 0.5) * xStep)
             end
             local u = (t - xMinFixed) / (xMaxFixed - xMinFixed)
             if u < 0 then u = 0 end
             if u > 1 then u = 1 end
             return xInsetL + (u * drawW)
         end
-        return xInsetL + ((i - 1) * xStep)
+        return xInsetL + ((i - 0.5) * xStep)
     end
 
     local function mapY(v)
@@ -1289,12 +1289,9 @@ function Summary:_RenderCardGraph(card)
     if card.axisYMin then card.axisYMin:SetText(yMin and tostring(math.floor(yMin)) or "") end
     if card.axisYMax then card.axisYMax:SetText(yMax and tostring(math.floor(yMax)) or "") end
 
-    if useCandles and candleTimes and #candleTimes >= 1 then
-        if card.axisXStart then card.axisXStart:SetText(date("%d %b", candleTimes[1])) end
-        if card.axisXEnd then card.axisXEnd:SetText("") end
-    elseif times and #times >= 1 then
-        if card.axisXStart then card.axisXStart:SetText(date("%d %b", times[1])) end
-        if card.axisXEnd then card.axisXEnd:SetText("") end
+    if seasonFinish then
+        if card.axisXStart then card.axisXStart:SetText(date("%d %b", time())) end
+        if card.axisXEnd then card.axisXEnd:SetText(date("%d %b", seasonFinish)) end
     else
         if card.axisXStart then card.axisXStart:SetText("") end
         if card.axisXEnd then card.axisXEnd:SetText("") end
@@ -2576,6 +2573,11 @@ function Summary:Refresh()
 					return lastMMR
 				end
 			
+				local stored = perChar and bracket.mmrKey and perChar[bracket.mmrKey]
+                if tonumber(stored) and tonumber(stored) > 0 then
+                    return tonumber(stored)
+                end
+
 				local live = select(10, GetPersonalRatedInfo(bracket.bracketID))
 				return tonumber(live) or 0
 			end)(),
