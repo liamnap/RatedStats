@@ -449,6 +449,18 @@ local function DrawCandles(frame, candles, times, xMinFixed, xMaxFixed, yMinFixe
             local yLow = mapY(c.low)
             local yClose = mapY(c.close)
 
+            -- A single sample day can produce open=high=low=close.
+            -- That collapses the candle into an invisible zero-length line.
+            if yHigh == yLow then
+                yHigh = yHigh + 1
+                yLow = yLow - 1
+            end
+
+            if yOpen == yClose then
+                yOpen = yOpen + 1
+                yClose = yClose - 1
+            end
+
             local r, g, b
             if c.close >= c.open then
                 r, g, b = 0.10, 0.85, 0.20
@@ -1289,9 +1301,15 @@ function Summary:_RenderCardGraph(card)
     if card.axisYMin then card.axisYMin:SetText(yMin and tostring(math.floor(yMin)) or "") end
     if card.axisYMax then card.axisYMax:SetText(yMax and tostring(math.floor(yMax)) or "") end
 
-    if seasonFinish then
-        if card.axisXStart then card.axisXStart:SetText(date("%d %b", time())) end
-        if card.axisXEnd then card.axisXEnd:SetText(date("%d %b", seasonFinish)) end
+    if seasonStart and seasonFinish then
+        local nowTime = time()
+        local rightTime = nowTime
+        if nowTime >= seasonFinish then
+            rightTime = seasonFinish
+        end
+
+        if card.axisXStart then card.axisXStart:SetText(date("%d %b", seasonStart)) end
+        if card.axisXEnd then card.axisXEnd:SetText(date("%d %b", rightTime)) end
     else
         if card.axisXStart then card.axisXStart:SetText("") end
         if card.axisXEnd then card.axisXEnd:SetText("") end
@@ -1455,7 +1473,7 @@ local function CreateBracketCard(parent)
                 if uu > 1 then uu = 1 end
                 return xInsetL + (uu * drawW)
             end
-            return xInsetL + ((i - 1) * (drawW / (n - 1)))
+            return xInsetL + ((i - 0.5) * (drawW / n))
         end
 
         local px = mapX(idx)
