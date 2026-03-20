@@ -228,13 +228,18 @@ local function GetLatestSeasonPlayerSnapshot(history, seasonStart, seasonFinish)
     end
 
     local cr = tonumber(latestMatch.cr)
-    local mmr = tonumber(latestMatch.friendlyMMR) or tonumber(latestMatch.mmr)
+    local mmr = tonumber(latestMatch.friendlyMMR)
+        or tonumber(latestMatch.postmatchMMR)
+        or tonumber(latestMatch.postMatchMMR)
+        or tonumber(latestMatch.mmr)
 
     if latestMatch.playerStats then
         for _, ps in ipairs(latestMatch.playerStats) do
             if ps.name == me then
                 cr = tonumber(ps.newrating) or cr
-                mmr = tonumber(ps.postmatchMMR) or mmr
+                mmr = tonumber(ps.postmatchMMR)
+                    or tonumber(ps.postMatchMMR)
+                    or mmr
                 break
             end
         end
@@ -321,18 +326,18 @@ local function DrawSpark(frame, values, times, xMinFixed, xMaxFixed, yMinFixed, 
 
     local n = #values
     local useTimeX = (type(times) == "table" and #times == n and xMinFixed and xMaxFixed and xMaxFixed > xMinFixed)
-    local xStep = drawW / (n - 1)
+    local xStep = drawW / n
 
     local function mapX(i)
         if useTimeX then
             local t = times[i]
-            if not t then return (i - 1) * xStep end
+            if not t then return xInsetL + ((i - 0.5) * xStep) end
             local u = (t - xMinFixed) / (xMaxFixed - xMinFixed)
             if u < 0 then u = 0 end
             if u > 1 then u = 1 end
             return xInsetL + (u * drawW)
         end
-        return xInsetL + ((i - 1) * xStep)
+        return xInsetL + ((i - 0.5) * xStep)
     end
 
     local function mapY(v)
@@ -409,21 +414,21 @@ local function DrawCandles(frame, candles, times, xMinFixed, xMaxFixed, yMinFixe
         yMax = yMin + 1
     end
 
-    local xStep = (n > 1) and (drawW / (n - 1)) or drawW
-    local candleHalfWidth = Clamp(math.floor(xStep * 0.22), 2, 6)
+    local xStep = drawW / n
+    local candleHalfWidth = 1
 
     local function mapX(i)
         if useTimeX then
             local t = times[i]
             if not t then
-                return xInsetL + ((i - 1) * xStep)
+                return xInsetL + ((i - 0.5) * xStep)
             end
             local u = (t - xMinFixed) / (xMaxFixed - xMinFixed)
             if u < 0 then u = 0 end
             if u > 1 then u = 1 end
             return xInsetL + (u * drawW)
         end
-        return xInsetL + ((i - 1) * xStep)
+        return xInsetL + ((i - 0.5) * xStep)
     end
 
     local function mapY(v)
@@ -443,6 +448,18 @@ local function DrawCandles(frame, candles, times, xMinFixed, xMaxFixed, yMinFixe
             local yHigh = mapY(c.high)
             local yLow = mapY(c.low)
             local yClose = mapY(c.close)
+
+            -- A single sample day can produce open=high=low=close.
+            -- That collapses the candle into an invisible zero-length line.
+            if yHigh == yLow then
+                yHigh = yHigh + 1
+                yLow = yLow - 1
+            end
+
+            if yOpen == yClose then
+                yOpen = yOpen + 1
+                yClose = yClose - 1
+            end
 
             local r, g, b
             if c.close >= c.open then
@@ -1138,13 +1155,18 @@ local function BuildSeasonMatchSeries(history, seasonStart, seasonFinish)
             if wl:find("W") then winsCum = winsCum + 1 end
 
             local cr = tonumber(match.cr)
-            local mmr = tonumber(match.mmr)
+            local mmr = tonumber(match.friendlyMMR)
+                or tonumber(match.postmatchMMR)
+                or tonumber(match.postMatchMMR)
+                or tonumber(match.mmr)
 
             if match.playerStats then
                 for _, ps in ipairs(match.playerStats) do
                     if ps.name == playerName then
                         cr  = tonumber(ps.newrating) or cr
-                        mmr = tonumber(ps.postmatchMMR) or mmr
+                        mmr = tonumber(ps.postmatchMMR)
+                            or tonumber(ps.postMatchMMR)
+                            or mmr
                         break
                     end
                 end
@@ -1162,28 +1184,6 @@ local function BuildSeasonMatchSeries(history, seasonStart, seasonFinish)
         end
     end
 
-    -- Make the chart span the whole season on X (time-based),
-    -- and remain flat/zero until our first stored match.
-    if #times > 0 then
-        local firstWins = winsSeries[1] or 0
-        local firstCR   = crSeries[1] or 0
-        local firstMMR  = mmrSeries[1] or 0
-
-        local lastWins  = winsSeries[#winsSeries] or firstWins
-        local lastCR    = crSeries[#crSeries] or firstCR
-        local lastMMR   = mmrSeries[#mmrSeries] or firstMMR
-
-        table.insert(times, 1, seasonStart)
-        table.insert(winsSeries, 1, 0)           -- wins are genuinely 0 at season start
-        table.insert(crSeries, 1, firstCR)       -- CR/MMR: hold first observed value (not 0)
-        table.insert(mmrSeries, 1, firstMMR)
-
-        table.insert(times, seasonFinish)
-        table.insert(winsSeries, lastWins)
-        table.insert(crSeries, lastCR)
-        table.insert(mmrSeries, lastMMR)
-    end
-    
     for _, bucket in ipairs(orderedDays) do
         if bucket.cr then
             table.insert(crCandles, bucket.cr)
@@ -1256,12 +1256,12 @@ function Summary:_RenderCardGraph(card)
     local yMin, yMax
 
     if useCandles then
-        yMin, yMax = DrawCandles(
+         yMin, yMax = DrawCandles(
             card.spark,
             candles or {},
             candleTimes,
-            seasonStart,
-            seasonFinish,
+            nil,
+            nil,
             nil,
             nil,
             card._xInsetL or 0,
@@ -1272,8 +1272,8 @@ function Summary:_RenderCardGraph(card)
             card.spark,
             series or {},
             times,
-            seasonStart,
-            seasonFinish,
+            nil,
+            nil,
             nil,
             nil,
             card._xInsetL or 0,
@@ -1294,26 +1294,22 @@ function Summary:_RenderCardGraph(card)
     hv.graphStyle = graphStyle
     hv.xInsetL = card._xInsetL or 0
     hv.xInsetR = card._xInsetR or 0
-    if seasonStart and seasonFinish then
-        hv.xMin = seasonStart
-        hv.xMax = seasonFinish
-        hv.useTimeX = true
-    else
-        hv.xMin = nil
-        hv.xMax = nil
-        hv.useTimeX = false
-    end
+    hv.xMin = nil
+    hv.xMax = nil
+    hv.useTimeX = false
 
     if card.axisYMin then card.axisYMin:SetText(yMin and tostring(math.floor(yMin)) or "") end
     if card.axisYMax then card.axisYMax:SetText(yMax and tostring(math.floor(yMax)) or "") end
 
     if seasonStart and seasonFinish then
+        local nowTime = time()
+        local rightTime = nowTime
+        if nowTime >= seasonFinish then
+            rightTime = seasonFinish
+        end
+
         if card.axisXStart then card.axisXStart:SetText(date("%d %b", seasonStart)) end
-        if card.axisXEnd then card.axisXEnd:SetText(date("%d %b", seasonFinish)) end
-    elseif times and #times >= 1 then
-        local t1, t2 = times[1], times[#times]
-        if card.axisXStart then card.axisXStart:SetText(t1 and date("%d %b", t1) or "") end
-        if card.axisXEnd then card.axisXEnd:SetText(t2 and date("%d %b", t2) or "") end
+        if card.axisXEnd then card.axisXEnd:SetText(date("%d %b", rightTime)) end
     else
         if card.axisXStart then card.axisXStart:SetText("") end
         if card.axisXEnd then card.axisXEnd:SetText("") end
@@ -1477,7 +1473,7 @@ local function CreateBracketCard(parent)
                 if uu > 1 then uu = 1 end
                 return xInsetL + (uu * drawW)
             end
-            return xInsetL + ((i - 1) * (drawW / (n - 1)))
+            return xInsetL + ((i - 0.5) * (drawW / n))
         end
 
         local px = mapX(idx)
@@ -2595,6 +2591,11 @@ function Summary:Refresh()
 					return lastMMR
 				end
 			
+				local stored = perChar and bracket.mmrKey and perChar[bracket.mmrKey]
+                if tonumber(stored) and tonumber(stored) > 0 then
+                    return tonumber(stored)
+                end
+
 				local live = select(10, GetPersonalRatedInfo(bracket.bracketID))
 				return tonumber(live) or 0
 			end)(),
