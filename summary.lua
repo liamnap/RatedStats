@@ -1096,18 +1096,18 @@ end
 --
 local function BuildSeasonMatchSeries(history, seasonStart, seasonFinish)
     if not history or #history == 0 then
-        return {}, {}, {}, {}, {}, {}, {}, {}
+        return {}, {}, {}, {}, {}, {}, {}, {}, {}
     end
 
     if not seasonStart or not seasonFinish then
-        return {}, {}, {}, {}, {}, {}, {}, {}
+        return {}, {}, {}, {}, {}, {}, {}, {}, {}
     end
 
     local playerName = GetPlayerFullName()
 
     table.sort(history, SortByEndTime)
 
-    local winsSeries, crSeries, mmrSeries, times = {}, {}, {}, {}, {}
+    local winsSeries, crSeries, mmrSeries, times, mmrSeriesTimes = {}, {}, {}, {}, {}
     local crCandles, crCandleTimes = {}, {}
     local mmrCandles, mmrCandleTimes = {}, {}
     local winsCum = 0
