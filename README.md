@@ -71,7 +71,7 @@ Source gallery (CurseForge): https://www.curseforge.com/wow/addons/rated-stats#g
 
 <br/><br/>
 <p><strong>Match History + Expanded Scoreboard</strong></p>
-<img src="https://media.forgecdn.net/attachments/1265/79/screenshot-2025-07-24-171432-jpeg.jpeg" width="100%"/>
+<img src="[https://media.forgecdn.net/attachments/1265/79/screenshot-2025-07-24-171432-jpeg.jpeg](https://media.forgecdn.net/attachments/1473/254/screenshot-2026-01-17-182450-jpeg.jpeg)" width="100%"/>
 <br/><br/>
 <img src="https://media.forgecdn.net/attachments/1265/82/screenshot-2025-07-24-171716-jpeg.jpeg" width="100%"/>
 <br/><br/>
