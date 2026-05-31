@@ -569,11 +569,11 @@ end
 
 local function IsFriendlyForMatch(ps, myTeamIndex)
     if not ps then return false end
-    if ps.isFriendly ~= nil then
-        return ps.isFriendly and true or false
-    end
     if myTeamIndex ~= nil and ps.teamIndex ~= nil then
         return ps.teamIndex == myTeamIndex
+    end
+    if ps.isFriendly ~= nil then
+        return ps.isFriendly and true or false
     end
     return false
 end
@@ -866,11 +866,13 @@ local function BuildMostWinsFriendly(perChar, seasonStart, seasonFinish)
             if t and (not seasonStart or t >= seasonStart) and (not seasonFinish or t < seasonFinish) then
                 local outcome = NormalizeOutcome(match.friendlyWinLoss)
                 if outcome then
-                    local myTeamIndex
-                    for _, ps in ipairs(match.playerStats or {}) do
-                        if ps and ps.name == me then
-                            myTeamIndex = ps.teamIndex
-                            break
+                    local myTeamIndex = match.myTeamIndex
+                    if myTeamIndex == nil then
+                        for _, ps in ipairs(match.playerStats or {}) do
+                            if ps and ps.name == me then
+                                myTeamIndex = ps.teamIndex
+                                break
+                            end
                         end
                     end
 
