@@ -236,10 +236,16 @@ local function GetLatestSeasonPlayerSnapshot(history, seasonStart, seasonFinish)
     if latestMatch.playerStats then
         for _, ps in ipairs(latestMatch.playerStats) do
             if ps.name == me then
-                cr = tonumber(ps.newrating) or cr
-                mmr = tonumber(ps.postmatchMMR)
-                    or tonumber(ps.postMatchMMR)
-                    or mmr
+				local psCR = tonumber(ps.newrating)
+				local psMMR = tonumber(ps.postmatchMMR) or tonumber(ps.postMatchMMR)
+	
+				if psCR and psCR > 0 then
+					cr = psCR
+				end
+	
+				if psMMR and psMMR > 0 then
+					mmr = psMMR
+				end
                 break
             end
         end
@@ -1090,18 +1096,18 @@ end
 --
 local function BuildSeasonMatchSeries(history, seasonStart, seasonFinish)
     if not history or #history == 0 then
-        return {}, {}, {}, {}, {}, {}, {}, {}
+        return {}, {}, {}, {}, {}, {}, {}, {}, {}
     end
 
     if not seasonStart or not seasonFinish then
-        return {}, {}, {}, {}, {}, {}, {}, {}
+        return {}, {}, {}, {}, {}, {}, {}, {}, {}
     end
 
     local playerName = GetPlayerFullName()
 
     table.sort(history, SortByEndTime)
 
-    local winsSeries, crSeries, mmrSeries, times = {}, {}, {}, {}
+    local winsSeries, crSeries, mmrSeries, times, mmrSeriesTimes = {}, {}, {}, {}, {}
     local crCandles, crCandleTimes = {}, {}
     local mmrCandles, mmrCandleTimes = {}, {}
     local winsCum = 0
@@ -1157,18 +1163,24 @@ local function BuildSeasonMatchSeries(history, seasonStart, seasonFinish)
             if wl:find("W") then winsCum = winsCum + 1 end
 
             local cr = tonumber(match.cr)
-            local mmr = tonumber(match.friendlyMMR)
-                or tonumber(match.postmatchMMR)
-                or tonumber(match.postMatchMMR)
-                or tonumber(match.mmr)
+            local mmr = tonumber(match.friendlyMMR) or tonumber(match.postmatchMMR) or tonumber(match.postMatchMMR) or tonumber(match.mmr)
+            if mmr and mmr <= 0 then
+                mmr = nil
+            end
 
             if match.playerStats then
                 for _, ps in ipairs(match.playerStats) do
                     if ps.name == playerName then
-                        cr  = tonumber(ps.newrating) or cr
-                        mmr = tonumber(ps.postmatchMMR)
-                            or tonumber(ps.postMatchMMR)
-                            or mmr
+                        local psCR = tonumber(ps.newrating)
+                        local psMMR = tonumber(ps.postmatchMMR) or tonumber(ps.postMatchMMR)
+
+                        if psCR and psCR > 0 then
+                            cr = psCR
+                        end
+
+                        if psMMR and psMMR > 0 then
+                            mmr = psMMR
+                        end
                         break
                     end
                 end
@@ -1177,7 +1189,10 @@ local function BuildSeasonMatchSeries(history, seasonStart, seasonFinish)
             table.insert(times, t)
             table.insert(winsSeries, winsCum)
             table.insert(crSeries, cr or 0)
-            table.insert(mmrSeries, mmr or 0)
+            if mmr and mmr > 0 then
+                table.insert(mmrSeries, mmr)
+                table.insert(mmrSeriesTimes, t)
+            end
 
             local dayStart = GetDayStart(t)
             local bucket = GetBucket(dayStart)
@@ -1197,7 +1212,7 @@ local function BuildSeasonMatchSeries(history, seasonStart, seasonFinish)
         end
     end
 
-    return winsSeries, crSeries, mmrSeries, times, crCandles, crCandleTimes, mmrCandles, mmrCandleTimes
+    return winsSeries, crSeries, mmrSeries, times, crCandles, crCandleTimes, mmrCandles, mmrCandleTimes, mmrSeriesTimes
 end
 
 local function CreateBackdrop(frame)
@@ -1242,7 +1257,7 @@ function Summary:_RenderCardGraph(card)
             candles, candleTimes = DownsampleCandles(data.candlesMMR or {}, data.candleTimesMMR or {}, maxPoints)
             useCandles = true
         else
-            series, times = Downsample(data.seriesMMR or {}, data.seriesTimes or {}, maxPoints)
+            series, times = Downsample(data.seriesMMR or {}, data.seriesMMRTimes or data.seriesTimes or {}, maxPoints)
         end
     end
 
@@ -2568,8 +2583,7 @@ function Summary:Refresh()
         local summary = BuildSeasonSummary(seasonMatches)
 
         -- Build the 3 graph series (this was missing, so graphs never draw)
-        local winsSeries, crSeries, mmrSeries, times, crCandles, crCandleTimes, mmrCandles, mmrCandleTimes =
-            BuildSeasonMatchSeries(history, seasonStart, seasonFinish)
+        local winsSeries, crSeries, mmrSeries, times, crCandles, crCandleTimes, mmrCandles, mmrCandleTimes, mmrSeriesTimes = BuildSeasonMatchSeries(history, seasonStart, seasonFinish)
 
         local last25Delta, last25Count = GetLast25CRDelta(history)
 
@@ -2612,6 +2626,7 @@ function Summary:Refresh()
             seriesCR = crSeries,
             seriesMMR = mmrSeries,
             seriesTimes = times,
+            seriesMMRTimes = mmrSeriesTimes,
             candlesCR = crCandles,
             candleTimesCR = crCandleTimes,
             candlesMMR = mmrCandles,
