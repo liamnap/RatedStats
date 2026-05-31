@@ -15,6 +15,24 @@ local function GetPlayerFullName()
     return playerName
 end
 
+-- Internal comparison key only. ScoreInfo names use realm names without spaces.
+local function GetUnitNameRealmKey(unit)
+    local name, realm = UnitFullName(unit)
+    if not name then return nil end
+    if not realm or realm == "" then realm = GetRealmName() end
+    if realm then realm = realm:gsub("%s+", "") end
+    return realm and (name .. "-" .. realm) or name
+end
+
+local function GetScoreInfoNameRealmKey(name)
+    if not name then return nil end
+    if name:find("-", 1, true) then return name end
+
+    local realm = GetRealmName()
+    if realm then realm = realm:gsub("%s+", "") end
+    return realm and (name .. "-" .. realm) or name
+end
+
 -- Get the region dynamically
 local regionName = GetCurrentRegionName()  -- This will return the region as a string (e.g., "US", "EU", "KR")
 
@@ -672,13 +690,10 @@ local RSTATS_ScoreHistory = {}
 local allianceTeamScore = 0
 local hordeTeamScore = 0
 local roundsWon = 0
--- Solo Shuffle: remember which scoreboard "team index" we belonged to at the
--- moment the round ended (so we can keep our team on the left even if the UI
--- reshuffles groups afterwards).
-local soloShuffleMyTeamIndexAtDeath = nil
--- Solo Shuffle: per-round allies (GUID set) captured at the moment the round ends.
--- This is the only reliable way to force "my team" on the left in SS.
-local soloShuffleAlliesGUIDAtDeath = nil
+-- Solo Shuffle: per-round allies captured at the moment the round ends.
+-- ScoreInfo GUIDs can be protected/secret during shuffle state changes, so
+-- this uses visible Name-Realm keys for team matching and KB snapshots.
+local soloShuffleAlliesNameAtDeath = nil
 local soloShuffleAlliesKBAtDeath   = nil  -- Solo Shuffle: per-round ally KB snapshot at round end
 
 local RBGScoreWidgets = {
@@ -887,17 +902,17 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
         end
     end
 
-    -- For Solo Shuffle we want to anchor "my team" based on the team index we
+    -- For Solo Shuffle we want to anchor "my team" based on the team we
     -- belonged to at the moment the round ended, not whatever reshuffles the
     -- scoreboard UI may have done afterwards.
-    local alliesGUID = soloShuffleAlliesGUIDAtDeath
+    local alliesName = soloShuffleAlliesNameAtDeath
 
-    -- Ensure "my team" set always includes me (defensive; depends on how you fill soloShuffleAlliesGUIDAtDeath)
-    if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() then
-        alliesGUID = alliesGUID or {}
-        local myGUID = UnitGUID("player")
-        if myGUID then
-            alliesGUID[myGUID] = true
+    -- Solo Shuffle score GUIDs can be protected/secret here, so use visible Name-Realm keys.
+    if isSoloShuffle then
+        alliesName = alliesName or {}
+        local myNameKey = GetUnitNameRealmKey("player")
+        if myNameKey then
+            alliesName[myNameKey] = true
         end
     end
 
@@ -933,10 +948,10 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
     -- existing (roundsWon > previousRoundsWon) W/L logic below.
     -- ------------------------------------------------------------
     if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() and roundIndex then
-        alliesGUID = soloShuffleAlliesGUIDAtDeath or alliesGUID or {}
-        local myGUID = UnitGUID("player")
-        if myGUID then
-            alliesGUID[myGUID] = true
+        alliesName = soloShuffleAlliesNameAtDeath or alliesName or {}
+        local myNameKey = GetUnitNameRealmKey("player")
+        if myNameKey then
+            alliesName[myNameKey] = true
         end
 
         -- Snapshot BEFORE we possibly increment this round.
@@ -946,13 +961,16 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
         if soloShuffleAlliesKBAtDeath then
             for i = 1, GetNumBattlefieldScores() do
                 local scoreInfo = C_PvP.GetScoreInfo(i)
-                if scoreInfo and scoreInfo.guid and alliesGUID[scoreInfo.guid] then
-                    local prevKB = soloShuffleAlliesKBAtDeath[scoreInfo.guid]
-                    if prevKB ~= nil then
-                        local nowKB = tonumber(scoreInfo.killingBlows) or 0
-                        if nowKB > prevKB then
-                            wonThisRound = true
-                            break
+                if scoreInfo then
+                    local nameKey = GetScoreInfoNameRealmKey(scoreInfo.name)
+                    if nameKey and alliesName[nameKey] then
+                        local prevKB = soloShuffleAlliesKBAtDeath[nameKey]
+                        if prevKB ~= nil then
+                            local nowKB = tonumber(scoreInfo.killingBlows) or 0
+                            if nowKB > prevKB then
+                                wonThisRound = true
+                                break
+                            end
                         end
                     end
                 end
@@ -1028,6 +1046,7 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
         local scoreInfo = C_PvP.GetScoreInfo(i)
         if scoreInfo then
             local name = scoreInfo.name
+            local nameKey = GetScoreInfoNameRealmKey(name)
             local killingBlows = scoreInfo.killingBlows
             local honorableKills = scoreInfo.honorableKills
             local deaths = tonumber(scoreInfo.deaths) or 0
@@ -1046,19 +1065,21 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
             local talentSpec = scoreInfo.talentSpec
             local honorLevel = scoreInfo.honorLevel
             local roleAssigned = scoreInfo.roleAssigned
-            local guid = scoreInfo.guid
+            local guid = isSoloShuffle and nil or scoreInfo.guid
             local stats = scoreInfo.stats
-            if guid then
-                objectiveByGUID[guid] = BuildObjectiveTextFromStats(stats)
+
+            local objectiveKey = isSoloShuffle and nameKey or guid
+            if objectiveKey then
+                objectiveByGUID[objectiveKey] = BuildObjectiveTextFromStats(stats)
             end
 
             -- Ensure damageDone and healingDone are numbers
             damageDone = tonumber(damageDone) or 0
             healingDone = tonumber(healingDone) or 0
 
-            if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() and alliesGUID then
+            if isSoloShuffle and alliesName then
                 -- Solo Shuffle: friendly == me + party1 + party2 for THIS round.
-                if guid and alliesGUID[guid] then
+                if nameKey and alliesName[nameKey] then
                     friendlyTotalDamage = friendlyTotalDamage + damageDone
                     friendlyTotalHealing = friendlyTotalHealing + healingDone
                 else
@@ -1101,11 +1122,10 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
     AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, allianceTeamScore, hordeTeamScore, roundsWon, categoryName, categoryID, damp, objectiveByGUID)
 
     -- Safe to clear AFTER stats capture:
-    -- GetPlayerStatsEndOfMatch has consumed soloShuffleAlliesGUIDAtDeath/KBAtDeath
+    -- GetPlayerStatsEndOfMatch has consumed soloShuffleAlliesNameAtDeath/KBAtDeath
     -- for totals + W/L, and AppendHistory has consumed them for per-player "isFriendly".
     if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() then
-        soloShuffleMyTeamIndexAtDeath = nil
-        soloShuffleAlliesGUIDAtDeath  = nil
+        soloShuffleAlliesNameAtDeath  = nil
         soloShuffleAlliesKBAtDeath    = nil
     end
 
@@ -1252,8 +1272,7 @@ function RefreshDataEvent(self, event, ...)
                 previousRoundsWon = nil
                 playerDeathSeen = false
                 scoreboardKBTotal = nil
-				soloShuffleMyTeamIndexAtDeath = nil
-                soloShuffleAlliesGUIDAtDeath = nil
+				soloShuffleAlliesNameAtDeath = nil
                 soloShuffleAlliesKBAtDeath   = nil
                 soloShuffleLastFriendlyKBTotal = nil
                 soloShuffleLastEnemyKBTotal    = nil
@@ -2437,8 +2456,9 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     local appendHistoryMatchID = nextID
     Database._nextMatchID[key] = nextID + 1
     local playerFullName = GetPlayerFullName() -- Get the player's full name
+    local playerNameKey = GetUnitNameRealmKey("player")
     local myTeamIndex
-    local ssAlliesGUID = soloShuffleAlliesGUIDAtDeath or nil
+    local ssAlliesName = soloShuffleAlliesNameAtDeath or nil
     local isSoloShuffle = (C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle()) or false
     local isArena = (C_PvP.IsRatedArena and C_PvP.IsRatedArena()) and not isSoloShuffle
 
@@ -2474,6 +2494,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
         local scoreInfo = C_PvP.GetScoreInfo(i)
         if scoreInfo then
             local name = scoreInfo.name
+            local nameKey = GetScoreInfoNameRealmKey(name)
             if name == UnitName("player") then
                 name = playerFullName
             elseif name and not name:find("-", 1, true) then
@@ -2501,15 +2522,11 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             local honorLevel = tonumber(scoreInfo.honorLevel) or 0
             local roleAssigned = scoreInfo.roleAssigned
             local stats = scoreInfo.stats
-            local guid = scoreInfo.guid
+            local guid = isSoloShuffle and nil or scoreInfo.guid
             local teamIndex = faction  -- C_PvP.GetScoreInfo().faction is a numeric team index
             if guid and guid == UnitGUID("player") then
                 myTeamIndex = teamIndex
             end
-            local roleAssigned = scoreInfo.roleAssigned
-            local stats = scoreInfo.stats
-            local guid = scoreInfo.guid
----            local roundsWon = roundsWon or 0  -- Capture rounds won
          
             -- Display additional stats
             if stats then
@@ -2537,11 +2554,11 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                 faction = translatedFaction,
                 teamIndex = teamIndex,
                 isFriendly = (
-                    C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle()
-                    and guid
+                    isSoloShuffle
+                    and nameKey
                     and (
-                        guid == UnitGUID("player")
-                        or (ssAlliesGUID and ssAlliesGUID[guid])
+                        nameKey == playerNameKey
+                        or (ssAlliesName and ssAlliesName[nameKey])
                     )
                 ) or false,
                 race = raceName,
@@ -2562,7 +2579,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                 postmatchMMR = postmatchMMR,
                 honorLevel = honorLevel,
                 newrating = newrating,  -- New field for adjusted rating
-                objective = (objectiveByGUID and guid and objectiveByGUID[guid]) or "-"
+                objective = (objectiveByGUID and ((isSoloShuffle and nameKey and objectiveByGUID[nameKey]) or ((not isSoloShuffle) and guid and objectiveByGUID[guid]))) or "-"
             }
 
             -- Ensure all damage and healing values are numbers
@@ -2799,7 +2816,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                     elseif name and not name:find("-", 1, true) then
                         name = name .. "-" .. GetRealmName()
 					end
-                    local guid2 = scoreInfo.guid
+                    local guid2 = C_PvP.IsRatedSoloShuffle() and nil or scoreInfo.guid
 
 					for _, playerData in ipairs(playerStats) do
 						if (guid2 and playerData.guid and playerData.guid == guid2) or playerData.name == name then
@@ -2949,7 +2966,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                         name = name .. "-" .. GetRealmName()
                     end
     
-					local guid2 = scoreInfo.guid
+					local guid2 = C_PvP.IsRatedSoloShuffle() and nil or scoreInfo.guid
                     for _, playerData in ipairs(playerStats) do
 						if (guid2 and playerData.guid and playerData.guid == guid2) or playerData.name == name then
                             -- Update the playerData fields with new stats
@@ -6232,20 +6249,20 @@ local function OnSoloShuffleStateChanged(event, ...)
     end
 
     -- Freeze our allies for THIS round, but only when we have the full set.
-    -- In Solo Shuffle, player + party1 + party2 should be 3 GUIDs.
-    local allies = {}
+    -- In Solo Shuffle, player + party1 + party2 should be 3 Name-Realm keys.
+    local allyNames = {}
 
-    local g = UnitGUID("player")
-    if g then allies[g] = true end
+    local function AddSoloShuffleAlly(unit)
+        local nameKey = GetUnitNameRealmKey(unit)
+        if nameKey then allyNames[nameKey] = true end
+    end
 
-    g = UnitGUID("party1")
-    if g then allies[g] = true end
-
-    g = UnitGUID("party2")
-    if g then allies[g] = true end
+    AddSoloShuffleAlly("player")
+    AddSoloShuffleAlly("party1")
+    AddSoloShuffleAlly("party2")
 
     local count = 0
-    for _ in pairs(allies) do
+    for _ in pairs(allyNames) do
         count = count + 1
     end
 
@@ -6259,8 +6276,11 @@ local function OnSoloShuffleStateChanged(event, ...)
     local kbSnapshot = {}
     for i = 1, GetNumBattlefieldScores() do
         local scoreInfo = C_PvP.GetScoreInfo(i)
-        if scoreInfo and scoreInfo.guid and allies[scoreInfo.guid] then
-            kbSnapshot[scoreInfo.guid] = tonumber(scoreInfo.killingBlows) or 0
+        if scoreInfo then
+            local nameKey = GetScoreInfoNameRealmKey(scoreInfo.name)
+            if nameKey and allyNames[nameKey] then
+                kbSnapshot[nameKey] = tonumber(scoreInfo.killingBlows) or 0
+            end
         end
     end
 
@@ -6274,7 +6294,7 @@ local function OnSoloShuffleStateChanged(event, ...)
         return
     end
 
-    soloShuffleAlliesGUIDAtDeath = allies
+    soloShuffleAlliesNameAtDeath = allyNames
     soloShuffleAlliesKBAtDeath   = kbSnapshot
     playerDeathSeen = true
 end
