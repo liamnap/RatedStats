@@ -760,6 +760,16 @@ frame:RegisterEvent("PVP_MATCH_COMPLETE")
 frame:RegisterEvent("UPDATE_UI_WIDGET")
 frame:SetScript("OnEvent", OnWidgetUpdate)
 
+local function SafeScoreNumber(value)
+    if value == nil then
+        return 0
+    end
+    if issecretvalue and issecretvalue(value) then
+        return 0
+    end
+    return tonumber(value) or 0
+end
+
 local function BuildObjectiveTextFromStats(stats)
     if type(stats) ~= "table" or #stats == 0 then
         return "-"
@@ -770,11 +780,11 @@ local function BuildObjectiveTextFromStats(stats)
 
     for _, s in ipairs(stats) do
         local name = (s.name or ""):lower()
-        local val  = tonumber(s.pvpStatValue) or 0
+        local val  = SafeScoreNumber(s.pvpStatValue)
         if name ~= "" then
             byName[name] = val
         end
-        ordered[#ordered + 1] = { orderIndex = tonumber(s.orderIndex) or 0, value = val }
+        ordered[#ordered + 1] = { orderIndex = SafeScoreNumber(s.orderIndex), value = val }
     end
 
     local function findAny(substrings)
@@ -1020,14 +1030,14 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
             local nameKey = GetScoreInfoNameRealmKey(name)
             local killingBlows = scoreInfo.killingBlows
             local honorableKills = scoreInfo.honorableKills
-            local deaths = tonumber(scoreInfo.deaths) or 0
+            local deaths = SafeScoreNumber(scoreInfo.deaths)
             local honorGained = scoreInfo.honorGained
             local faction = scoreInfo.faction
             local raceName = scoreInfo.raceName
             local className = scoreInfo.className
             local classToken = scoreInfo.classToken
-            local damageDone = scoreInfo.damageDone
-            local healingDone = scoreInfo.healingDone
+            damageDone = SafeScoreNumber(damageDone)
+            healingDone = SafeScoreNumber(healingDone)
             local rating = scoreInfo.rating
             local ratingChange = scoreInfo.ratingChange
             local prematchMMR = scoreInfo.prematchMMR
@@ -2475,23 +2485,23 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             end
 
             -- Get faction group tag and localized faction
-            local killingBlows = tonumber(scoreInfo.killingBlows) or 0
-            local honorableKills = tonumber(scoreInfo.honorableKills) or 0
-            local deaths = tonumber(scoreInfo.deaths) or 0
-            local honorGained = tonumber(scoreInfo.honorGained) or 0
+            local killingBlows = SafeScoreNumber(scoreInfo.killingBlows)
+            local honorableKills = SafeScoreNumber(scoreInfo.honorableKills)
+            local deaths = SafeScoreNumber(scoreInfo.deaths)
+            local honorGained = SafeScoreNumber(scoreInfo.honorGained)
             local faction = scoreInfo.faction
             local raceName = scoreInfo.raceName
             local className = scoreInfo.className
             local classToken = scoreInfo.classToken
-            local damageDone = tonumber(scoreInfo.damageDone) or 0  -- Ensure damageDone is a number
-            local healingDone = tonumber(scoreInfo.healingDone) or 0  -- Ensure healingDone is a number
-            local rating = tonumber(scoreInfo.rating) or 0
-            local ratingChange = tonumber(scoreInfo.ratingChange) or 0
-            local prematchMMR = tonumber(scoreInfo.prematchMMR) or 0
-            local mmrChange = tonumber(scoreInfo.mmrChange) or 0
-            local postmatchMMR = tonumber(scoreInfo.postmatchMMR) or 0
+            local damageDone = SafeScoreNumber(scoreInfo.damageDone)
+            local healingDone = SafeScoreNumber(scoreInfo.healingDone)
+            local rating = SafeScoreNumber(scoreInfo.rating)
+            local ratingChange = SafeScoreNumber(scoreInfo.ratingChange)
+            local prematchMMR = SafeScoreNumber(scoreInfo.prematchMMR)
+            local mmrChange = SafeScoreNumber(scoreInfo.mmrChange)
+            local postmatchMMR = SafeScoreNumber(scoreInfo.postmatchMMR)
             local talentSpec = scoreInfo.talentSpec
-            local honorLevel = tonumber(scoreInfo.honorLevel) or 0
+            local honorLevel = SafeScoreNumber(scoreInfo.honorLevel)
             local roleAssigned = scoreInfo.roleAssigned
             local stats = scoreInfo.stats
             local guid = isSoloShuffle and nil or scoreInfo.guid
@@ -2792,23 +2802,23 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 
 					for _, playerData in ipairs(playerStats) do
 						if (guid2 and playerData.guid and playerData.guid == guid2) or playerData.name == name then
-							playerData.killingBlows   = tonumber(scoreInfo.killingBlows) or 0
-							playerData.honorableKills = tonumber(scoreInfo.honorableKills) or 0
-							playerData.deaths         = tonumber(scoreInfo.deaths) or 0
-							playerData.damage         = tonumber(scoreInfo.damageDone) or 0
-							playerData.healing        = tonumber(scoreInfo.healingDone) or 0
-							playerData.rating         = tonumber(scoreInfo.rating) or 0
-							playerData.ratingChange   = tonumber(scoreInfo.ratingChange) or 0
-							playerData.mmrChange      = tonumber(scoreInfo.mmrChange) or 0
-							playerData.postmatchMMR   = tonumber(scoreInfo.postmatchMMR) or 0
-							playerData.honorLevel     = tonumber(scoreInfo.honorLevel) or 0
+							playerData.killingBlows   = SafeScoreNumber(scoreInfo.killingBlows)
++							playerData.honorableKills = SafeScoreNumber(scoreInfo.honorableKills)
++							playerData.deaths         = SafeScoreNumber(scoreInfo.deaths)
++							playerData.damage         = SafeScoreNumber(scoreInfo.damageDone)
++							playerData.healing        = SafeScoreNumber(scoreInfo.healingDone)
++							playerData.rating         = SafeScoreNumber(scoreInfo.rating)
++							playerData.ratingChange   = SafeScoreNumber(scoreInfo.ratingChange)
++							playerData.mmrChange      = SafeScoreNumber(scoreInfo.mmrChange)
++							playerData.postmatchMMR   = SafeScoreNumber(scoreInfo.postmatchMMR)
++							playerData.honorLevel     = SafeScoreNumber(scoreInfo.honorLevel)
 
 							-- Solo Shuffle rounds won comes from scoreInfo.stats
 							do
 								local wins = 0
                                 if scoreInfo.stats and #scoreInfo.stats > 0 then
                                     -- Solo Shuffle stat column is the first stat entry
-                                    wins = tonumber(scoreInfo.stats[1].pvpStatValue) or 0 -- roundsWon from SS stats Scoreboard, not main Scoreboard
+                                    wins = SafeScoreNumber(scoreInfo.stats[1].pvpStatValue) -- roundsWon from SS stats Scoreboard, not main Scoreboard
                                 end
 								playerData.wins = wins
 							end
@@ -2942,23 +2952,23 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                     for _, playerData in ipairs(playerStats) do
 						if (guid2 and playerData.guid and playerData.guid == guid2) or playerData.name == name then
                             -- Update the playerData fields with new stats
-                            playerData.killingBlows = tonumber(scoreInfo.killingBlows) or 0
-                            playerData.honorableKills = tonumber(scoreInfo.honorableKills) or 0
-                            playerData.deaths = tonumber(scoreInfo.deaths) or 0
-                            playerData.damage = tonumber(scoreInfo.damageDone) or 0
-                            playerData.healing = tonumber(scoreInfo.healingDone) or 0
-                            playerData.rating = tonumber(scoreInfo.rating) or 0
-                            playerData.ratingChange = tonumber(scoreInfo.ratingChange) or 0
-                            playerData.mmrChange = tonumber(scoreInfo.mmrChange) or 0
-                            playerData.postmatchMMR = tonumber(scoreInfo.postmatchMMR) or 0
-                            playerData.honorLevel = tonumber(scoreInfo.honorLevel) or 0
+                            playerData.killingBlows = SafeScoreNumber(scoreInfo.killingBlows)
+                            playerData.honorableKills = SafeScoreNumber(scoreInfo.honorableKills)
+                            playerData.deaths = SafeScoreNumber(scoreInfo.deaths)
+                            playerData.damage = SafeScoreNumber(scoreInfo.damageDone)
+                            playerData.healing = SafeScoreNumber(scoreInfo.healingDone)
+                            playerData.rating = SafeScoreNumber(scoreInfo.rating)
+                            playerData.ratingChange = SafeScoreNumber(scoreInfo.ratingChange)
+                            playerData.mmrChange = SafeScoreNumber(scoreInfo.mmrChange)
+                            playerData.postmatchMMR = SafeScoreNumber(scoreInfo.postmatchMMR)
+                            playerData.honorLevel = SafeScoreNumber(scoreInfo.honorLevel)
 
 							-- Solo Shuffle rounds won comes from scoreInfo.stats
 							do
 								local wins = 0
                                 if scoreInfo.stats and #scoreInfo.stats > 0 then
                                     -- Solo Shuffle stat column is the first stat entry
-                                    wins = tonumber(scoreInfo.stats[1].pvpStatValue) or 0 -- roundsWon from SS stats Scoreboard, not main Scoreboard
+                                    wins = SafeScoreNumber(scoreInfo.stats[1].pvpStatValue) -- roundsWon from SS stats Scoreboard, not main Scoreboard
                                 end
 								playerData.wins = wins
 							end    
