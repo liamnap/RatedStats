@@ -690,11 +690,10 @@ local RSTATS_ScoreHistory = {}
 local allianceTeamScore = 0
 local hordeTeamScore = 0
 local roundsWon = 0
--- Solo Shuffle: per-round allies captured at the moment the round ends.
--- ScoreInfo GUIDs can be protected/secret during shuffle state changes, so
--- this uses visible Name-Realm keys for team matching and KB snapshots.
+-- Solo Shuffle: per-round allies/result captured at PostRound.
+-- KB values are still stored later, but are no longer compared for W/L.
 local soloShuffleAlliesNameAtDeath = nil
-local soloShuffleAlliesKBAtDeath   = nil  -- Solo Shuffle: per-round ally KB snapshot at round end
+local soloShuffleRoundWonAtDeath   = nil
 
 local RBGScoreWidgets = {
     [529]  = 1671, -- Arathi Basin
@@ -936,16 +935,10 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
     local objectiveByGUID = {}
 
     -- ------------------------------------------------------------
-    -- Solo Shuffle: determine THIS round's win via KB increment on the 3 allies
-    -- captured at PVP_MATCH_STATE_CHANGED ("Death").
+    -- Solo Shuffle: determine THIS round's win from GetActiveMatchWinner().
     --
-    -- Why: SS players rotate teams. A running total delta across *different*
-    -- ally sets causes "ghost wins" when a player with existing KB rotates onto
-    -- your next team. So we snapshot the 3 allies' KB at Death, then on the next
-    -- PVP_MATCH_ACTIVE we check whether any of those 3 gained +1 KB.
-    --
-    -- No extra guard variable: we still only update roundsWon and keep your
-    -- existing (roundsWon > previousRoundsWon) W/L logic below.
+    -- 12.0.5 can return secret scoreboard KB values during active PvP.
+    -- We still store KB later, but we do not compare KB values for W/L.
     -- ------------------------------------------------------------
     if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() and roundIndex then
         alliesName = soloShuffleAlliesNameAtDeath or alliesName or {}
@@ -957,29 +950,7 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
         -- Snapshot BEFORE we possibly increment this round.
         previousRoundsWon = roundsWon
 
-        local wonThisRound = false
-        if soloShuffleAlliesKBAtDeath then
-            for i = 1, GetNumBattlefieldScores() do
-                local scoreInfo = C_PvP.GetScoreInfo(i)
-                if scoreInfo then
-                    local nameKey = GetScoreInfoNameRealmKey(scoreInfo.name)
-                    if nameKey and alliesName[nameKey] then
-                        local prevKB = soloShuffleAlliesKBAtDeath[nameKey]
-                        if prevKB ~= nil then
-                            local nowKB = tonumber(scoreInfo.killingBlows) or 0
-                            if nowKB > prevKB then
-                                wonThisRound = true
-                                break
-                            end
-                        end
-                    end
-                end
-            end
-        end
-
-        -- If any of the 3 allies gained a KB since Death, count it as a round win.
-        -- If not, treat it as not-a-win (loss/timeout) as you requested.
-        if wonThisRound then
+        if soloShuffleRoundWonAtDeath then
             roundsWon = roundsWon + 1
         end
     end
@@ -1122,11 +1093,11 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
     AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, allianceTeamScore, hordeTeamScore, roundsWon, categoryName, categoryID, damp, objectiveByGUID)
 
     -- Safe to clear AFTER stats capture:
-    -- GetPlayerStatsEndOfMatch has consumed soloShuffleAlliesNameAtDeath/KBAtDeath
-    -- for totals + W/L, and AppendHistory has consumed them for per-player "isFriendly".
+    -- GetPlayerStatsEndOfMatch has consumed soloShuffleRoundWonAtDeath,
+    -- and AppendHistory has consumed soloShuffleAlliesNameAtDeath for per-player "isFriendly".
     if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() then
         soloShuffleAlliesNameAtDeath  = nil
-        soloShuffleAlliesKBAtDeath    = nil
+        soloShuffleRoundWonAtDeath    = nil
     end
 
 	-- Call CheckPlayerTalents to process talents for new matches
@@ -1199,7 +1170,7 @@ function RefreshDataEvent(self, event, ...)
                 roundIndex = 1
             end
 
-            -- If we saw a round-ending "Death" (via PVP_MATCH_STATE_CHANGED),
+            -- If we saw a round-ending PostRound state,
             -- treat this PVP_MATCH_ACTIVE as the point where the scoreboard is
             -- final and create the row now.
             if self.isSoloShuffle and roundIndex and playerDeathSeen then
@@ -1273,7 +1244,7 @@ function RefreshDataEvent(self, event, ...)
                 playerDeathSeen = false
                 scoreboardKBTotal = nil
 				soloShuffleAlliesNameAtDeath = nil
-                soloShuffleAlliesKBAtDeath   = nil
+                soloShuffleRoundWonAtDeath   = nil
                 soloShuffleLastFriendlyKBTotal = nil
                 soloShuffleLastEnemyKBTotal    = nil
             elseif C_PvP.IsRatedArena() then
@@ -6248,6 +6219,11 @@ local function OnSoloShuffleStateChanged(event, ...)
         return
     end
 
+    local state = C_PvP.GetActiveMatchState and C_PvP.GetActiveMatchState()
+    if state ~= Enum.PvPMatchState.PostRound then
+        return
+    end
+
     -- Freeze our allies for THIS round, but only when we have the full set.
     -- In Solo Shuffle, player + party1 + party2 should be 3 Name-Realm keys.
     local allyNames = {}
@@ -6271,31 +6247,34 @@ local function OnSoloShuffleStateChanged(event, ...)
         return
     end
 
-    -- Snapshot allies' Killing Blows at the moment the round ends.
-    -- We will compare this snapshot against the next PVP_MATCH_ACTIVE scoreboard to decide win/loss.
-    local kbSnapshot = {}
+    local winnerTeamIndex = C_PvP.GetActiveMatchWinner and C_PvP.GetActiveMatchWinner()
+    if winnerTeamIndex == nil then
+        return
+    end
+
+    local myTeamIndex = nil
     for i = 1, GetNumBattlefieldScores() do
         local scoreInfo = C_PvP.GetScoreInfo(i)
         if scoreInfo then
-            local nameKey = GetScoreInfoNameRealmKey(scoreInfo.name)
-            if nameKey and allyNames[nameKey] then
-                kbSnapshot[nameKey] = tonumber(scoreInfo.killingBlows) or 0
+            local rawName = scoreInfo.name
+            if rawName and not (issecretvalue and issecretvalue(rawName)) then
+                local nameKey = GetScoreInfoNameRealmKey(rawName)
+                if nameKey and allyNames[nameKey] then
+                    -- Despite the field name, this is the scoreboard team index
+                    -- used for Gold/Purple-style Solo Shuffle team grouping.
+                    myTeamIndex = scoreInfo.faction
+                    break
+                end
             end
         end
     end
 
-    local kbCount = 0
-    for _ in pairs(kbSnapshot) do
-        kbCount = kbCount + 1
-    end
-
-    -- Not ready yet: do NOT latch. Wait for the next state change event.
-    if kbCount < 3 then
+    if myTeamIndex == nil then
         return
     end
 
     soloShuffleAlliesNameAtDeath = allyNames
-    soloShuffleAlliesKBAtDeath   = kbSnapshot
+    soloShuffleRoundWonAtDeath   = winnerTeamIndex == myTeamIndex
     playerDeathSeen = true
 end
 
