@@ -867,6 +867,20 @@ local function GetRBGBDuoPartnerNameRealm()
     return nil
 end
 
+local function RawScoreValue(value, keepRaw)
+    if keepRaw then
+        return value
+    end
+
+    local ok, numberValue = pcall(tonumber, value)
+    return (ok and numberValue) or 0
+end
+
+local function ScoreNumberOrZero(value)
+    local ok, numberValue = pcall(tonumber, value)
+    return (ok and numberValue) or 0
+end
+
 local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categoryName, categoryID, startTime)
     local mapID = GetCurrentMapID()
     local mapName = GetMapName(mapID) or "Unknown"
@@ -1046,20 +1060,14 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
             end
 
             -- Ensure damageDone and healingDone are numbers
-            damageDone = tonumber(damageDone) or 0
-            healingDone = tonumber(healingDone) or 0
+            damageDone = RawScoreValue(damageDone, isSoloShuffle)
+            healingDone = RawScoreValue(healingDone, isSoloShuffle)
 
             if isSoloShuffle and alliesName then
-                -- Solo Shuffle: friendly == me + party1 + party2 for THIS round.
-                if nameKey and alliesName[nameKey] then
-                    friendlyTotalDamage = friendlyTotalDamage + damageDone
-                    friendlyTotalHealing = friendlyTotalHealing + healingDone
-                else
-                    enemyTotalDamage = enemyTotalDamage + damageDone
-                    enemyTotalHealing = enemyTotalHealing + healingDone
-                end
+                -- Solo Shuffle damage/healing can remain secret until Complete.
+                -- Store raw per-player values in AppendHistory; do not do team-total arithmetic here.
             else
-                -- Non-SS:
+               -- Non-SS:
                -- Arena uses numeric team index; BG can be Horde/Alliance (string) or 0/1 (number).
                if isArena and myArenaTeamIndex ~= nil then
                    if faction == myArenaTeamIndex then
@@ -2183,20 +2191,23 @@ local function GetUnitIDByName(name)
 end
 
 local function FormatNumber(value)
-    -- Check if the value is a number
-    if type(value) ~= "number" then
-        -- If not a number, return the value as is
-        return tostring(value)
+    local okNumber, numberValue = pcall(tonumber, value)
+    if okNumber and numberValue then
+        if numberValue >= 1000000 then
+            return string.format("%.1fM", numberValue / 1000000)
+        elseif numberValue >= 1000 then
+            return string.format("%.1fk", numberValue / 1000)
+        else
+            return tostring(numberValue)
+        end
     end
 
-    -- Now we know value is a number, we can safely compare it
-    if value >= 1000000 then
-        return string.format("%.1fM", value / 1000000)
-    elseif value >= 1000 then
-        return string.format("%.1fk", value / 1000)
-    else
-        return tostring(value)
+    local okText, textValue = pcall(tostring, value)
+    if okText then
+        return textValue
     end
+
+    return "N/A"
 end
 
 local roleIcons = {
@@ -2483,8 +2494,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             local raceName = scoreInfo.raceName
             local className = scoreInfo.className
             local classToken = scoreInfo.classToken
-            local damageDone = tonumber(scoreInfo.damageDone) or 0  -- Ensure damageDone is a number
-            local healingDone = tonumber(scoreInfo.healingDone) or 0  -- Ensure healingDone is a number
+            local damageDone = RawScoreValue(scoreInfo.damageDone, isSoloShuffle)
+            local healingDone = RawScoreValue(scoreInfo.healingDone, isSoloShuffle)
             local rating = tonumber(scoreInfo.rating) or 0
             local ratingChange = tonumber(scoreInfo.ratingChange) or 0
             local prematchMMR = tonumber(scoreInfo.prematchMMR) or 0
@@ -2562,15 +2573,11 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 
             if C_PvP.IsRatedSoloShuffle() then
                 if playerData.isFriendly then
-                    friendlyTotalDamage = friendlyTotalDamage + damageDone
-                    friendlyTotalHealing = friendlyTotalHealing + healingDone
                     friendlyRatingTotal = friendlyRatingTotal + playerData.newrating
                     friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
                     friendlyPlayerCount = friendlyPlayerCount + 1
                     table.insert(friendlyPlayers, playerData)
                 else
-                    enemyTotalDamage = enemyTotalDamage + damageDone
-                    enemyTotalHealing = enemyTotalHealing + healingDone
                     enemyRatingTotal = enemyRatingTotal + playerData.newrating
                     enemyRatingChangeTotal = enemyRatingChangeTotal + playerData.ratingChange
                     enemyPlayerCount = enemyPlayerCount + 1
@@ -2795,8 +2802,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 							playerData.killingBlows   = tonumber(scoreInfo.killingBlows) or 0
 							playerData.honorableKills = tonumber(scoreInfo.honorableKills) or 0
 							playerData.deaths         = tonumber(scoreInfo.deaths) or 0
-							playerData.damage         = tonumber(scoreInfo.damageDone) or 0
-							playerData.healing        = tonumber(scoreInfo.healingDone) or 0
+							playerData.damage         = RawScoreValue(scoreInfo.damageDone, C_PvP.IsRatedSoloShuffle())
+							playerData.healing        = RawScoreValue(scoreInfo.healingDone, C_PvP.IsRatedSoloShuffle())
 							playerData.rating         = tonumber(scoreInfo.rating) or 0
 							playerData.ratingChange   = tonumber(scoreInfo.ratingChange) or 0
 							playerData.mmrChange      = tonumber(scoreInfo.mmrChange) or 0
@@ -2816,14 +2823,10 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 							-- Totals: Solo Shuffle uses the frozen ally team for this round; non-SS uses teamFaction.
 							if C_PvP.IsRatedSoloShuffle() then
 								if playerData.isFriendly then
-									friendlyTotalDamage = friendlyTotalDamage + playerData.damage
-									friendlyTotalHealing = friendlyTotalHealing + playerData.healing
 									friendlyRatingTotal = friendlyRatingTotal + playerData.rating + playerData.ratingChange
 									friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
 									friendlyPlayerCount = friendlyPlayerCount + 1
 								else
-									enemyTotalDamage = enemyTotalDamage + playerData.damage
-									enemyTotalHealing = enemyTotalHealing + playerData.healing
 									enemyRatingTotal = enemyRatingTotal + playerData.rating + playerData.ratingChange
 									enemyRatingChangeTotal = enemyRatingChangeTotal + playerData.ratingChange
 									enemyPlayerCount = enemyPlayerCount + 1
@@ -2945,8 +2948,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                             playerData.killingBlows = tonumber(scoreInfo.killingBlows) or 0
                             playerData.honorableKills = tonumber(scoreInfo.honorableKills) or 0
                             playerData.deaths = tonumber(scoreInfo.deaths) or 0
-                            playerData.damage = tonumber(scoreInfo.damageDone) or 0
-                            playerData.healing = tonumber(scoreInfo.healingDone) or 0
+                            playerData.damage = ScoreNumberOrZero(scoreInfo.damageDone)
+                            playerData.healing = ScoreNumberOrZero(scoreInfo.healingDone)
                             playerData.rating = tonumber(scoreInfo.rating) or 0
                             playerData.ratingChange = tonumber(scoreInfo.ratingChange) or 0
                             playerData.mmrChange = tonumber(scoreInfo.mmrChange) or 0
@@ -4200,9 +4203,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     -- ------------------------------------------------------------------
     local function GetNumericStat(p, field)
         if not p then return 0 end
-        local v = p[field]
-        v = tonumber(v)
-        return v or 0
+        return ScoreNumberOrZero(p[field])
     end
 
     if not (isInitial or isMissedGame) then
@@ -4278,8 +4279,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     local function BuildRankMap(players, field)
         local items = {}
         for _, p in ipairs(players) do
-            local v = p and p[field]
-            v = tonumber(v)
+            local v = p and ScoreNumberOrZero(p[field])
             if v then
                 items[#items + 1] = { p = p, v = v }
             end
