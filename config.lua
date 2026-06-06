@@ -753,6 +753,7 @@ end
 local soloShuffleLastFriendlyKBTotal = nil
 local soloShuffleLastEnemyKBTotal    = nil
 
+
 -- Main frame for registering events
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("PVP_MATCH_ACTIVE")
@@ -2802,16 +2803,16 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 
 					for _, playerData in ipairs(playerStats) do
 						if (guid2 and playerData.guid and playerData.guid == guid2) or playerData.name == name then
-							playerData.killingBlows   = SafeScoreNumber(scoreInfo.killingBlows)
-+							playerData.honorableKills = SafeScoreNumber(scoreInfo.honorableKills)
-+							playerData.deaths         = SafeScoreNumber(scoreInfo.deaths)
-+							playerData.damage         = SafeScoreNumber(scoreInfo.damageDone)
-+							playerData.healing        = SafeScoreNumber(scoreInfo.healingDone)
-+							playerData.rating         = SafeScoreNumber(scoreInfo.rating)
-+							playerData.ratingChange   = SafeScoreNumber(scoreInfo.ratingChange)
-+							playerData.mmrChange      = SafeScoreNumber(scoreInfo.mmrChange)
-+							playerData.postmatchMMR   = SafeScoreNumber(scoreInfo.postmatchMMR)
-+							playerData.honorLevel     = SafeScoreNumber(scoreInfo.honorLevel)
+						playerData.killingBlows   = SafeScoreNumber(scoreInfo.killingBlows)
+							playerData.honorableKills = SafeScoreNumber(scoreInfo.honorableKills)
+							playerData.deaths         = SafeScoreNumber(scoreInfo.deaths)
+							playerData.damage         = SafeScoreNumber(scoreInfo.damageDone)
+							playerData.healing        = SafeScoreNumber(scoreInfo.healingDone)
+							playerData.rating         = SafeScoreNumber(scoreInfo.rating)
+							playerData.ratingChange   = SafeScoreNumber(scoreInfo.ratingChange)
+							playerData.mmrChange      = SafeScoreNumber(scoreInfo.mmrChange)
+							playerData.postmatchMMR   = SafeScoreNumber(scoreInfo.postmatchMMR)
+							playerData.honorLevel     = SafeScoreNumber(scoreInfo.honorLevel)
 
 							-- Solo Shuffle rounds won comes from scoreInfo.stats
 							do
