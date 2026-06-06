@@ -1039,9 +1039,10 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
             local guid = isSoloShuffle and nil or scoreInfo.guid
             local stats = scoreInfo.stats
 
-            local objectiveKey = isSoloShuffle and nameKey or guid
-            if objectiveKey then
-                objectiveByGUID[objectiveKey] = BuildObjectiveTextFromStats(stats)
+            -- Solo Shuffle stats can contain secret values during the active match.
+            -- Objective text is only relevant for BG/BGB-style maps.
+            if not isSoloShuffle and guid then
+                objectiveByGUID[guid] = BuildObjectiveTextFromStats(stats)
             end
 
             -- Ensure damageDone and healingDone are numbers
