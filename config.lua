@@ -1050,7 +1050,10 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
             local talentSpec = scoreInfo.talentSpec
             local honorLevel = scoreInfo.honorLevel
             local roleAssigned = scoreInfo.roleAssigned
-            local guid = isSoloShuffle and nil or scoreInfo.guid
+            local guid = nil
+            if not isSoloShuffle then
+                guid = scoreInfo.guid
+            end
             local stats = scoreInfo.stats
 
             -- Solo Shuffle stats can contain secret values during the active match.
@@ -2505,7 +2508,10 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             local honorLevel = tonumber(scoreInfo.honorLevel) or 0
             local roleAssigned = scoreInfo.roleAssigned
             local stats = scoreInfo.stats
-            local guid = isSoloShuffle and nil or scoreInfo.guid
+            local guid = nil
+            if not isSoloShuffle then
+                guid = scoreInfo.guid
+            end
             local teamIndex = faction  -- C_PvP.GetScoreInfo().faction is a numeric team index
             if guid and guid == UnitGUID("player") then
                 myTeamIndex = teamIndex
@@ -2795,7 +2801,10 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                     elseif name and not name:find("-", 1, true) then
                         name = name .. "-" .. GetRealmName()
 					end
-                    local guid2 = C_PvP.IsRatedSoloShuffle() and nil or scoreInfo.guid
+                    local guid2 = nil
+                    if not isSoloShuffle then
+                        guid2 = scoreInfo.guid
+                    end
 
 					for _, playerData in ipairs(playerStats) do
 						if (guid2 and playerData.guid and playerData.guid == guid2) or playerData.name == name then
@@ -2941,7 +2950,10 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                         name = name .. "-" .. GetRealmName()
                     end
     
-					local guid2 = C_PvP.IsRatedSoloShuffle() and nil or scoreInfo.guid
+					local guid2 = nil
+					if not isSoloShuffle then
+						guid2 = scoreInfo.guid
+					end
                     for _, playerData in ipairs(playerStats) do
 						if (guid2 and playerData.guid and playerData.guid == guid2) or playerData.name == name then
                             -- Update the playerData fields with new stats
