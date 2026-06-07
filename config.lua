@@ -4589,7 +4589,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 CreateIconWithTooltip(nestedTable, stat, player.spec, columnPositions[i], rowOffset, columnWidths[i], rowHeight)
             elseif i == 6 then
                 -- Add role tooltip
-                CreateIconWithTooltip(nestedTable, stat, SafeTableLookup(roleTooltips, player.role, "-"), xPos, rowOffset, width, rowHeight)
+                CreateIconWithTooltip(nestedTable, stat, SafeTableLookup(roleTooltips, player.role, "-"), columnPositions[i], rowOffset, columnWidths[i], rowHeight)
             elseif i == COLS_PER_TEAM then
                 local textValue = stat or "-"
                 local fs = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
