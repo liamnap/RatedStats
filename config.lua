@@ -2388,6 +2388,8 @@ local function GetSpecIcon(className, specName)
 end
 
 local function CreateIconWithTooltip(parentFrame, content, tooltipText, xOffset, yOffset, columnWidth, rowHeight, isAtlas)
+    local displayContent = content or "-"
+    local displayTooltipText = tooltipText or displayContent
     if isAtlas then
         -- draw a texture from an Atlas
         local tex = parentFrame:CreateTexture(nil, "ARTWORK")
@@ -2396,7 +2398,7 @@ local function CreateIconWithTooltip(parentFrame, content, tooltipText, xOffset,
         tex:SetAtlas(content, false)   -- `content` is your atlas name
         tex:SetScript("OnEnter", function()
             GameTooltip:SetOwner(tex, "ANCHOR_RIGHT")
-            GameTooltip:SetText(tooltipText, 1,1,1,1, true)
+            GameTooltip:SetText(displayTooltipText, 1,1,1,1, true)
             GameTooltip:Show()
         end)
         tex:SetScript("OnLeave", function()
@@ -2407,11 +2409,11 @@ local function CreateIconWithTooltip(parentFrame, content, tooltipText, xOffset,
         -- existing text path
         local icon = parentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         icon:SetFont(GetUnicodeSafeFont(), 14)
-        icon:SetText(content)         -- `content` is your text or texture-string
+        icon:SetText(displayContent)         -- `content` is your text or texture-string
         icon:SetPoint("CENTER", parentFrame, "TOPLEFT", xOffset + (columnWidth/2), yOffset - (rowHeight/2))
         icon:SetScript("OnEnter", function()
             GameTooltip:SetOwner(icon, "ANCHOR_RIGHT")
-            GameTooltip:SetText(tooltipText, 1,1,1,1, true)
+            GameTooltip:SetText(displayTooltipText, 1,1,1,1, true)
             GameTooltip:Show()
         end)
         icon:SetScript("OnLeave", function()
