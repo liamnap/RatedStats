@@ -4334,8 +4334,8 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     local function BuildRankMap(players, field)
         local items = {}
         for _, p in ipairs(players) do
-            local v = p and ScoreNumberOrZero(p[field])
-            if v then
+            local v = p and ComparableScoreNumber(p[field])
+            if v ~= nil then
                 items[#items + 1] = { p = p, v = v }
             end
         end
