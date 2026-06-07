@@ -894,6 +894,18 @@ local function ComparableScoreNumber(value)
     return numberValue
 end
 
+local function IsFinalSoloShuffleEntry(entry)
+    if not entry or not entry.isSoloShuffle then return true end
+    if entry.roundIndex == 6 then return true end
+
+    local roundText = entry.friendlyWinLoss or entry.winLoss
+    if type(roundText) == "string" and roundText:match("^RND%s+6") then
+        return true
+    end
+
+    return false
+end
+
 local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categoryName, categoryID, startTime)
     local mapID = GetCurrentMapID()
     local mapName = GetMapName(mapID) or "Unknown"
@@ -2011,19 +2023,26 @@ function CheckForMissedGames()
 			currentMMR = tonumber(currentMMR) or 0	
 ---			Log(string.format("Missed game detected in category ID %d | Previous CR: %d | Current CR: %d | Change: %+d", category.id, previousCR, currentCR, crChange))
 	
-			local highestMatchID = 0
-			local highestMatchEntry = nil
-			for _, e in ipairs(historyTable) do
-				local mid = tonumber(e.matchID)
-				if mid and mid > highestMatchID then
-					highestMatchID = mid
-					highestMatchEntry = e
-				end
-			end
+            local highestMatchID = 0
+            local highestBaselineMatchID = 0
+            local highestMatchEntry = nil
+            for _, e in ipairs(historyTable) do
+                local mid = tonumber(e.matchID)
+                if mid and mid > highestMatchID then
+                    highestMatchID = mid
+                end
+
+                -- Solo Shuffle rounds 1-5 contain raw secret scoreboard values.
+                -- They can be displayed, but must not drive missed-game CR/MMR fallback logic.
+                if mid and IsFinalSoloShuffleEntry(e) and mid > highestBaselineMatchID then
+                    highestBaselineMatchID = mid
+                    highestMatchEntry = e
+                end
+            end
 
 			local previousCR = 0
 			if highestMatchEntry then
-				previousCR = tonumber(highestMatchEntry.cr) or tonumber(highestMatchEntry.rating) or 0
+				previousCR = ComparableScoreNumber(highestMatchEntry.cr) or ComparableScoreNumber(highestMatchEntry.rating) or 0
 			end
 			if currentCR == 0 and previousCR > 0 then
 				currentCR = previousCR
@@ -2040,17 +2059,17 @@ function CheckForMissedGames()
 				if category.id == 7 and type(highestMatchEntry.playerStats) == "table" then
 					for _, s in ipairs(highestMatchEntry.playerStats) do
 						if s.name == myName then
-							local v = tonumber(s.postmatchMMR) or tonumber(s.postMatchMMR) or 0
+							local v = ComparableScoreNumber(s.postmatchMMR) or ComparableScoreNumber(s.postMatchMMR) or 0
 							if v > 0 then return v end
 							break
 						end
 					end
 				end
 
-				local v = tonumber(highestMatchEntry.friendlyMMR) or 0
+				local v = ComparableScoreNumber(highestMatchEntry.friendlyMMR) or 0
 				if v > 0 then return v end
 
-				v = tonumber(highestMatchEntry.mmr) or tonumber(highestMatchEntry.postMatchMMR) or 0
+				v = ComparableScoreNumber(highestMatchEntry.mmr) or ComparableScoreNumber(highestMatchEntry.postMatchMMR) or 0
 				if v > 0 then return v end
 
 				return 0
@@ -4958,7 +4977,8 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
             -- Never let placeholder rows drive Current CR/MMR display.
             local isMissed = entry and (entry.isMissedGame or entry.winLoss == "Missed Game" or entry.friendlyWinLoss == "Missed Game")
             local isInitial = entry and entry.isInitial
-            if ok and (not isMissed) and (not isInitial) and entry.matchID and (not highestMatchID or entry.matchID > highestMatchID) then
+            local isNonFinalSoloShuffleRound = (categoryID == 7 and entry and entry.isSoloShuffle and not IsFinalSoloShuffleEntry(entry))
+            if ok and (not isMissed) and (not isInitial) and (not isNonFinalSoloShuffleRound) and entry.matchID and (not highestMatchID or entry.matchID > highestMatchID) then
                 highestMatchID = entry.matchID
                 highestMatchEntry = entry
             end
@@ -4978,12 +4998,12 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
         if highestMatchEntry.playerStats then
             for _, stats in ipairs(highestMatchEntry.playerStats) do
                 if stats.name == playerName then
-                    local cr = tonumber(stats.newrating)
+                    local cr = ComparableScoreNumber(stats.newrating) or ComparableScoreNumber(stats.rating)
                     if (not currentCR or currentCR == 0) and cr then
                         currentCR = cr
                     end
 
-                    local mmr = tonumber(stats.postmatchMMR)
+                    local mmr = ComparableScoreNumber(stats.postmatchMMR) or ComparableScoreNumber(stats.postMatchMMR)
                     if mmr and mmr > 0 then
                         resolvedMMR = mmr
                     end
@@ -4992,8 +5012,8 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
             end
         end
 
-        if not resolvedMMR or resolvedMMR <= 0 then
-            local teamMMR = tonumber(highestMatchEntry.friendlyMMR) or tonumber(highestMatchEntry.mmr)
+        if not resolvedMMR then
+            local teamMMR = ComparableScoreNumber(highestMatchEntry.friendlyMMR) or ComparableScoreNumber(highestMatchEntry.mmr)
             if teamMMR and teamMMR > 0 then
                 resolvedMMR = teamMMR
             end
