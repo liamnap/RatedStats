@@ -2509,24 +2509,38 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             end
 
             -- Get faction group tag and localized faction
-            local killingBlows = tonumber(scoreInfo.killingBlows) or 0
-            local honorableKills = tonumber(scoreInfo.honorableKills) or 0
-            local deaths = tonumber(scoreInfo.deaths) or 0
-            local honorGained = tonumber(scoreInfo.honorGained) or 0
+            local killingBlows = RawScoreValue(scoreInfo.killingBlows, isSoloShuffle) or "-"
+            local honorableKills = RawScoreValue(scoreInfo.honorableKills, isSoloShuffle) or "-"
+            local deaths = RawScoreValue(scoreInfo.deaths, isSoloShuffle) or "-"
+            local honorGained = RawScoreValue(scoreInfo.honorGained, isSoloShuffle) or "-"
             local faction = scoreInfo.faction
             local raceName = scoreInfo.raceName
             local className = scoreInfo.className
             local classToken = scoreInfo.classToken
             local damageDone = RawScoreValue(scoreInfo.damageDone, isSoloShuffle)
             local healingDone = RawScoreValue(scoreInfo.healingDone, isSoloShuffle)
-            local rating = deferSoloShuffleRating and "-" or (tonumber(scoreInfo.rating) or 0)
-            local ratingChange = deferSoloShuffleRating and "-" or (tonumber(scoreInfo.ratingChange) or 0)
-            local prematchMMR = deferSoloShuffleRating and "-" or (tonumber(scoreInfo.prematchMMR) or 0)
-            local mmrChange = deferSoloShuffleRating and "-" or (tonumber(scoreInfo.mmrChange) or 0)
-            local postmatchMMR = deferSoloShuffleRating and "-" or (tonumber(scoreInfo.postmatchMMR) or 0)
+            local rating
+            local ratingChange
+            local prematchMMR
+            local mmrChange
+            local postmatchMMR
+
+            if deferSoloShuffleRating then
+                rating = RawScoreValue(scoreInfo.rating, true) or "-"
+                ratingChange = RawScoreValue(scoreInfo.ratingChange, true) or "-"
+                prematchMMR = RawScoreValue(scoreInfo.prematchMMR, true) or "-"
+                mmrChange = RawScoreValue(scoreInfo.mmrChange, true) or "-"
+                postmatchMMR = RawScoreValue(scoreInfo.postmatchMMR, true) or "-"
+            else
+                rating = RawScoreValue(scoreInfo.rating, false)
+                ratingChange = RawScoreValue(scoreInfo.ratingChange, false)
+                prematchMMR = RawScoreValue(scoreInfo.prematchMMR, false)
+                mmrChange = RawScoreValue(scoreInfo.mmrChange, false)
+                postmatchMMR = RawScoreValue(scoreInfo.postmatchMMR, false)
+            end
             local talentSpec = scoreInfo.talentSpec
-            local honorLevel = tonumber(scoreInfo.honorLevel) or 0
-            local roleAssigned = scoreInfo.roleAssigned
+            local honorLevel = RawScoreValue(scoreInfo.honorLevel, isSoloShuffle) or "-"
+            local roleAssigned = roleIcons[scoreInfo.roleAssigned] and scoreInfo.roleAssigned or "-"
             local stats = scoreInfo.stats
             local guid = nil
             if not isSoloShuffle then
@@ -2543,7 +2557,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                 end
             end
           
-            local newrating = deferSoloShuffleRating and "-" or (rating + ratingChange)
+            local newrating = deferSoloShuffleRating and rating or (rating + ratingChange)
             local translatedFaction = (faction == 0 and "Horde" or "Alliance")
 
 			-- Fetch BattleTag for the player using GUID
@@ -2832,16 +2846,18 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 
 					for _, playerData in ipairs(playerStats) do
 						if (guid2 and playerData.guid and playerData.guid == guid2) or playerData.name == name then
-							playerData.killingBlows   = tonumber(scoreInfo.killingBlows) or 0
-							playerData.honorableKills = tonumber(scoreInfo.honorableKills) or 0
-							playerData.deaths         = tonumber(scoreInfo.deaths) or 0
-							playerData.damage         = RawScoreValue(scoreInfo.damageDone, C_PvP.IsRatedSoloShuffle())
-							playerData.healing        = RawScoreValue(scoreInfo.healingDone, C_PvP.IsRatedSoloShuffle())
-							playerData.rating         = "-"
-                            playerData.ratingChange   = "-"
-                            playerData.mmrChange      = "-"
-                            playerData.postmatchMMR   = "-"
-							playerData.honorLevel     = tonumber(scoreInfo.honorLevel) or 0
+                            playerData.killingBlows   = RawScoreValue(scoreInfo.killingBlows, true) or "-"
+                            playerData.honorableKills = RawScoreValue(scoreInfo.honorableKills, true) or "-"
+                            playerData.deaths         = RawScoreValue(scoreInfo.deaths, true) or "-"
+                            playerData.damage         = RawScoreValue(scoreInfo.damageDone, true) or "-"
+                            playerData.healing        = RawScoreValue(scoreInfo.healingDone, true) or "-"
+                            playerData.rating         = RawScoreValue(scoreInfo.rating, true) or "-"
+                            playerData.ratingChange   = RawScoreValue(scoreInfo.ratingChange, true) or "-"
+                            playerData.prematchMMR    = RawScoreValue(scoreInfo.prematchMMR, true) or "-"
+                            playerData.mmrChange      = RawScoreValue(scoreInfo.mmrChange, true) or "-"
+                            playerData.postmatchMMR   = RawScoreValue(scoreInfo.postmatchMMR, true) or "-"
+                            playerData.newrating      = playerData.rating
+                            playerData.honorLevel     = RawScoreValue(scoreInfo.honorLevel, true) or "-"
 
 							-- Solo Shuffle rounds won comes from scoreInfo.stats
 							do
@@ -4417,49 +4433,66 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     local enemyTeamSize     = #enemyPlayers
     local totalPlayerCount  = #allPlayers
 
-    -- CR/MMR display helpers (scoreboard provides rating + (pre/post)match MMR in rated brackets)
-    local function HasMMR(p)
-        if not p then return false end
-        local post = tonumber(p.postmatchMMR) or 0
-        local pre  = tonumber(p.prematchMMR) or 0
-        return (post > 0) or (pre > 0)
+    -- CR/MMR display helpers. SS rounds 1-5 may contain protected scoreboard values:
+    -- display what was stored, but do not force numeric conversion or calculate deltas.
+    local function FormatScoreText(value)
+        local okNumber, numberValue = pcall(tonumber, value)
+        if okNumber and numberValue then
+            local okText, textValue = pcall(tostring, numberValue)
+            if okText and textValue then
+                return textValue
+            end
+        end
+
+        local okText, textValue = pcall(tostring, value)
+        if okText and textValue then
+            return textValue
+        end
+
+        return "-"
     end
 
-    local function FormatSignedNumber(n)
-        n = tonumber(n)
-        if n == nil then return "-" end
-        if n > 0 then
-            return "+" .. n
+    local function FormatSignedNumber(value)
+        local okNumber, numberValue = pcall(tonumber, value)
+        if okNumber and numberValue then
+            local okSigned, signedText = pcall(function()
+                if numberValue > 0 then
+                    return "+" .. numberValue
+                end
+                return tostring(numberValue)
+            end)
+
+            if okSigned and signedText then
+                return signedText
+            end
         end
-        return tostring(n)
+
+        return FormatScoreText(value)
     end
 
     local function FormatCRMMR(p)
-        local crVal = tonumber(p and p.newrating) or tonumber(p and p.rating)
-        if crVal == nil then
-            return "-"
+        local crTxt = FormatScoreText(p and p.newrating)
+        local mmrTxt = FormatScoreText(p and p.postmatchMMR)
+
+        if mmrTxt == "-" then
+            mmrTxt = FormatScoreText(p and p.prematchMMR)
         end
-        if HasMMR(p) then
-            local mmrVal = tonumber(p and p.postmatchMMR) or tonumber(p and p.prematchMMR) or 0
-            return string.format("%d / %d", crVal, mmrVal)
+
+        if mmrTxt ~= "-" then
+            return crTxt .. " / " .. mmrTxt
         end
-        return tostring(crVal)
+
+        return crTxt
     end
 
     local function FormatCRMMRChange(p)
         local crTxt = FormatSignedNumber(p and p.ratingChange)
-        if HasMMR(p) then
-            local pre  = tonumber(p and p.prematchMMR) or 0
-            local post = tonumber(p and p.postmatchMMR) or 0
-            local delta = 0
+        local mmrTxt = FormatSignedNumber(p and p.mmrChange)
 
-            if pre > 0 and post > 0 then
-                delta = post - pre
-            end
-
-            local mmrTxt = FormatSignedNumber(delta)
+        if mmrTxt ~= "-" then
             return crTxt .. " / " .. mmrTxt
         end
+
         return crTxt
     end
 
@@ -4507,7 +4540,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 raceIcons[player.race] or player.race,
                 classIcons[player.class] or player.class,
                 GetSpecIcon(player.class, player.spec),
-                roleIcons[player.role] or player.role,
+                roleIcons[player.role] or "-",
                 FormatCRMMR(player),
                 player.killingBlows,
                 winHKValue,
@@ -4524,7 +4557,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 raceIcons[player.race] or player.race,
                 classIcons[player.class] or player.class,
                 GetSpecIcon(player.class, player.spec),
-                roleIcons[player.role] or player.role,
+                roleIcons[player.role] or "-",
                 FormatCRMMR(player),
                 player.killingBlows,
                 winHKValue,
@@ -4546,7 +4579,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 CreateIconWithTooltip(nestedTable, stat, player.spec, columnPositions[i], rowOffset, columnWidths[i], rowHeight)
             elseif i == 6 then
                 -- Add role tooltip
-                CreateIconWithTooltip(nestedTable, stat, roleTooltips[player.role], columnPositions[i], rowOffset, columnWidths[i], rowHeight)
+                CreateIconWithTooltip(nestedTable, stat, roleTooltips[player.role] or "-", columnPositions[i], rowOffset, columnWidths[i], rowHeight)
             elseif i == COLS_PER_TEAM then
                 local textValue = stat or "-"
                 local fs = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -4657,7 +4690,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 raceIcons[player.race] or player.race,
                 classIcons[player.class] or player.class,
                 GetSpecIcon(player.class, player.spec),
-                roleIcons[player.role] or player.role,
+                roleIcons[player.role] or "-",
                 FormatCRMMR(player),
                 player.killingBlows,
                 winHKValue,
@@ -4674,7 +4707,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 raceIcons[player.race] or player.race,
                 classIcons[player.class] or player.class,
                 GetSpecIcon(player.class, player.spec),
-                roleIcons[player.role] or player.role,
+                roleIcons[player.role] or "-",
                 FormatCRMMR(player),
                 player.killingBlows,
                 winHKValue,
@@ -4700,7 +4733,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 CreateIconWithTooltip(nestedTable, stat, player.spec, xPos, rowOffset, width, rowHeight)
             elseif i == 6 then
                 -- Add role tooltip
-                CreateIconWithTooltip(nestedTable, stat, roleTooltips[player.role], xPos, rowOffset, width, rowHeight)
+                CreateIconWithTooltip(nestedTable, stat, roleTooltips[player.role] or "-", xPos, rowOffset, width, rowHeight)
             elseif i == COLS_PER_TEAM then
                 local textValue = stat or "-"
                 local fs = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
