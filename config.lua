@@ -2463,7 +2463,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     local friendlyRatingTotal, enemyRatingTotal = 0, 0
     local friendlyPlayerCount, enemyPlayerCount = 0, 0
     local friendlyRatingChangeTotal, enemyRatingChangeTotal = 0, 0
-	
+    local deferSoloShuffleRating = isSoloShuffle and roundIndex and roundIndex >= 1 and roundIndex <= 5
+
     -- Pre-pass: in arenas, grab MY team index so we can keep "my team" left consistently.
     if isArena then
         local myGUID = UnitGUID("player")
@@ -2499,11 +2500,11 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             local classToken = scoreInfo.classToken
             local damageDone = RawScoreValue(scoreInfo.damageDone, isSoloShuffle)
             local healingDone = RawScoreValue(scoreInfo.healingDone, isSoloShuffle)
-            local rating = tonumber(scoreInfo.rating) or 0
-            local ratingChange = tonumber(scoreInfo.ratingChange) or 0
-            local prematchMMR = tonumber(scoreInfo.prematchMMR) or 0
-            local mmrChange = tonumber(scoreInfo.mmrChange) or 0
-            local postmatchMMR = tonumber(scoreInfo.postmatchMMR) or 0
+            local rating = deferSoloShuffleRating and "-" or (tonumber(scoreInfo.rating) or 0)
+            local ratingChange = deferSoloShuffleRating and "-" or (tonumber(scoreInfo.ratingChange) or 0)
+            local prematchMMR = deferSoloShuffleRating and "-" or (tonumber(scoreInfo.prematchMMR) or 0)
+            local mmrChange = deferSoloShuffleRating and "-" or (tonumber(scoreInfo.mmrChange) or 0)
+            local postmatchMMR = deferSoloShuffleRating and "-" or (tonumber(scoreInfo.postmatchMMR) or 0)
             local talentSpec = scoreInfo.talentSpec
             local honorLevel = tonumber(scoreInfo.honorLevel) or 0
             local roleAssigned = scoreInfo.roleAssigned
@@ -2523,7 +2524,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                 end
             end
           
-            local newrating = rating + ratingChange
+            local newrating = deferSoloShuffleRating and "-" or (rating + ratingChange)
             local translatedFaction = (faction == 0 and "Horde" or "Alliance")
 
 			-- Fetch BattleTag for the player using GUID
@@ -2579,13 +2580,17 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 
             if C_PvP.IsRatedSoloShuffle() then
                 if playerData.isFriendly then
-                    friendlyRatingTotal = friendlyRatingTotal + playerData.newrating
-                    friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
+                    if not deferSoloShuffleRating then
+                        friendlyRatingTotal = friendlyRatingTotal + playerData.newrating
+                        friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
+                    end
                     friendlyPlayerCount = friendlyPlayerCount + 1
                     table.insert(friendlyPlayers, playerData)
                 else
-                    enemyRatingTotal = enemyRatingTotal + playerData.newrating
-                    enemyRatingChangeTotal = enemyRatingChangeTotal + playerData.ratingChange
+                    if not deferSoloShuffleRating then
+                        enemyRatingTotal = enemyRatingTotal + playerData.newrating
+                        enemyRatingChangeTotal = enemyRatingChangeTotal + playerData.ratingChange
+                    end
                     enemyPlayerCount = enemyPlayerCount + 1
                     table.insert(enemyPlayers, playerData)
                 end
@@ -2659,12 +2664,12 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     end
 
     -- Calculate average newrating for friendly and enemy teams
-    local friendlyAvgCR = friendlyPlayerCount > 0 and math.floor(friendlyRatingTotal / friendlyPlayerCount) or "N/A"
-    local enemyAvgCR = enemyPlayerCount > 0 and math.floor(enemyRatingTotal / enemyPlayerCount) or "N/A"
+    local friendlyAvgCR = deferSoloShuffleRating and "-" or (friendlyPlayerCount > 0 and math.floor(friendlyRatingTotal / friendlyPlayerCount) or "N/A")
+    local enemyAvgCR = deferSoloShuffleRating and "-" or (enemyPlayerCount > 0 and math.floor(enemyRatingTotal / enemyPlayerCount) or "N/A")
 
     -- Calculate average ratingChange for friendly and enemy teams
-    local friendlyAvgRatingChange = friendlyPlayerCount > 0 and math.floor(friendlyRatingChangeTotal / friendlyPlayerCount) or "N/A"
-    local enemyAvgRatingChange = enemyPlayerCount > 0 and math.floor(enemyRatingChangeTotal / enemyPlayerCount) or "N/A"
+    local friendlyAvgRatingChange = deferSoloShuffleRating and "-" or (friendlyPlayerCount > 0 and math.floor(friendlyRatingChangeTotal / friendlyPlayerCount) or "N/A")
+    local enemyAvgRatingChange = deferSoloShuffleRating and "-" or (enemyPlayerCount > 0 and math.floor(enemyRatingChangeTotal / enemyPlayerCount) or "N/A"
 
     -- Combine friendly and enemy players into playerStats
     for _, player in ipairs(friendlyPlayers) do
@@ -2813,10 +2818,10 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 							playerData.deaths         = tonumber(scoreInfo.deaths) or 0
 							playerData.damage         = RawScoreValue(scoreInfo.damageDone, C_PvP.IsRatedSoloShuffle())
 							playerData.healing        = RawScoreValue(scoreInfo.healingDone, C_PvP.IsRatedSoloShuffle())
-							playerData.rating         = tonumber(scoreInfo.rating) or 0
-							playerData.ratingChange   = tonumber(scoreInfo.ratingChange) or 0
-							playerData.mmrChange      = tonumber(scoreInfo.mmrChange) or 0
-							playerData.postmatchMMR   = tonumber(scoreInfo.postmatchMMR) or 0
+							playerData.rating         = "-"
+                            playerData.ratingChange   = "-"
+                            playerData.mmrChange      = "-"
+                            playerData.postmatchMMR   = "-"
 							playerData.honorLevel     = tonumber(scoreInfo.honorLevel) or 0
 
 							-- Solo Shuffle rounds won comes from scoreInfo.stats
@@ -2832,12 +2837,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 							-- Totals: Solo Shuffle uses the frozen ally team for this round; non-SS uses teamFaction.
 							if C_PvP.IsRatedSoloShuffle() then
 								if playerData.isFriendly then
-									friendlyRatingTotal = friendlyRatingTotal + playerData.rating + playerData.ratingChange
-									friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
 									friendlyPlayerCount = friendlyPlayerCount + 1
 								else
-									enemyRatingTotal = enemyRatingTotal + playerData.rating + playerData.ratingChange
-									enemyRatingChangeTotal = enemyRatingChangeTotal + playerData.ratingChange
 									enemyPlayerCount = enemyPlayerCount + 1
 								end
 							else
@@ -2862,10 +2863,10 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 				end
 			end
 
-			local friendlyAvgCR = friendlyPlayerCount > 0 and math.floor(friendlyRatingTotal / friendlyPlayerCount) or "N/A"
-			local enemyAvgCR = enemyPlayerCount > 0 and math.floor(enemyRatingTotal / enemyPlayerCount) or "N/A"
-			local friendlyAvgRatingChange = friendlyPlayerCount > 0 and math.floor(friendlyRatingChangeTotal / friendlyPlayerCount) or "N/A"
-			local enemyAvgRatingChange = enemyPlayerCount > 0 and math.floor(enemyRatingChangeTotal / enemyPlayerCount) or "N/A"
+			local friendlyAvgCR = "-"
+            local enemyAvgCR = "-"
+            local friendlyAvgRatingChange = "-"
+            local enemyAvgRatingChange = "-"
 
             local ssRoundData = {
                 matchID = appendHistoryMatchID,
