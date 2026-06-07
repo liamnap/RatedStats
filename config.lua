@@ -2246,6 +2246,14 @@ local roleTooltips = {
     ["-"] = "-"  -- This will preserve the hyphen in the text
 }
 
+local function SafeTableLookup(tbl, key, fallback)
+    local ok, value = pcall(function()
+        return tbl[key]
+    end)
+
+    return (ok and value) or fallback or "-"
+end
+
 local factionIcons = {
     ["Horde"] = "|TInterface\\PVPFrame\\PVP-Currency-Horde:12:12:12:0:64:64:0:64:0:64|t",
     ["Alliance"] = "|TInterface\\PVPFrame\\PVP-Currency-Alliance:14:14:12:0:64:64:0:64:0:64|t",
@@ -2540,7 +2548,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             end
             local talentSpec = scoreInfo.talentSpec
             local honorLevel = RawScoreValue(scoreInfo.honorLevel, isSoloShuffle) or "-"
-            local roleAssigned = roleIcons[scoreInfo.roleAssigned] and scoreInfo.roleAssigned or "-"
+            local roleAssigned = scoreInfo.roleAssigned
             local stats = scoreInfo.stats
             local guid = nil
             if not isSoloShuffle then
@@ -4540,13 +4548,13 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 raceIcons[player.race] or player.race,
                 classIcons[player.class] or player.class,
                 GetSpecIcon(player.class, player.spec),
-                roleIcons[player.role] or "-",
+                SafeTableLookup(roleIcons, player.role, "-"),
                 FormatCRMMR(player),
                 player.killingBlows,
                 winHKValue,
                 player.deaths or "-",
-                FormatNumber(player.damage),
-                FormatNumber(player.healing),
+                isSS and player.damage or FormatNumber(player.damage),
+                isSS and player.healing or FormatNumber(player.healing),
                 FormatCRMMRChange(player),
                 ((isSS or is2v2 or is3v3) and "" or (player.objective or "-"))
             }
@@ -4557,12 +4565,12 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 raceIcons[player.race] or player.race,
                 classIcons[player.class] or player.class,
                 GetSpecIcon(player.class, player.spec),
-                roleIcons[player.role] or "-",
+                SafeTableLookup(roleIcons, player.role, "-"),
                 FormatCRMMR(player),
                 player.killingBlows,
                 winHKValue,
-                FormatNumber(player.damage),
-                FormatNumber(player.healing),
+                isSS and player.damage or FormatNumber(player.damage),
+                isSS and player.healing or FormatNumber(player.healing),
                 FormatCRMMRChange(player),
                 ((isSS or is2v2 or is3v3) and "" or (player.objective or "-"))
             }
@@ -4579,14 +4587,14 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 CreateIconWithTooltip(nestedTable, stat, player.spec, columnPositions[i], rowOffset, columnWidths[i], rowHeight)
             elseif i == 6 then
                 -- Add role tooltip
-                CreateIconWithTooltip(nestedTable, stat, roleTooltips[player.role] or "-", columnPositions[i], rowOffset, columnWidths[i], rowHeight)
+                CreateIconWithTooltip(nestedTable, stat, SafeTableLookup(roleTooltips, player.role, "-"), xPos, rowOffset, width, rowHeight)
             elseif i == COLS_PER_TEAM then
                 local textValue = stat or "-"
                 local fs = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
                 fs:SetFont(GetUnicodeSafeFont(), entryFontSize)
                 fs:SetJustifyH("CENTER")
                 fs:SetPoint("CENTER", nestedTable, "TOPLEFT", columnPositions[i] + (columnWidths[i] / 2), rowOffset - (rowHeight / 2))
-                fs:SetText(tostring(textValue))
+                fs:SetText(textValue)
                 if highlightRow then
                     fs:SetTextColor(highlightR, highlightG, highlightB)
                 end
@@ -4647,7 +4655,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                         text:SetJustifyH("RIGHT")
                         text:SetWidth(width - 30)
                         text:SetPoint("RIGHT", nestedTable, "TOPLEFT", xPos + width - 28, rowOffset - (rowHeight / 2))
-                        text:SetText(tostring(textValue))
+                        text:SetText(textValue)
                         if highlightRow then
                             text:SetTextColor(highlightR, highlightG, highlightB)
                         end
@@ -4656,7 +4664,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                     else
                         text:SetJustifyH("CENTER")
                         text:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
-                        text:SetText(tostring(textValue))
+                        text:SetText(textValue)
                         if highlightRow then
                             text:SetTextColor(highlightR, highlightG, highlightB)
                         end
@@ -4664,7 +4672,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 else
                     text:SetJustifyH("CENTER")
                     text:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
-                    text:SetText(tostring(textValue))  -- Ensure the value is converted to a string
+                    text:SetText(textValue)  -- Ensure the value is converted to a string
                     if highlightRow then
                             text:SetTextColor(highlightR, highlightG, highlightB)
                     end
@@ -4690,13 +4698,13 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 raceIcons[player.race] or player.race,
                 classIcons[player.class] or player.class,
                 GetSpecIcon(player.class, player.spec),
-                roleIcons[player.role] or "-",
+                SafeTableLookup(roleIcons, player.role, "-"),
                 FormatCRMMR(player),
                 player.killingBlows,
                 winHKValue,
                 player.deaths or "-",
-                FormatNumber(player.damage),
-                FormatNumber(player.healing),
+                isSS and player.damage or FormatNumber(player.damage),
+                isSS and player.healing or FormatNumber(player.healing),
                 FormatCRMMRChange(player),
                 ((isSS or is2v2 or is3v3) and "" or (player.objective or "-"))
             }
@@ -4707,12 +4715,12 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 raceIcons[player.race] or player.race,
                 classIcons[player.class] or player.class,
                 GetSpecIcon(player.class, player.spec),
-                roleIcons[player.role] or "-",
+                SafeTableLookup(roleIcons, player.role, "-"),
                 FormatCRMMR(player),
                 player.killingBlows,
                 winHKValue,
-                FormatNumber(player.damage),
-                FormatNumber(player.healing),
+                isSS and player.damage or FormatNumber(player.damage),
+                isSS and player.healing or FormatNumber(player.healing),
                 FormatCRMMRChange(player),
                 ((isSS or is2v2 or is3v3) and "" or (player.objective or "-"))
             }
@@ -4733,14 +4741,14 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 CreateIconWithTooltip(nestedTable, stat, player.spec, xPos, rowOffset, width, rowHeight)
             elseif i == 6 then
                 -- Add role tooltip
-                CreateIconWithTooltip(nestedTable, stat, roleTooltips[player.role] or "-", xPos, rowOffset, width, rowHeight)
+                CreateIconWithTooltip(nestedTable, stat, SafeTableLookup(roleTooltips, player.role, "-"), columnPositions[i], rowOffset, columnWidths[i], rowHeight)
             elseif i == COLS_PER_TEAM then
                 local textValue = stat or "-"
                 local fs = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
                 fs:SetFont(GetUnicodeSafeFont(), entryFontSize)
                 fs:SetJustifyH("CENTER")
                 fs:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
-                fs:SetText(tostring(textValue))
+                fs:SetText(textValue)
 
                 -- Add objective tooltip
                 fs:EnableMouse(true)
@@ -4795,18 +4803,18 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                         text:SetJustifyH("RIGHT")
                         text:SetWidth(width - 30)
                         text:SetPoint("RIGHT", nestedTable, "TOPLEFT", xPos + width - 28, rowOffset - (rowHeight / 2))
-                        text:SetText(tostring(textValue))
+                        text:SetText(textValue)
 
                         CreateRankIndicator(nestedTable, xPos, width, rowOffset, rowHeight, teamRank, teamSize, overallRank, totalPlayerCount, rankFontSize)
                     else
                         text:SetJustifyH("CENTER")
                         text:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
-                        text:SetText(tostring(textValue))
+                        text:SetText(textValue)
                     end
                 else
                     text:SetJustifyH("CENTER")
                     text:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
-                    text:SetText(tostring(textValue))  -- Ensure the value is converted to a string
+                    text:SetText(textValue)  -- Ensure the value is converted to a string
                 end
             end
         end  -- This 'end' closes the inner 'for' loop
