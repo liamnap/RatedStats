@@ -881,6 +881,19 @@ local function ScoreNumberOrZero(value)
     return (ok and numberValue) or 0
 end
 
+local function ComparableScoreNumber(value)
+    local ok, numberValue = pcall(tonumber, value)
+    if not ok or numberValue == nil then return nil end
+
+    -- Stored secret scoreboard values can be displayed, but cannot be sorted or ranked.
+    local canCompare = pcall(function()
+        return numberValue < 0
+    end)
+
+    if not canCompare then return nil end
+    return numberValue
+end
+
 local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categoryName, categoryID, startTime)
     local mapID = GetCurrentMapID()
     local mapName = GetMapName(mapID) or "Unknown"
@@ -2196,12 +2209,18 @@ end
 local function FormatNumber(value)
     local okNumber, numberValue = pcall(tonumber, value)
     if okNumber and numberValue then
-        if numberValue >= 1000000 then
-            return string.format("%.1fM", numberValue / 1000000)
-        elseif numberValue >= 1000 then
-            return string.format("%.1fk", numberValue / 1000)
-        else
-            return tostring(numberValue)
+        local okFormat, formatted = pcall(function()
+            if numberValue >= 1000000 then
+                return string.format("%.1fM", numberValue / 1000000)
+            elseif numberValue >= 1000 then
+                return string.format("%.1fk", numberValue / 1000)
+            else
+                return tostring(numberValue)
+            end
+        end)
+
+        if okFormat then
+            return formatted
         end
     end
 
@@ -4212,16 +4231,27 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     -- ------------------------------------------------------------------
     -- Sort rows per team:
     -- If YOU are a healer (role=4) sort by healing, otherwise sort by damage.
+    -- Secret scoreboard values are displayed but cannot be sorted/ranked.
     -- Sorting is per-team only (friendly sorted within friendly, enemy within enemy).
     -- ------------------------------------------------------------------
     local function GetNumericStat(p, field)
         if not p then return 0 end
-        return ScoreNumberOrZero(p[field])
+        return ComparableScoreNumber(p[field]) or 0
+    end
+
+    local function TeamCanSort(players, field)
+        for _, p in ipairs(players) do
+            if p and ComparableScoreNumber(p[field]) == nil then
+                return false
+            end
+        end
+        return #players > 1
     end
 
     if not (isInitial or isMissedGame) then
         local myName = playerName
         local myRole = nil
+        local canUseRole = true
 
         local function NamesMatch(a, b)
             if not (a and b) then return false end
@@ -4239,19 +4269,31 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
             end
         end
 
-        local isHealer =
-            (myRole == 4) or
-            (myRole == "HEALER")
+        local isHealer = false
+        if myRole then
+            local okRole, roleResult = pcall(function()
+                return (myRole == 4) or (myRole == "HEALER")
+            end)
 
-        local sortField = isHealer and "healing" or "damage"
+            canUseRole = okRole
+            isHealer = okRole and roleResult
+        end
 
-        table.sort(friendlyPlayers, function(a, b)
-            return GetNumericStat(a, sortField) > GetNumericStat(b, sortField)
-        end)
+        if canUseRole then
+            local sortField = isHealer and "healing" or "damage"
 
-        table.sort(enemyPlayers, function(a, b)
-            return GetNumericStat(a, sortField) > GetNumericStat(b, sortField)
-        end)
+            if TeamCanSort(friendlyPlayers, sortField) then
+                table.sort(friendlyPlayers, function(a, b)
+                    return GetNumericStat(a, sortField) > GetNumericStat(b, sortField)
+                end)
+            end
+
+            if TeamCanSort(enemyPlayers, sortField) then
+                table.sort(enemyPlayers, function(a, b)
+                    return GetNumericStat(a, sortField) > GetNumericStat(b, sortField)
+                end)
+            end
+        end
     end
     
     -- ------------------------------------------------------------------
