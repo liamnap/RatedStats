@@ -2669,7 +2669,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 
     -- Calculate average ratingChange for friendly and enemy teams
     local friendlyAvgRatingChange = deferSoloShuffleRating and "-" or (friendlyPlayerCount > 0 and math.floor(friendlyRatingChangeTotal / friendlyPlayerCount) or "N/A")
-    local enemyAvgRatingChange = deferSoloShuffleRating and "-" or (enemyPlayerCount > 0 and math.floor(enemyRatingChangeTotal / enemyPlayerCount) or "N/A"
+    local enemyAvgRatingChange = deferSoloShuffleRating and "-" or (enemyPlayerCount > 0 and math.floor(enemyRatingChangeTotal / enemyPlayerCount) or "N/A")
 
     -- Combine friendly and enemy players into playerStats
     for _, player in ipairs(friendlyPlayers) do
