@@ -5071,6 +5071,7 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
         -- Reach: 2300 CR and 25 Wins above 2300 CR
         return LabelNum("Reach: ", crReq) .. " " .. RSTATS:ColorText("CR")
             .. " " .. RSTATS:ColorText("and ")
+            .. "|cffffffff" .. tostring(winsReq) .. "|r"
             .. " " .. RSTATS:ColorText(winsText)
     end
 
