@@ -2255,6 +2255,13 @@ local roleIcons = {
     [2] = "|TInterface\\LFGFrame\\UI-LFG-ICON-ROLES:12:12:0:0:64:64:0:16:16:32|t",  -- Tank icon (Middle Left)
     [4] = "|TInterface\\LFGFrame\\UI-LFG-ICON-ROLES:12:12:0:0:64:64:16:32:0:16|t",  -- Healer icon (Top Middle)
     [8] = "|TInterface\\LFGFrame\\UI-LFG-ICON-ROLES:12:12:0:0:64:64:16:32:16:32|t",  -- DPS icon (Middle Middle)
+    ["2"] = "|TInterface\\LFGFrame\\UI-LFG-ICON-ROLES:12:12:0:0:64:64:0:16:16:32|t",
+    ["4"] = "|TInterface\\LFGFrame\\UI-LFG-ICON-ROLES:12:12:0:0:64:64:16:32:0:16|t",
+    ["8"] = "|TInterface\\LFGFrame\\UI-LFG-ICON-ROLES:12:12:0:0:64:64:16:32:16:32|t",
+    ["TANK"] = "|TInterface\\LFGFrame\\UI-LFG-ICON-ROLES:12:12:0:0:64:64:0:16:16:32|t",
+    ["HEALER"] = "|TInterface\\LFGFrame\\UI-LFG-ICON-ROLES:12:12:0:0:64:64:16:32:0:16|t",
+    ["DAMAGER"] = "|TInterface\\LFGFrame\\UI-LFG-ICON-ROLES:12:12:0:0:64:64:16:32:16:32|t",
+    ["DPS"] = "|TInterface\\LFGFrame\\UI-LFG-ICON-ROLES:12:12:0:0:64:64:16:32:16:32|t",
     ["-"] = "-"  -- This will preserve the hyphen in the text
 }
 
@@ -2262,6 +2269,13 @@ local roleTooltips = {
     [2] = "Tank",
     [4] = "Healer",
     [8] = "DPS",
+    ["2"] = "Tank",
+    ["4"] = "Healer",
+    ["8"] = "DPS",
+    ["TANK"] = "Tank",
+    ["HEALER"] = "Healer",
+    ["DAMAGER"] = "DPS",
+    ["DPS"] = "DPS",
     ["-"] = "-"  -- This will preserve the hyphen in the text
 }
 
