@@ -5090,25 +5090,8 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
         crReq = tonumber(crReq) or 0
         local total = 0
 
-        local function GetPreMatchCR(entry)
-            local postCR = tonumber(entry and entry.cr) or 0
-            local ratingChange = nil
-
-            if entry and entry.playerStats then
-                for _, ps in ipairs(entry.playerStats) do
-                    if ps and ps.name == playerName then
-                        ratingChange = tonumber(ps.ratingChange)
-                        break
-                    end
-                end
-            end
-
-            if not ratingChange then return 0 end
-            return postCR - ratingChange
-        end
-
         for _, e in ipairs(tbl) do
-            local ecr = GetPreMatchCR(e)
+            local ecr = tonumber(e and e.cr) or 0
             if ecr >= crReq then
                 if winsMode == "ss_rounds" then
                     -- Solo Shuffle: we store per-player rounds won as playerData.wins
