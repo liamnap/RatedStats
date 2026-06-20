@@ -2342,7 +2342,7 @@ local specIcons = {
     -- Demon Hunter
     ["Demon Hunter:Havoc"] = "|TInterface\\Icons\\Ability_DemonHunter_SpecDPS:12:12:0:0:64:64:0:64:0:64|t",
     ["Demon Hunter:Vengeance"] = "|TInterface\\Icons\\Ability_DemonHunter_SpecTank:12:12:0:0:64:64:0:64:0:64|t",
-	["Demon Hunter:Devourer"] = "|TInterface\\Icons\\Classicon_DemonHunter_Void_64.blp:12:12:0:0:64:64:0:64:0:64|t",
+	["Demon Hunter:Devourer"] = "|TInterface\\Icons\\Classicon_DemonHunter_Void_256.blp:12:12:0:0:64:64:0:64:0:64|t",
 
     -- Druid
     ["Druid:Balance"] = "|TInterface\\Icons\\Spell_Nature_StarFall:12:12:0:0:64:64:0:64:0:64|t",
