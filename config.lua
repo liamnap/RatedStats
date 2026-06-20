@@ -15,6 +15,24 @@ local function GetPlayerFullName()
     return playerName
 end
 
+-- Internal comparison key only. ScoreInfo names use realm names without spaces.
+local function GetUnitNameRealmKey(unit)
+    local name, realm = UnitFullName(unit)
+    if not name then return nil end
+    if not realm or realm == "" then realm = GetRealmName() end
+    if realm then realm = realm:gsub("%s+", "") end
+    return realm and (name .. "-" .. realm) or name
+end
+
+local function GetScoreInfoNameRealmKey(name)
+    if not name then return nil end
+    if name:find("-", 1, true) then return name end
+
+    local realm = GetRealmName()
+    if realm then realm = realm:gsub("%s+", "") end
+    return realm and (name .. "-" .. realm) or name
+end
+
 -- Get the region dynamically
 local regionName = GetCurrentRegionName()  -- This will return the region as a string (e.g., "US", "EU", "KR")
 
@@ -672,14 +690,10 @@ local RSTATS_ScoreHistory = {}
 local allianceTeamScore = 0
 local hordeTeamScore = 0
 local roundsWon = 0
--- Solo Shuffle: remember which scoreboard "team index" we belonged to at the
--- moment the round ended (so we can keep our team on the left even if the UI
--- reshuffles groups afterwards).
-local soloShuffleMyTeamIndexAtDeath = nil
--- Solo Shuffle: per-round allies (GUID set) captured at the moment the round ends.
--- This is the only reliable way to force "my team" on the left in SS.
-local soloShuffleAlliesGUIDAtDeath = nil
-local soloShuffleAlliesKBAtDeath   = nil  -- Solo Shuffle: per-round ally KB snapshot at round end
+-- Solo Shuffle: per-round allies/result captured at PostRound.
+-- KB values are still stored later, but are no longer compared for W/L.
+local soloShuffleAlliesNameAtDeath = nil
+local soloShuffleRoundWonAtDeath   = nil
 
 local RBGScoreWidgets = {
     [529]  = 1671, -- Arathi Basin
@@ -853,6 +867,45 @@ local function GetRBGBDuoPartnerNameRealm()
     return nil
 end
 
+local function RawScoreValue(value, keepRaw)
+    if keepRaw then
+        return value
+    end
+
+    local ok, numberValue = pcall(tonumber, value)
+    return (ok and numberValue) or 0
+end
+
+local function ScoreNumberOrZero(value)
+    local ok, numberValue = pcall(tonumber, value)
+    return (ok and numberValue) or 0
+end
+
+local function ComparableScoreNumber(value)
+    local ok, numberValue = pcall(tonumber, value)
+    if not ok or numberValue == nil then return nil end
+
+    -- Stored secret scoreboard values can be displayed, but cannot be sorted or ranked.
+    local canCompare = pcall(function()
+        return numberValue < 0
+    end)
+
+    if not canCompare then return nil end
+    return numberValue
+end
+
+local function IsFinalSoloShuffleEntry(entry)
+    if not entry or not entry.isSoloShuffle then return true end
+    if entry.roundIndex == 6 then return true end
+
+    local roundText = entry.friendlyWinLoss or entry.winLoss
+    if type(roundText) == "string" and roundText:match("^RND%s+6") then
+        return true
+    end
+
+    return false
+end
+
 local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categoryName, categoryID, startTime)
     local mapID = GetCurrentMapID()
     local mapName = GetMapName(mapID) or "Unknown"
@@ -887,17 +940,17 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
         end
     end
 
-    -- For Solo Shuffle we want to anchor "my team" based on the team index we
+    -- For Solo Shuffle we want to anchor "my team" based on the team we
     -- belonged to at the moment the round ended, not whatever reshuffles the
     -- scoreboard UI may have done afterwards.
-    local alliesGUID = soloShuffleAlliesGUIDAtDeath
+    local alliesName = soloShuffleAlliesNameAtDeath
 
-    -- Ensure "my team" set always includes me (defensive; depends on how you fill soloShuffleAlliesGUIDAtDeath)
-    if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() then
-        alliesGUID = alliesGUID or {}
-        local myGUID = UnitGUID("player")
-        if myGUID then
-            alliesGUID[myGUID] = true
+    -- Solo Shuffle score GUIDs can be protected/secret here, so use visible Name-Realm keys.
+    if isSoloShuffle then
+        alliesName = alliesName or {}
+        local myNameKey = GetUnitNameRealmKey("player")
+        if myNameKey then
+            alliesName[myNameKey] = true
         end
     end
 
@@ -921,47 +974,22 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
     local objectiveByGUID = {}
 
     -- ------------------------------------------------------------
-    -- Solo Shuffle: determine THIS round's win via KB increment on the 3 allies
-    -- captured at PVP_MATCH_STATE_CHANGED ("Death").
+    -- Solo Shuffle: determine THIS round's win from GetActiveMatchWinner().
     --
-    -- Why: SS players rotate teams. A running total delta across *different*
-    -- ally sets causes "ghost wins" when a player with existing KB rotates onto
-    -- your next team. So we snapshot the 3 allies' KB at Death, then on the next
-    -- PVP_MATCH_ACTIVE we check whether any of those 3 gained +1 KB.
-    --
-    -- No extra guard variable: we still only update roundsWon and keep your
-    -- existing (roundsWon > previousRoundsWon) W/L logic below.
+    -- 12.0.5 can return secret scoreboard KB values during active PvP.
+    -- We still store KB later, but we do not compare KB values for W/L.
     -- ------------------------------------------------------------
     if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() and roundIndex then
-        alliesGUID = soloShuffleAlliesGUIDAtDeath or alliesGUID or {}
-        local myGUID = UnitGUID("player")
-        if myGUID then
-            alliesGUID[myGUID] = true
+        alliesName = soloShuffleAlliesNameAtDeath or alliesName or {}
+        local myNameKey = GetUnitNameRealmKey("player")
+        if myNameKey then
+            alliesName[myNameKey] = true
         end
 
         -- Snapshot BEFORE we possibly increment this round.
         previousRoundsWon = roundsWon
 
-        local wonThisRound = false
-        if soloShuffleAlliesKBAtDeath then
-            for i = 1, GetNumBattlefieldScores() do
-                local scoreInfo = C_PvP.GetScoreInfo(i)
-                if scoreInfo and scoreInfo.guid and alliesGUID[scoreInfo.guid] then
-                    local prevKB = soloShuffleAlliesKBAtDeath[scoreInfo.guid]
-                    if prevKB ~= nil then
-                        local nowKB = tonumber(scoreInfo.killingBlows) or 0
-                        if nowKB > prevKB then
-                            wonThisRound = true
-                            break
-                        end
-                    end
-                end
-            end
-        end
-
-        -- If any of the 3 allies gained a KB since Death, count it as a round win.
-        -- If not, treat it as not-a-win (loss/timeout) as you requested.
-        if wonThisRound then
+        if soloShuffleRoundWonAtDeath then
             roundsWon = roundsWon + 1
         end
     end
@@ -1028,6 +1056,7 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
         local scoreInfo = C_PvP.GetScoreInfo(i)
         if scoreInfo then
             local name = scoreInfo.name
+            local nameKey = GetScoreInfoNameRealmKey(name)
             local killingBlows = scoreInfo.killingBlows
             local honorableKills = scoreInfo.honorableKills
             local deaths = tonumber(scoreInfo.deaths) or 0
@@ -1046,27 +1075,27 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
             local talentSpec = scoreInfo.talentSpec
             local honorLevel = scoreInfo.honorLevel
             local roleAssigned = scoreInfo.roleAssigned
-            local guid = scoreInfo.guid
+            local guid = nil
+            if not isSoloShuffle then
+                guid = scoreInfo.guid
+            end
             local stats = scoreInfo.stats
-            if guid then
+
+            -- Solo Shuffle stats can contain secret values during the active match.
+            -- Objective text is only relevant for BG/BGB-style maps.
+            if not isSoloShuffle and guid then
                 objectiveByGUID[guid] = BuildObjectiveTextFromStats(stats)
             end
 
             -- Ensure damageDone and healingDone are numbers
-            damageDone = tonumber(damageDone) or 0
-            healingDone = tonumber(healingDone) or 0
+            damageDone = RawScoreValue(damageDone, isSoloShuffle)
+            healingDone = RawScoreValue(healingDone, isSoloShuffle)
 
-            if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() and alliesGUID then
-                -- Solo Shuffle: friendly == me + party1 + party2 for THIS round.
-                if guid and alliesGUID[guid] then
-                    friendlyTotalDamage = friendlyTotalDamage + damageDone
-                    friendlyTotalHealing = friendlyTotalHealing + healingDone
-                else
-                    enemyTotalDamage = enemyTotalDamage + damageDone
-                    enemyTotalHealing = enemyTotalHealing + healingDone
-                end
+            if isSoloShuffle and alliesName then
+                -- Solo Shuffle damage/healing can remain secret until Complete.
+                -- Store raw per-player values in AppendHistory; do not do team-total arithmetic here.
             else
-                -- Non-SS:
+               -- Non-SS:
                -- Arena uses numeric team index; BG can be Horde/Alliance (string) or 0/1 (number).
                if isArena and myArenaTeamIndex ~= nil then
                    if faction == myArenaTeamIndex then
@@ -1101,12 +1130,11 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
     AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, allianceTeamScore, hordeTeamScore, roundsWon, categoryName, categoryID, damp, objectiveByGUID)
 
     -- Safe to clear AFTER stats capture:
-    -- GetPlayerStatsEndOfMatch has consumed soloShuffleAlliesGUIDAtDeath/KBAtDeath
-    -- for totals + W/L, and AppendHistory has consumed them for per-player "isFriendly".
+    -- GetPlayerStatsEndOfMatch has consumed soloShuffleRoundWonAtDeath,
+    -- and AppendHistory has consumed soloShuffleAlliesNameAtDeath for per-player "isFriendly".
     if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() then
-        soloShuffleMyTeamIndexAtDeath = nil
-        soloShuffleAlliesGUIDAtDeath  = nil
-        soloShuffleAlliesKBAtDeath    = nil
+        soloShuffleAlliesNameAtDeath  = nil
+        soloShuffleRoundWonAtDeath    = nil
     end
 
 	-- Call CheckPlayerTalents to process talents for new matches
@@ -1179,7 +1207,7 @@ function RefreshDataEvent(self, event, ...)
                 roundIndex = 1
             end
 
-            -- If we saw a round-ending "Death" (via PVP_MATCH_STATE_CHANGED),
+            -- If we saw a round-ending PostRound state,
             -- treat this PVP_MATCH_ACTIVE as the point where the scoreboard is
             -- final and create the row now.
             if self.isSoloShuffle and roundIndex and playerDeathSeen then
@@ -1252,9 +1280,8 @@ function RefreshDataEvent(self, event, ...)
                 previousRoundsWon = nil
                 playerDeathSeen = false
                 scoreboardKBTotal = nil
-				soloShuffleMyTeamIndexAtDeath = nil
-                soloShuffleAlliesGUIDAtDeath = nil
-                soloShuffleAlliesKBAtDeath   = nil
+				soloShuffleAlliesNameAtDeath = nil
+                soloShuffleRoundWonAtDeath   = nil
                 soloShuffleLastFriendlyKBTotal = nil
                 soloShuffleLastEnemyKBTotal    = nil
             elseif C_PvP.IsRatedArena() then
@@ -1996,19 +2023,26 @@ function CheckForMissedGames()
 			currentMMR = tonumber(currentMMR) or 0	
 ---			Log(string.format("Missed game detected in category ID %d | Previous CR: %d | Current CR: %d | Change: %+d", category.id, previousCR, currentCR, crChange))
 	
-			local highestMatchID = 0
-			local highestMatchEntry = nil
-			for _, e in ipairs(historyTable) do
-				local mid = tonumber(e.matchID)
-				if mid and mid > highestMatchID then
-					highestMatchID = mid
-					highestMatchEntry = e
-				end
-			end
+            local highestMatchID = 0
+            local highestBaselineMatchID = 0
+            local highestMatchEntry = nil
+            for _, e in ipairs(historyTable) do
+                local mid = tonumber(e.matchID)
+                if mid and mid > highestMatchID then
+                    highestMatchID = mid
+                end
+
+                -- Solo Shuffle rounds 1-5 contain raw secret scoreboard values.
+                -- They can be displayed, but must not drive missed-game CR/MMR fallback logic.
+                if mid and IsFinalSoloShuffleEntry(e) and mid > highestBaselineMatchID then
+                    highestBaselineMatchID = mid
+                    highestMatchEntry = e
+                end
+            end
 
 			local previousCR = 0
 			if highestMatchEntry then
-				previousCR = tonumber(highestMatchEntry.cr) or tonumber(highestMatchEntry.rating) or 0
+				previousCR = ComparableScoreNumber(highestMatchEntry.cr) or ComparableScoreNumber(highestMatchEntry.rating) or 0
 			end
 			if currentCR == 0 and previousCR > 0 then
 				currentCR = previousCR
@@ -2025,17 +2059,17 @@ function CheckForMissedGames()
 				if category.id == 7 and type(highestMatchEntry.playerStats) == "table" then
 					for _, s in ipairs(highestMatchEntry.playerStats) do
 						if s.name == myName then
-							local v = tonumber(s.postmatchMMR) or tonumber(s.postMatchMMR) or 0
+							local v = ComparableScoreNumber(s.postmatchMMR) or ComparableScoreNumber(s.postMatchMMR) or 0
 							if v > 0 then return v end
 							break
 						end
 					end
 				end
 
-				local v = tonumber(highestMatchEntry.friendlyMMR) or 0
+				local v = ComparableScoreNumber(highestMatchEntry.friendlyMMR) or 0
 				if v > 0 then return v end
 
-				v = tonumber(highestMatchEntry.mmr) or tonumber(highestMatchEntry.postMatchMMR) or 0
+				v = ComparableScoreNumber(highestMatchEntry.mmr) or ComparableScoreNumber(highestMatchEntry.postMatchMMR) or 0
 				if v > 0 then return v end
 
 				return 0
@@ -2192,26 +2226,38 @@ local function GetUnitIDByName(name)
 end
 
 local function FormatNumber(value)
-    -- Check if the value is a number
-    if type(value) ~= "number" then
-        -- If not a number, return the value as is
-        return tostring(value)
+    local okNumber, numberValue = pcall(tonumber, value)
+    if okNumber and numberValue then
+        local okFormat, formatted = pcall(function()
+            if numberValue >= 1000000 then
+                return string.format("%.1fM", numberValue / 1000000)
+            elseif numberValue >= 1000 then
+                return string.format("%.1fk", numberValue / 1000)
+            else
+                return tostring(numberValue)
+            end
+        end)
+
+        if okFormat then
+            return formatted
+        end
     end
 
-    -- Now we know value is a number, we can safely compare it
-    if value >= 1000000 then
-        return string.format("%.1fM", value / 1000000)
-    elseif value >= 1000 then
-        return string.format("%.1fk", value / 1000)
-    else
-        return tostring(value)
+    local okText, textValue = pcall(tostring, value)
+    if okText then
+        return textValue
     end
+
+    return "N/A"
 end
 
 local roleIcons = {
     [2] = "|TInterface\\LFGFrame\\UI-LFG-ICON-ROLES:12:12:0:0:64:64:0:16:16:32|t",  -- Tank icon (Middle Left)
     [4] = "|TInterface\\LFGFrame\\UI-LFG-ICON-ROLES:12:12:0:0:64:64:16:32:0:16|t",  -- Healer icon (Top Middle)
     [8] = "|TInterface\\LFGFrame\\UI-LFG-ICON-ROLES:12:12:0:0:64:64:16:32:16:32|t",  -- DPS icon (Middle Middle)
+    ["TANK"] = "|TInterface\\LFGFrame\\UI-LFG-ICON-ROLES:12:12:0:0:64:64:0:16:16:32|t",
+    ["HEALER"] = "|TInterface\\LFGFrame\\UI-LFG-ICON-ROLES:12:12:0:0:64:64:16:32:0:16|t",
+    ["DAMAGER"] = "|TInterface\\LFGFrame\\UI-LFG-ICON-ROLES:12:12:0:0:64:64:16:32:16:32|t",
     ["-"] = "-"  -- This will preserve the hyphen in the text
 }
 
@@ -2219,8 +2265,19 @@ local roleTooltips = {
     [2] = "Tank",
     [4] = "Healer",
     [8] = "DPS",
+    ["TANK"] = "Tank",
+    ["HEALER"] = "Healer",
+    ["DAMAGER"] = "DPS",
     ["-"] = "-"  -- This will preserve the hyphen in the text
 }
+
+local function SafeTableLookup(tbl, key, fallback)
+    local ok, value = pcall(function()
+        return tbl[key]
+    end)
+
+    return (ok and value) or fallback or "-"
+end
 
 local factionIcons = {
     ["Horde"] = "|TInterface\\PVPFrame\\PVP-Currency-Horde:12:12:12:0:64:64:0:64:0:64|t",
@@ -2356,6 +2413,8 @@ local function GetSpecIcon(className, specName)
 end
 
 local function CreateIconWithTooltip(parentFrame, content, tooltipText, xOffset, yOffset, columnWidth, rowHeight, isAtlas)
+    local displayContent = content or "-"
+    local displayTooltipText = tooltipText or displayContent
     if isAtlas then
         -- draw a texture from an Atlas
         local tex = parentFrame:CreateTexture(nil, "ARTWORK")
@@ -2364,7 +2423,7 @@ local function CreateIconWithTooltip(parentFrame, content, tooltipText, xOffset,
         tex:SetAtlas(content, false)   -- `content` is your atlas name
         tex:SetScript("OnEnter", function()
             GameTooltip:SetOwner(tex, "ANCHOR_RIGHT")
-            GameTooltip:SetText(tooltipText, 1,1,1,1, true)
+            GameTooltip:SetText(displayTooltipText, 1,1,1,1, true)
             GameTooltip:Show()
         end)
         tex:SetScript("OnLeave", function()
@@ -2375,11 +2434,11 @@ local function CreateIconWithTooltip(parentFrame, content, tooltipText, xOffset,
         -- existing text path
         local icon = parentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         icon:SetFont(GetUnicodeSafeFont(), 14)
-        icon:SetText(content)         -- `content` is your text or texture-string
+        icon:SetText(displayContent)         -- `content` is your text or texture-string
         icon:SetPoint("CENTER", parentFrame, "TOPLEFT", xOffset + (columnWidth/2), yOffset - (rowHeight/2))
         icon:SetScript("OnEnter", function()
             GameTooltip:SetOwner(icon, "ANCHOR_RIGHT")
-            GameTooltip:SetText(tooltipText, 1,1,1,1, true)
+            GameTooltip:SetText(displayTooltipText, 1,1,1,1, true)
             GameTooltip:Show()
         end)
         icon:SetScript("OnLeave", function()
@@ -2437,8 +2496,9 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     local appendHistoryMatchID = nextID
     Database._nextMatchID[key] = nextID + 1
     local playerFullName = GetPlayerFullName() -- Get the player's full name
+    local playerNameKey = GetUnitNameRealmKey("player")
     local myTeamIndex
-    local ssAlliesGUID = soloShuffleAlliesGUIDAtDeath or nil
+    local ssAlliesName = soloShuffleAlliesNameAtDeath or nil
     local isSoloShuffle = (C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle()) or false
     local isArena = (C_PvP.IsRatedArena and C_PvP.IsRatedArena()) and not isSoloShuffle
 
@@ -2457,7 +2517,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     local friendlyRatingTotal, enemyRatingTotal = 0, 0
     local friendlyPlayerCount, enemyPlayerCount = 0, 0
     local friendlyRatingChangeTotal, enemyRatingChangeTotal = 0, 0
-	
+    local deferSoloShuffleRating = isSoloShuffle and roundIndex and roundIndex >= 1 and roundIndex <= 5
+
     -- Pre-pass: in arenas, grab MY team index so we can keep "my team" left consistently.
     if isArena then
         local myGUID = UnitGUID("player")
@@ -2474,6 +2535,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
         local scoreInfo = C_PvP.GetScoreInfo(i)
         if scoreInfo then
             local name = scoreInfo.name
+            local nameKey = GetScoreInfoNameRealmKey(name)
             if name == UnitName("player") then
                 name = playerFullName
             elseif name and not name:find("-", 1, true) then
@@ -2482,34 +2544,47 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             end
 
             -- Get faction group tag and localized faction
-            local killingBlows = tonumber(scoreInfo.killingBlows) or 0
-            local honorableKills = tonumber(scoreInfo.honorableKills) or 0
-            local deaths = tonumber(scoreInfo.deaths) or 0
-            local honorGained = tonumber(scoreInfo.honorGained) or 0
+            local killingBlows = RawScoreValue(scoreInfo.killingBlows, isSoloShuffle) or "-"
+            local honorableKills = RawScoreValue(scoreInfo.honorableKills, isSoloShuffle) or "-"
+            local deaths = RawScoreValue(scoreInfo.deaths, isSoloShuffle) or "-"
+            local honorGained = RawScoreValue(scoreInfo.honorGained, isSoloShuffle) or "-"
             local faction = scoreInfo.faction
             local raceName = scoreInfo.raceName
             local className = scoreInfo.className
             local classToken = scoreInfo.classToken
-            local damageDone = tonumber(scoreInfo.damageDone) or 0  -- Ensure damageDone is a number
-            local healingDone = tonumber(scoreInfo.healingDone) or 0  -- Ensure healingDone is a number
-            local rating = tonumber(scoreInfo.rating) or 0
-            local ratingChange = tonumber(scoreInfo.ratingChange) or 0
-            local prematchMMR = tonumber(scoreInfo.prematchMMR) or 0
-            local mmrChange = tonumber(scoreInfo.mmrChange) or 0
-            local postmatchMMR = tonumber(scoreInfo.postmatchMMR) or 0
+            local damageDone = RawScoreValue(scoreInfo.damageDone, isSoloShuffle)
+            local healingDone = RawScoreValue(scoreInfo.healingDone, isSoloShuffle)
+            local rating
+            local ratingChange
+            local prematchMMR
+            local mmrChange
+            local postmatchMMR
+
+            if deferSoloShuffleRating then
+                rating = RawScoreValue(scoreInfo.rating, true) or "-"
+                ratingChange = RawScoreValue(scoreInfo.ratingChange, true) or "-"
+                prematchMMR = RawScoreValue(scoreInfo.prematchMMR, true) or "-"
+                mmrChange = RawScoreValue(scoreInfo.mmrChange, true) or "-"
+                postmatchMMR = RawScoreValue(scoreInfo.postmatchMMR, true) or "-"
+            else
+                rating = RawScoreValue(scoreInfo.rating, false)
+                ratingChange = RawScoreValue(scoreInfo.ratingChange, false)
+                prematchMMR = RawScoreValue(scoreInfo.prematchMMR, false)
+                mmrChange = RawScoreValue(scoreInfo.mmrChange, false)
+                postmatchMMR = RawScoreValue(scoreInfo.postmatchMMR, false)
+            end
             local talentSpec = scoreInfo.talentSpec
-            local honorLevel = tonumber(scoreInfo.honorLevel) or 0
+            local honorLevel = RawScoreValue(scoreInfo.honorLevel, isSoloShuffle) or "-"
             local roleAssigned = scoreInfo.roleAssigned
             local stats = scoreInfo.stats
-            local guid = scoreInfo.guid
+            local guid = nil
+            if not isSoloShuffle then
+                guid = scoreInfo.guid
+            end
             local teamIndex = faction  -- C_PvP.GetScoreInfo().faction is a numeric team index
             if guid and guid == UnitGUID("player") then
                 myTeamIndex = teamIndex
             end
-            local roleAssigned = scoreInfo.roleAssigned
-            local stats = scoreInfo.stats
-            local guid = scoreInfo.guid
----            local roundsWon = roundsWon or 0  -- Capture rounds won
          
             -- Display additional stats
             if stats then
@@ -2517,7 +2592,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                 end
             end
           
-            local newrating = rating + ratingChange
+            local newrating = deferSoloShuffleRating and rating or (rating + ratingChange)
             local translatedFaction = (faction == 0 and "Horde" or "Alliance")
 
 			-- Fetch BattleTag for the player using GUID
@@ -2537,11 +2612,11 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                 faction = translatedFaction,
                 teamIndex = teamIndex,
                 isFriendly = (
-                    C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle()
-                    and guid
+                    isSoloShuffle
+                    and nameKey
                     and (
-                        guid == UnitGUID("player")
-                        or (ssAlliesGUID and ssAlliesGUID[guid])
+                        nameKey == playerNameKey
+                        or (ssAlliesName and ssAlliesName[nameKey])
                     )
                 ) or false,
                 race = raceName,
@@ -2562,7 +2637,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                 postmatchMMR = postmatchMMR,
                 honorLevel = honorLevel,
                 newrating = newrating,  -- New field for adjusted rating
-                objective = (objectiveByGUID and guid and objectiveByGUID[guid]) or "-"
+                objective = (objectiveByGUID and ((isSoloShuffle and nameKey and objectiveByGUID[nameKey]) or ((not isSoloShuffle) and guid and objectiveByGUID[guid]))) or "-"
             }
 
             -- Ensure all damage and healing values are numbers
@@ -2573,17 +2648,17 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 
             if C_PvP.IsRatedSoloShuffle() then
                 if playerData.isFriendly then
-                    friendlyTotalDamage = friendlyTotalDamage + damageDone
-                    friendlyTotalHealing = friendlyTotalHealing + healingDone
-                    friendlyRatingTotal = friendlyRatingTotal + playerData.newrating
-                    friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
+                    if not deferSoloShuffleRating then
+                        friendlyRatingTotal = friendlyRatingTotal + playerData.newrating
+                        friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
+                    end
                     friendlyPlayerCount = friendlyPlayerCount + 1
                     table.insert(friendlyPlayers, playerData)
                 else
-                    enemyTotalDamage = enemyTotalDamage + damageDone
-                    enemyTotalHealing = enemyTotalHealing + healingDone
-                    enemyRatingTotal = enemyRatingTotal + playerData.newrating
-                    enemyRatingChangeTotal = enemyRatingChangeTotal + playerData.ratingChange
+                    if not deferSoloShuffleRating then
+                        enemyRatingTotal = enemyRatingTotal + playerData.newrating
+                        enemyRatingChangeTotal = enemyRatingChangeTotal + playerData.ratingChange
+                    end
                     enemyPlayerCount = enemyPlayerCount + 1
                     table.insert(enemyPlayers, playerData)
                 end
@@ -2657,12 +2732,12 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     end
 
     -- Calculate average newrating for friendly and enemy teams
-    local friendlyAvgCR = friendlyPlayerCount > 0 and math.floor(friendlyRatingTotal / friendlyPlayerCount) or "N/A"
-    local enemyAvgCR = enemyPlayerCount > 0 and math.floor(enemyRatingTotal / enemyPlayerCount) or "N/A"
+    local friendlyAvgCR = deferSoloShuffleRating and "-" or (friendlyPlayerCount > 0 and math.floor(friendlyRatingTotal / friendlyPlayerCount) or "N/A")
+    local enemyAvgCR = deferSoloShuffleRating and "-" or (enemyPlayerCount > 0 and math.floor(enemyRatingTotal / enemyPlayerCount) or "N/A")
 
     -- Calculate average ratingChange for friendly and enemy teams
-    local friendlyAvgRatingChange = friendlyPlayerCount > 0 and math.floor(friendlyRatingChangeTotal / friendlyPlayerCount) or "N/A"
-    local enemyAvgRatingChange = enemyPlayerCount > 0 and math.floor(enemyRatingChangeTotal / enemyPlayerCount) or "N/A"
+    local friendlyAvgRatingChange = deferSoloShuffleRating and "-" or (friendlyPlayerCount > 0 and math.floor(friendlyRatingChangeTotal / friendlyPlayerCount) or "N/A")
+    local enemyAvgRatingChange = deferSoloShuffleRating and "-" or (enemyPlayerCount > 0 and math.floor(enemyRatingChangeTotal / enemyPlayerCount) or "N/A")
 
     -- Combine friendly and enemy players into playerStats
     for _, player in ipairs(friendlyPlayers) do
@@ -2799,20 +2874,25 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                     elseif name and not name:find("-", 1, true) then
                         name = name .. "-" .. GetRealmName()
 					end
-                    local guid2 = scoreInfo.guid
+                    local guid2 = nil
+                    if not isSoloShuffle then
+                        guid2 = scoreInfo.guid
+                    end
 
 					for _, playerData in ipairs(playerStats) do
 						if (guid2 and playerData.guid and playerData.guid == guid2) or playerData.name == name then
-							playerData.killingBlows   = tonumber(scoreInfo.killingBlows) or 0
-							playerData.honorableKills = tonumber(scoreInfo.honorableKills) or 0
-							playerData.deaths         = tonumber(scoreInfo.deaths) or 0
-							playerData.damage         = tonumber(scoreInfo.damageDone) or 0
-							playerData.healing        = tonumber(scoreInfo.healingDone) or 0
-							playerData.rating         = tonumber(scoreInfo.rating) or 0
-							playerData.ratingChange   = tonumber(scoreInfo.ratingChange) or 0
-							playerData.mmrChange      = tonumber(scoreInfo.mmrChange) or 0
-							playerData.postmatchMMR   = tonumber(scoreInfo.postmatchMMR) or 0
-							playerData.honorLevel     = tonumber(scoreInfo.honorLevel) or 0
+                            playerData.killingBlows   = RawScoreValue(scoreInfo.killingBlows, true) or "-"
+                            playerData.honorableKills = RawScoreValue(scoreInfo.honorableKills, true) or "-"
+                            playerData.deaths         = RawScoreValue(scoreInfo.deaths, true) or "-"
+                            playerData.damage         = RawScoreValue(scoreInfo.damageDone, true) or "-"
+                            playerData.healing        = RawScoreValue(scoreInfo.healingDone, true) or "-"
+                            playerData.rating         = RawScoreValue(scoreInfo.rating, true) or "-"
+                            playerData.ratingChange   = RawScoreValue(scoreInfo.ratingChange, true) or "-"
+                            playerData.prematchMMR    = RawScoreValue(scoreInfo.prematchMMR, true) or "-"
+                            playerData.mmrChange      = RawScoreValue(scoreInfo.mmrChange, true) or "-"
+                            playerData.postmatchMMR   = RawScoreValue(scoreInfo.postmatchMMR, true) or "-"
+                            playerData.newrating      = playerData.rating
+                            playerData.honorLevel     = RawScoreValue(scoreInfo.honorLevel, true) or "-"
 
 							-- Solo Shuffle rounds won comes from scoreInfo.stats
 							do
@@ -2827,16 +2907,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 							-- Totals: Solo Shuffle uses the frozen ally team for this round; non-SS uses teamFaction.
 							if C_PvP.IsRatedSoloShuffle() then
 								if playerData.isFriendly then
-									friendlyTotalDamage = friendlyTotalDamage + playerData.damage
-									friendlyTotalHealing = friendlyTotalHealing + playerData.healing
-									friendlyRatingTotal = friendlyRatingTotal + playerData.rating + playerData.ratingChange
-									friendlyRatingChangeTotal = friendlyRatingChangeTotal + playerData.ratingChange
 									friendlyPlayerCount = friendlyPlayerCount + 1
 								else
-									enemyTotalDamage = enemyTotalDamage + playerData.damage
-									enemyTotalHealing = enemyTotalHealing + playerData.healing
-									enemyRatingTotal = enemyRatingTotal + playerData.rating + playerData.ratingChange
-									enemyRatingChangeTotal = enemyRatingChangeTotal + playerData.ratingChange
 									enemyPlayerCount = enemyPlayerCount + 1
 								end
 							else
@@ -2861,10 +2933,10 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 				end
 			end
 
-			local friendlyAvgCR = friendlyPlayerCount > 0 and math.floor(friendlyRatingTotal / friendlyPlayerCount) or "N/A"
-			local enemyAvgCR = enemyPlayerCount > 0 and math.floor(enemyRatingTotal / enemyPlayerCount) or "N/A"
-			local friendlyAvgRatingChange = friendlyPlayerCount > 0 and math.floor(friendlyRatingChangeTotal / friendlyPlayerCount) or "N/A"
-			local enemyAvgRatingChange = enemyPlayerCount > 0 and math.floor(enemyRatingChangeTotal / enemyPlayerCount) or "N/A"
+			local friendlyAvgCR = "-"
+            local enemyAvgCR = "-"
+            local friendlyAvgRatingChange = "-"
+            local enemyAvgRatingChange = "-"
 
             local ssRoundData = {
                 matchID = appendHistoryMatchID,
@@ -2949,15 +3021,18 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                         name = name .. "-" .. GetRealmName()
                     end
     
-					local guid2 = scoreInfo.guid
+					local guid2 = nil
+					if not isSoloShuffle then
+						guid2 = scoreInfo.guid
+					end
                     for _, playerData in ipairs(playerStats) do
 						if (guid2 and playerData.guid and playerData.guid == guid2) or playerData.name == name then
                             -- Update the playerData fields with new stats
                             playerData.killingBlows = tonumber(scoreInfo.killingBlows) or 0
                             playerData.honorableKills = tonumber(scoreInfo.honorableKills) or 0
                             playerData.deaths = tonumber(scoreInfo.deaths) or 0
-                            playerData.damage = tonumber(scoreInfo.damageDone) or 0
-                            playerData.healing = tonumber(scoreInfo.healingDone) or 0
+                            playerData.damage = ScoreNumberOrZero(scoreInfo.damageDone)
+                            playerData.healing = ScoreNumberOrZero(scoreInfo.healingDone)
                             playerData.rating = tonumber(scoreInfo.rating) or 0
                             playerData.ratingChange = tonumber(scoreInfo.ratingChange) or 0
                             playerData.mmrChange = tonumber(scoreInfo.mmrChange) or 0
@@ -4207,18 +4282,27 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     -- ------------------------------------------------------------------
     -- Sort rows per team:
     -- If YOU are a healer (role=4) sort by healing, otherwise sort by damage.
+    -- Secret scoreboard values are displayed but cannot be sorted/ranked.
     -- Sorting is per-team only (friendly sorted within friendly, enemy within enemy).
     -- ------------------------------------------------------------------
     local function GetNumericStat(p, field)
         if not p then return 0 end
-        local v = p[field]
-        v = tonumber(v)
-        return v or 0
+        return ComparableScoreNumber(p[field]) or 0
+    end
+
+    local function TeamCanSort(players, field)
+        for _, p in ipairs(players) do
+            if p and ComparableScoreNumber(p[field]) == nil then
+                return false
+            end
+        end
+        return #players > 1
     end
 
     if not (isInitial or isMissedGame) then
         local myName = playerName
         local myRole = nil
+        local canUseRole = true
 
         local function NamesMatch(a, b)
             if not (a and b) then return false end
@@ -4236,19 +4320,31 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
             end
         end
 
-        local isHealer =
-            (myRole == 4) or
-            (myRole == "HEALER")
+        local isHealer = false
+        if myRole then
+            local okRole, roleResult = pcall(function()
+                return (myRole == 4) or (myRole == "HEALER")
+            end)
 
-        local sortField = isHealer and "healing" or "damage"
+            canUseRole = okRole
+            isHealer = okRole and roleResult
+        end
 
-        table.sort(friendlyPlayers, function(a, b)
-            return GetNumericStat(a, sortField) > GetNumericStat(b, sortField)
-        end)
+        if canUseRole then
+            local sortField = isHealer and "healing" or "damage"
 
-        table.sort(enemyPlayers, function(a, b)
-            return GetNumericStat(a, sortField) > GetNumericStat(b, sortField)
-        end)
+            if TeamCanSort(friendlyPlayers, sortField) then
+                table.sort(friendlyPlayers, function(a, b)
+                    return GetNumericStat(a, sortField) > GetNumericStat(b, sortField)
+                end)
+            end
+
+            if TeamCanSort(enemyPlayers, sortField) then
+                table.sort(enemyPlayers, function(a, b)
+                    return GetNumericStat(a, sortField) > GetNumericStat(b, sortField)
+                end)
+            end
+        end
     end
     
     -- ------------------------------------------------------------------
@@ -4289,9 +4385,8 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     local function BuildRankMap(players, field)
         local items = {}
         for _, p in ipairs(players) do
-            local v = p and p[field]
-            v = tonumber(v)
-            if v then
+            local v = p and ComparableScoreNumber(p[field])
+            if v ~= nil then
                 items[#items + 1] = { p = p, v = v }
             end
         end
@@ -4373,49 +4468,66 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     local enemyTeamSize     = #enemyPlayers
     local totalPlayerCount  = #allPlayers
 
-    -- CR/MMR display helpers (scoreboard provides rating + (pre/post)match MMR in rated brackets)
-    local function HasMMR(p)
-        if not p then return false end
-        local post = tonumber(p.postmatchMMR) or 0
-        local pre  = tonumber(p.prematchMMR) or 0
-        return (post > 0) or (pre > 0)
+    -- CR/MMR display helpers. SS rounds 1-5 may contain protected scoreboard values:
+    -- display what was stored, but do not force numeric conversion or calculate deltas.
+    local function FormatScoreText(value)
+        local okNumber, numberValue = pcall(tonumber, value)
+        if okNumber and numberValue then
+            local okText, textValue = pcall(tostring, numberValue)
+            if okText and textValue then
+                return textValue
+            end
+        end
+
+        local okText, textValue = pcall(tostring, value)
+        if okText and textValue then
+            return textValue
+        end
+
+        return "-"
     end
 
-    local function FormatSignedNumber(n)
-        n = tonumber(n)
-        if n == nil then return "-" end
-        if n > 0 then
-            return "+" .. n
+    local function FormatSignedNumber(value)
+        local okNumber, numberValue = pcall(tonumber, value)
+        if okNumber and numberValue then
+            local okSigned, signedText = pcall(function()
+                if numberValue > 0 then
+                    return "+" .. numberValue
+                end
+                return tostring(numberValue)
+            end)
+
+            if okSigned and signedText then
+                return signedText
+            end
         end
-        return tostring(n)
+
+        return FormatScoreText(value)
     end
 
     local function FormatCRMMR(p)
-        local crVal = tonumber(p and p.newrating) or tonumber(p and p.rating)
-        if crVal == nil then
-            return "-"
+        local crTxt = FormatScoreText(p and p.newrating)
+        local mmrTxt = FormatScoreText(p and p.postmatchMMR)
+
+        if mmrTxt == "-" then
+            mmrTxt = FormatScoreText(p and p.prematchMMR)
         end
-        if HasMMR(p) then
-            local mmrVal = tonumber(p and p.postmatchMMR) or tonumber(p and p.prematchMMR) or 0
-            return string.format("%d / %d", crVal, mmrVal)
+
+        if mmrTxt ~= "-" then
+            return crTxt .. " / " .. mmrTxt
         end
-        return tostring(crVal)
+
+        return crTxt
     end
 
     local function FormatCRMMRChange(p)
         local crTxt = FormatSignedNumber(p and p.ratingChange)
-        if HasMMR(p) then
-            local pre  = tonumber(p and p.prematchMMR) or 0
-            local post = tonumber(p and p.postmatchMMR) or 0
-            local delta = 0
+        local mmrTxt = FormatSignedNumber(p and p.mmrChange)
 
-            if pre > 0 and post > 0 then
-                delta = post - pre
-            end
-
-            local mmrTxt = FormatSignedNumber(delta)
+        if mmrTxt ~= "-" then
             return crTxt .. " / " .. mmrTxt
         end
+
         return crTxt
     end
 
@@ -4463,13 +4575,13 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 raceIcons[player.race] or player.race,
                 classIcons[player.class] or player.class,
                 GetSpecIcon(player.class, player.spec),
-                roleIcons[player.role] or player.role,
+                SafeTableLookup(roleIcons, player.role, "-"),
                 FormatCRMMR(player),
                 player.killingBlows,
                 winHKValue,
                 player.deaths or "-",
-                FormatNumber(player.damage),
-                FormatNumber(player.healing),
+                isSS and player.damage or FormatNumber(player.damage),
+                isSS and player.healing or FormatNumber(player.healing),
                 FormatCRMMRChange(player),
                 ((isSS or is2v2 or is3v3) and "" or (player.objective or "-"))
             }
@@ -4480,12 +4592,12 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 raceIcons[player.race] or player.race,
                 classIcons[player.class] or player.class,
                 GetSpecIcon(player.class, player.spec),
-                roleIcons[player.role] or player.role,
+                SafeTableLookup(roleIcons, player.role, "-"),
                 FormatCRMMR(player),
                 player.killingBlows,
                 winHKValue,
-                FormatNumber(player.damage),
-                FormatNumber(player.healing),
+                isSS and player.damage or FormatNumber(player.damage),
+                isSS and player.healing or FormatNumber(player.healing),
                 FormatCRMMRChange(player),
                 ((isSS or is2v2 or is3v3) and "" or (player.objective or "-"))
             }
@@ -4502,14 +4614,14 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 CreateIconWithTooltip(nestedTable, stat, player.spec, columnPositions[i], rowOffset, columnWidths[i], rowHeight)
             elseif i == 6 then
                 -- Add role tooltip
-                CreateIconWithTooltip(nestedTable, stat, roleTooltips[player.role], columnPositions[i], rowOffset, columnWidths[i], rowHeight)
+                CreateIconWithTooltip(nestedTable, stat, SafeTableLookup(roleTooltips, player.role, "-"), columnPositions[i], rowOffset, columnWidths[i], rowHeight)
             elseif i == COLS_PER_TEAM then
                 local textValue = stat or "-"
                 local fs = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
                 fs:SetFont(GetUnicodeSafeFont(), entryFontSize)
                 fs:SetJustifyH("CENTER")
                 fs:SetPoint("CENTER", nestedTable, "TOPLEFT", columnPositions[i] + (columnWidths[i] / 2), rowOffset - (rowHeight / 2))
-                fs:SetText(tostring(textValue))
+                fs:SetText(textValue)
                 if highlightRow then
                     fs:SetTextColor(highlightR, highlightG, highlightB)
                 end
@@ -4570,7 +4682,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                         text:SetJustifyH("RIGHT")
                         text:SetWidth(width - 30)
                         text:SetPoint("RIGHT", nestedTable, "TOPLEFT", xPos + width - 28, rowOffset - (rowHeight / 2))
-                        text:SetText(tostring(textValue))
+                        text:SetText(textValue)
                         if highlightRow then
                             text:SetTextColor(highlightR, highlightG, highlightB)
                         end
@@ -4579,7 +4691,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                     else
                         text:SetJustifyH("CENTER")
                         text:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
-                        text:SetText(tostring(textValue))
+                        text:SetText(textValue)
                         if highlightRow then
                             text:SetTextColor(highlightR, highlightG, highlightB)
                         end
@@ -4587,7 +4699,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 else
                     text:SetJustifyH("CENTER")
                     text:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
-                    text:SetText(tostring(textValue))  -- Ensure the value is converted to a string
+                    text:SetText(textValue)  -- Ensure the value is converted to a string
                     if highlightRow then
                             text:SetTextColor(highlightR, highlightG, highlightB)
                     end
@@ -4613,13 +4725,13 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 raceIcons[player.race] or player.race,
                 classIcons[player.class] or player.class,
                 GetSpecIcon(player.class, player.spec),
-                roleIcons[player.role] or player.role,
+                SafeTableLookup(roleIcons, player.role, "-"),
                 FormatCRMMR(player),
                 player.killingBlows,
                 winHKValue,
                 player.deaths or "-",
-                FormatNumber(player.damage),
-                FormatNumber(player.healing),
+                isSS and player.damage or FormatNumber(player.damage),
+                isSS and player.healing or FormatNumber(player.healing),
                 FormatCRMMRChange(player),
                 ((isSS or is2v2 or is3v3) and "" or (player.objective or "-"))
             }
@@ -4630,12 +4742,12 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 raceIcons[player.race] or player.race,
                 classIcons[player.class] or player.class,
                 GetSpecIcon(player.class, player.spec),
-                roleIcons[player.role] or player.role,
+                SafeTableLookup(roleIcons, player.role, "-"),
                 FormatCRMMR(player),
                 player.killingBlows,
                 winHKValue,
-                FormatNumber(player.damage),
-                FormatNumber(player.healing),
+                isSS and player.damage or FormatNumber(player.damage),
+                isSS and player.healing or FormatNumber(player.healing),
                 FormatCRMMRChange(player),
                 ((isSS or is2v2 or is3v3) and "" or (player.objective or "-"))
             }
@@ -4656,14 +4768,14 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                 CreateIconWithTooltip(nestedTable, stat, player.spec, xPos, rowOffset, width, rowHeight)
             elseif i == 6 then
                 -- Add role tooltip
-                CreateIconWithTooltip(nestedTable, stat, roleTooltips[player.role], xPos, rowOffset, width, rowHeight)
+                CreateIconWithTooltip(nestedTable, stat, SafeTableLookup(roleTooltips, player.role, "-"), xPos, rowOffset, width, rowHeight)
             elseif i == COLS_PER_TEAM then
                 local textValue = stat or "-"
                 local fs = nestedTable:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
                 fs:SetFont(GetUnicodeSafeFont(), entryFontSize)
                 fs:SetJustifyH("CENTER")
                 fs:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
-                fs:SetText(tostring(textValue))
+                fs:SetText(textValue)
 
                 -- Add objective tooltip
                 fs:EnableMouse(true)
@@ -4718,18 +4830,18 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
                         text:SetJustifyH("RIGHT")
                         text:SetWidth(width - 30)
                         text:SetPoint("RIGHT", nestedTable, "TOPLEFT", xPos + width - 28, rowOffset - (rowHeight / 2))
-                        text:SetText(tostring(textValue))
+                        text:SetText(textValue)
 
                         CreateRankIndicator(nestedTable, xPos, width, rowOffset, rowHeight, teamRank, teamSize, overallRank, totalPlayerCount, rankFontSize)
                     else
                         text:SetJustifyH("CENTER")
                         text:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
-                        text:SetText(tostring(textValue))
+                        text:SetText(textValue)
                     end
                 else
                     text:SetJustifyH("CENTER")
                     text:SetPoint("CENTER", nestedTable, "TOPLEFT", xPos + (width / 2), rowOffset - (rowHeight / 2))
-                    text:SetText(tostring(textValue))  -- Ensure the value is converted to a string
+                    text:SetText(textValue)  -- Ensure the value is converted to a string
                 end
             end
         end  -- This 'end' closes the inner 'for' loop
@@ -4871,7 +4983,8 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
             -- Never let placeholder rows drive Current CR/MMR display.
             local isMissed = entry and (entry.isMissedGame or entry.winLoss == "Missed Game" or entry.friendlyWinLoss == "Missed Game")
             local isInitial = entry and entry.isInitial
-            if ok and (not isMissed) and (not isInitial) and entry.matchID and (not highestMatchID or entry.matchID > highestMatchID) then
+            local isNonFinalSoloShuffleRound = (categoryID == 7 and entry and entry.isSoloShuffle and not IsFinalSoloShuffleEntry(entry))
+            if ok and (not isMissed) and (not isInitial) and (not isNonFinalSoloShuffleRound) and entry.matchID and (not highestMatchID or entry.matchID > highestMatchID) then
                 highestMatchID = entry.matchID
                 highestMatchEntry = entry
             end
@@ -4891,12 +5004,12 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
         if highestMatchEntry.playerStats then
             for _, stats in ipairs(highestMatchEntry.playerStats) do
                 if stats.name == playerName then
-                    local cr = tonumber(stats.newrating)
+                    local cr = ComparableScoreNumber(stats.newrating) or ComparableScoreNumber(stats.rating)
                     if (not currentCR or currentCR == 0) and cr then
                         currentCR = cr
                     end
 
-                    local mmr = tonumber(stats.postmatchMMR)
+                    local mmr = ComparableScoreNumber(stats.postmatchMMR) or ComparableScoreNumber(stats.postMatchMMR)
                     if mmr and mmr > 0 then
                         resolvedMMR = mmr
                     end
@@ -4905,8 +5018,8 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
             end
         end
 
-        if not resolvedMMR or resolvedMMR <= 0 then
-            local teamMMR = tonumber(highestMatchEntry.friendlyMMR) or tonumber(highestMatchEntry.mmr)
+        if not resolvedMMR then
+            local teamMMR = ComparableScoreNumber(highestMatchEntry.friendlyMMR) or ComparableScoreNumber(highestMatchEntry.mmr)
             if teamMMR and teamMMR > 0 then
                 resolvedMMR = teamMMR
             end
@@ -6231,21 +6344,26 @@ local function OnSoloShuffleStateChanged(event, ...)
         return
     end
 
+    local state = C_PvP.GetActiveMatchState and C_PvP.GetActiveMatchState()
+    if state ~= Enum.PvPMatchState.PostRound then
+        return
+    end
+
     -- Freeze our allies for THIS round, but only when we have the full set.
-    -- In Solo Shuffle, player + party1 + party2 should be 3 GUIDs.
-    local allies = {}
+    -- In Solo Shuffle, player + party1 + party2 should be 3 Name-Realm keys.
+    local allyNames = {}
 
-    local g = UnitGUID("player")
-    if g then allies[g] = true end
+    local function AddSoloShuffleAlly(unit)
+        local nameKey = GetUnitNameRealmKey(unit)
+        if nameKey then allyNames[nameKey] = true end
+    end
 
-    g = UnitGUID("party1")
-    if g then allies[g] = true end
-
-    g = UnitGUID("party2")
-    if g then allies[g] = true end
+    AddSoloShuffleAlly("player")
+    AddSoloShuffleAlly("party1")
+    AddSoloShuffleAlly("party2")
 
     local count = 0
-    for _ in pairs(allies) do
+    for _ in pairs(allyNames) do
         count = count + 1
     end
 
@@ -6254,28 +6372,34 @@ local function OnSoloShuffleStateChanged(event, ...)
         return
     end
 
-    -- Snapshot allies' Killing Blows at the moment the round ends.
-    -- We will compare this snapshot against the next PVP_MATCH_ACTIVE scoreboard to decide win/loss.
-    local kbSnapshot = {}
-    for i = 1, GetNumBattlefieldScores() do
-        local scoreInfo = C_PvP.GetScoreInfo(i)
-        if scoreInfo and scoreInfo.guid and allies[scoreInfo.guid] then
-            kbSnapshot[scoreInfo.guid] = tonumber(scoreInfo.killingBlows) or 0
-        end
-    end
-
-    local kbCount = 0
-    for _ in pairs(kbSnapshot) do
-        kbCount = kbCount + 1
-    end
-
-    -- Not ready yet: do NOT latch. Wait for the next state change event.
-    if kbCount < 3 then
+    local winnerTeamIndex = C_PvP.GetActiveMatchWinner and C_PvP.GetActiveMatchWinner()
+    if winnerTeamIndex == nil then
         return
     end
 
-    soloShuffleAlliesGUIDAtDeath = allies
-    soloShuffleAlliesKBAtDeath   = kbSnapshot
+    local myTeamIndex = nil
+    for i = 1, GetNumBattlefieldScores() do
+        local scoreInfo = C_PvP.GetScoreInfo(i)
+        if scoreInfo then
+            local rawName = scoreInfo.name
+            if rawName and not (issecretvalue and issecretvalue(rawName)) then
+                local nameKey = GetScoreInfoNameRealmKey(rawName)
+                if nameKey and allyNames[nameKey] then
+                    -- Despite the field name, this is the scoreboard team index
+                    -- used for Gold/Purple-style Solo Shuffle team grouping.
+                    myTeamIndex = scoreInfo.faction
+                    break
+                end
+            end
+        end
+    end
+
+    if myTeamIndex == nil then
+        return
+    end
+
+    soloShuffleAlliesNameAtDeath = allyNames
+    soloShuffleRoundWonAtDeath   = winnerTeamIndex == myTeamIndex
     playerDeathSeen = true
 end
 
