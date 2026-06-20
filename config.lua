@@ -5103,7 +5103,7 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
                 end
             end
 
-            ratingChange = ratingChange or tonumber(entry and entry.friendlyRatingChange) or 0
+            if not ratingChange then return 0 end
             return postCR - ratingChange
         end
 
