@@ -5091,20 +5091,26 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
         local total = 0
 
         local function GetPreMatchCR(entry)
-            local postCR = tonumber(entry and entry.cr) or 0
-            local ratingChange = nil
-
             if entry and entry.playerStats then
                 for _, ps in ipairs(entry.playerStats) do
                     if ps and ps.name == playerName then
-                        ratingChange = tonumber(ps.ratingChange)
-                        break
+                        local rating = tonumber(ps.rating)
+                        if rating then
+                            return rating
+                        end
+
+                        local newrating = tonumber(ps.newrating)
+                        local ratingChange = tonumber(ps.ratingChange)
+                        if newrating and ratingChange then
+                            return newrating - ratingChange
+                        end
+
+                        return nil
                     end
                 end
             end
 
-            if not ratingChange then return nil end
-            return postCR - ratingChange
+            return nil
         end
 
         for _, e in ipairs(tbl) do
