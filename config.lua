@@ -5066,14 +5066,13 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
         return LabelNum("Drop below: ", cr) .. " " .. RSTATS:ColorText("CR")
     end
 
-    local function ReachAndWins(crReq, winsReq)
-        -- Reach: 2400 CR and 25 Wins above 2400 CR
+    local function ReachAndWins(crReq, winsReq, countCR)
+        local winsText = (countCR == 0) and "Wins during Season" or ("Wins above " .. tostring(crReq) .. " CR")
+        -- Reach: 2300 CR and 25 Wins above 2300 CR
         return LabelNum("Reach: ", crReq) .. " " .. RSTATS:ColorText("CR")
             .. " " .. RSTATS:ColorText("and ")
             .. "|cffffffff" .. tostring(winsReq) .. "|r"
-            .. " " .. RSTATS:ColorText("Wins above ")
-            .. "|cffffffff" .. tostring(crReq) .. "|r"
-            .. " " .. RSTATS:ColorText("CR")
+            .. " " .. RSTATS:ColorText(winsText)
     end
 
     local function ProgressLine(cur, max)
@@ -5084,37 +5083,96 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
     end
 
     local function CountWinsAboveCR(bracketID, crReq, winsMode)
-        local key = categoryMappings[bracketID]
-        local tbl = key and Database[key]
+        local tbl
+
+        if bracketID == 7 and RSTATS and RSTATS.GetHistoryForTab then
+            tbl = RSTATS:GetHistoryForTab(1)
+        elseif bracketID == 9 and RSTATS and RSTATS.GetHistoryForTab then
+            tbl = RSTATS:GetHistoryForTab(5)
+        else
+            local key = categoryMappings[bracketID]
+            tbl = key and Database[key]
+        end
         if type(tbl) ~= "table" then return 0 end
 
         crReq = tonumber(crReq) or 0
         local total = 0
+        local eliteDropCR = 2275
+        local hasElite = false
+        local seasonStart, seasonFinish
+
+        if RSTATS and RSTATS.GetSummarySeasonRange then
+            seasonStart, seasonFinish = RSTATS:GetSummarySeasonRange()
+        end
+
+        local function IsCurrentSeasonEntry(entry)
+            local ts = tonumber(entry and (entry.timestamp or entry.endTime)) or 0
+            if seasonStart and ts < seasonStart then return false end
+            if seasonFinish and ts >= seasonFinish then return false end
+            return true
+        end
+
+        local function GetPlayerRating(entry)
+            if entry and entry.playerStats then
+                for _, ps in ipairs(entry.playerStats) do
+                    if ps and ps.name == playerName then
+                        local rating = tonumber(ps.rating)
+                        local newrating = tonumber(ps.newrating)
+                        local ratingChange = tonumber(ps.ratingChange)
+                        if rating then
+                            return rating, newrating or (ratingChange and (rating + ratingChange)) or rating
+                        end
+
+                        if newrating and ratingChange then
+                            return newrating - ratingChange, newrating
+                        end
+
+                        return nil, newrating
+                    end
+                end
+            end
+
+            local entryCR = tonumber(entry and entry.cr)
+            return entryCR, entryCR
+        end
 
         for _, e in ipairs(tbl) do
-            local ecr = tonumber(e and e.cr) or 0
-            if ecr >= crReq then
-                if winsMode == "ss_rounds" then
-                    -- Solo Shuffle: we store per-player rounds won as playerData.wins
-                    local added = 0
-                    if e.playerStats then
-                        for _, ps in ipairs(e.playerStats) do
-                            if ps and ps.name == playerName then
-                                added = tonumber(ps.wins) or 0
-                                break
+            if IsCurrentSeasonEntry(e) then
+                local preCR, postCR = GetPlayerRating(e)
+
+                if preCR and preCR < eliteDropCR then
+                    hasElite = false
+                end
+
+                local countsAtElite = hasElite and preCR and preCR >= eliteDropCR
+
+                if countsAtElite then
+                    if winsMode == "ss_rounds" then
+                        -- Solo Shuffle: we store per-player rounds won as playerData.wins
+                        local added = 0
+                        if e.playerStats then
+                            for _, ps in ipairs(e.playerStats) do
+                                if ps and ps.name == playerName then
+                                    added = tonumber(ps.wins) or 0
+                                    break
+                                end
                             end
                         end
+                        if added <= 0 then
+                            added = tonumber(e.roundsWon) or 0
+                        end
+                        total = total + added
+                    else
+                        -- Other brackets: count match wins from friendlyWinLoss
+                        local wl = e and e.friendlyWinLoss
+                        if type(wl) == "string" and wl:find("W", 1, true) then
+                            total = total + 1
+                        end
                     end
-                    if added <= 0 then
-                        added = tonumber(e.roundsWon) or 0
-                    end
-                    total = total + added
-                else
-                    -- Other brackets: count match wins from friendlyWinLoss
-                    local wl = e and e.friendlyWinLoss
-                    if type(wl) == "string" and wl:find("W", 1, true) then
-                        total = total + 1
-                    end
+                end
+
+                if postCR and postCR >= crReq then
+                    hasElite = true
                 end
             end
         end
@@ -5170,54 +5228,55 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
         local TINT_GLAD  = { 1.00, 0.35, 0.95 }
         local TINT_LEG   = { 1.00, 0.35, 0.20 }
 
-        -- Only meaningful once you're at/above Elite (2400+). Caller gates display.
+        -- Only meaningful once you're at/above Elite (2300+). Caller gates display.
+        local MILESTONE_CR = 2300
 
         if bracketID == 9 then
-            local progStrat = CountWinsAboveCR(9, 2400, "match_wins")
+            local progStrat = CountWinsAboveCR(9, MILESTONE_CR, "match_wins")
             if progStrat < 25 then
-                return { name="Strategist", icon=ICON_ELITEPLUS, tint=TINT_STRAT, reqCR=2400, reqWins=25, winsMode="match_wins" }
+                return { name="Strategist", icon=ICON_ELITEPLUS, tint=TINT_STRAT, reqCR=MILESTONE_CR, reqWins=25, winsMode="match_wins" }
             end
-            local progR1 = CountWinsAboveCR(9, 2400, "match_wins")
+            local progR1 = CountWinsAboveCR(9, MILESTONE_CR, "match_wins")
             if progR1 < 50 then
-                return { name="Rank 1", icon=ICON_ELITEPLUS, tint=nil, reqCR=2400, reqWins=50, topText="Top 0.1% of Season", winsMode="match_wins" }
+                return { name="Rank 1", icon=ICON_ELITEPLUS, tint=nil, reqCR=MILESTONE_CR, reqWins=50, countCR=0, topText="Top 0.1% of Season", winsMode="match_wins" }
             end
             return nil
         end
 
         if bracketID == 7 then
-            local progLeg = CountWinsAboveCR(7, 2400, "ss_rounds")
-            if progLeg < 100 then
-                return { name="Legend", icon=ICON_ELITEPLUS, tint=TINT_LEG, reqCR=2400, reqWins=100, winsMode="ss_rounds" }
-            end
-            local progR1 = CountWinsAboveCR(7, 2400, "ss_rounds")
+            local progR1 = CountWinsAboveCR(7, MILESTONE_CR, "ss_rounds")
             if progR1 < 50 then
-                return { name="Rank 1", icon=ICON_ELITEPLUS, tint=nil, reqCR=2400, reqWins=50, topText="Top 0.1% of Season", winsMode="ss_rounds" }
+                return { name="Rank 1", icon=ICON_ELITEPLUS, tint=nil, reqCR=MILESTONE_CR, reqWins=50, countCR=0, topText="Top 0.1% of Season", winsMode="ss_rounds" }
+            end
+            local progLeg = CountWinsAboveCR(7, MILESTONE_CR, "ss_rounds")
+            if progLeg < 100 then
+                return { name="Legend", icon=ICON_ELITEPLUS, tint=TINT_LEG, reqCR=MILESTONE_CR, reqWins=100, winsMode="ss_rounds" }
             end
             return nil
         end
 
         if bracketID == 2 then
-            local progGlad = CountWinsAboveCR(2, 2400, "match_wins")
+            local progGlad = CountWinsAboveCR(2, MILESTONE_CR, "match_wins")
             if progGlad < 50 then
-                return { name="Gladiator", icon=ICON_ELITEPLUS, tint=TINT_GLAD, reqCR=2400, reqWins=50, winsMode="match_wins" }
+                return { name="Gladiator", icon=ICON_ELITEPLUS, tint=TINT_GLAD, reqCR=MILESTONE_CR, reqWins=50, winsMode="match_wins" }
             end
             if cr < 2700 then
                 return { name="Three's Company", icon=ICON_3C, tint=nil, reqCR=2700 }
             end
-            local progR1 = CountWinsAboveCR(2, 2700, "match_wins")
-            if progR1 < 50 then
-                return { name="Rank 1", icon=ICON_ELITEPLUS, tint=nil, reqCR=2700, reqWins=50, topText="Top 0.1% of Season", winsMode="match_wins" }
+            local progR1 = CountWinsAboveCR(2, MILESTONE_CR, "match_wins")
+            if progR1 < 150 then
+                return { name="Rank 1", icon=ICON_ELITEPLUS, tint=nil, reqCR=MILESTONE_CR, reqWins=150, countCR=0, topText="Top 0.1% of Season", winsMode="match_wins" }
             end
             return nil
         end
 
         if bracketID == 4 then
-            -- HotX: 2400 + X wins + Top 0.1%. Wins counted only at/above 2400.
+            -- HotX: 2300 + X wins + Top 0.5%. Wins counted only at/above 2300.
             local faction = UnitFactionGroup("player")
             local icon = (faction == "Horde") and ICON_HERO_H or ICON_HERO_A
-            local prog = CountWinsAboveCR(4, 2400, "match_wins")
+            local prog = CountWinsAboveCR(4, MILESTONE_CR, "match_wins")
             if prog < 50 then
-                return { name="HotX", icon=icon, tint=nil, reqCR=2400, reqWins=50, topText="Top 0.1% of Season", winsMode="match_wins" }
+                return { name="HotX", icon=icon, tint=nil, reqCR=MILESTONE_CR, reqWins=50, countCR=0, topText="Top 0.5% of Season", winsMode="match_wins" }
             end
             return nil
         end
@@ -5320,7 +5379,7 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
 
     -- Right (up): bracket milestone first; otherwise next PvP tier
     local isTopTier = (curTier and (not curTier.ascendTier or tonumber(curTier.ascendTier) == 0))
-    local canShowMilestone = isTopTier and (tonumber(currentCR) or 0) >= 2400
+    local canShowMilestone = isTopTier and (tonumber(currentCR) or 0) >= 2300
     local milestone = canShowMilestone and GetMilestoneForBracket(categoryID, currentCR) or nil
 
     if milestone and milestone.icon and milestone.name then
@@ -5337,8 +5396,10 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
         -- CR-gated milestones (Strategist/Legend/Glad/R1/3's Company)
         if milestone.reqCR and tonumber(milestone.reqCR) and tonumber(milestone.reqCR) > 0 then
             if milestone.reqWins and tonumber(milestone.reqWins) and tonumber(milestone.reqWins) > 0 then
-                local prog = CountWinsAboveCR(categoryID, milestone.reqCR, milestone.winsMode)
-                lines[#lines + 1] = ReachAndWins(milestone.reqCR, milestone.reqWins)
+                local countCR = milestone.countCR
+                if countCR == nil then countCR = milestone.reqCR end
+                local prog = CountWinsAboveCR(categoryID, countCR, milestone.winsMode)
+                lines[#lines + 1] = ReachAndWins(milestone.reqCR, milestone.reqWins, countCR)
                 lines[#lines + 1] = ProgressLine(prog, milestone.reqWins)
                 if milestone.topText then
                     lines[#lines + 1] = RSTATS:ColorText(milestone.topText)

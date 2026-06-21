@@ -185,6 +185,20 @@ local function GetSummarySeasonRange()
     return tonumber(s.start), tonumber(s.finish), tostring(s.label or ""), isEndedSeason
 end
 
+function RSTATS:GetSummarySeasonRange()
+    return GetSummarySeasonRange()
+end
+
+function RSTATS:GetCurrentSeasonStart()
+    local seasonStart = GetSummarySeasonRange()
+    return seasonStart
+end
+
+function RSTATS:GetCurrentSeasonFinish()
+    local _, seasonFinish = GetSummarySeasonRange()
+    return seasonFinish
+end
+
 local function GetCurrentSeasonLabel()
     -- If you later add RSTATS:GetCurrentSeasonLabel() in filters.lua, this will use it.
     if RSTATS and RSTATS.GetCurrentSeasonLabel then
