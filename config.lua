@@ -5083,39 +5083,57 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
     end
 
     local function CountWinsAboveCR(bracketID, crReq, winsMode)
-        local key = categoryMappings[bracketID]
-        local tbl = key and Database[key]
+        local tbl
+
+        if bracketID == 7 and RSTATS and RSTATS.GetHistoryForTab then
+            tbl = RSTATS:GetHistoryForTab(1)
+        elseif bracketID == 9 and RSTATS and RSTATS.GetHistoryForTab then
+            tbl = RSTATS:GetHistoryForTab(5)
+        else
+            local key = categoryMappings[bracketID]
+            tbl = key and Database[key]
+        end
         if type(tbl) ~= "table" then return 0 end
 
         crReq = tonumber(crReq) or 0
         local total = 0
+        local eliteDropCR = 2275
+        local hasElite = false
 
-        local function GetPreMatchCR(entry)
+        local function GetPlayerRating(entry)
             if entry and entry.playerStats then
                 for _, ps in ipairs(entry.playerStats) do
                     if ps and ps.name == playerName then
                         local rating = tonumber(ps.rating)
-                        if rating then
-                            return rating
-                        end
-
                         local newrating = tonumber(ps.newrating)
                         local ratingChange = tonumber(ps.ratingChange)
-                        if newrating and ratingChange then
-                            return newrating - ratingChange
+                        if rating then
+                            return rating, newrating or (ratingChange and (rating + ratingChange)) or rating
                         end
 
-                        return nil
+                        if newrating and ratingChange then
+                            return newrating - ratingChange, newrating
+                        end
+
+                        return nil, newrating
                     end
                 end
             end
 
-            return nil
+            local entryCR = tonumber(entry and entry.cr)
+            return entryCR, entryCR
         end
 
         for _, e in ipairs(tbl) do
-            local ecr = GetPreMatchCR(e)
-            if ecr and ecr >= crReq then
+            local preCR, postCR = GetPlayerRating(e)
+
+            if preCR and preCR < eliteDropCR then
+                hasElite = false
+            end
+
+            local countsAtElite = hasElite and preCR and preCR >= eliteDropCR
+
+            if countsAtElite then
                 if winsMode == "ss_rounds" then
                     -- Solo Shuffle: we store per-player rounds won as playerData.wins
                     local added = 0
@@ -5138,6 +5156,10 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
                         total = total + 1
                     end
                 end
+            end
+
+            if postCR and postCR >= crReq then
+                hasElite = true
             end
         end
 
