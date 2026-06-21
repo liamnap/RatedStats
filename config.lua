@@ -5100,6 +5100,17 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
         local eliteDropCR = 2275
         local hasElite = false
 
+        if RSTATS and RSTATS.GetSummarySeasonRange then
+            seasonStart, seasonFinish = RSTATS:GetSummarySeasonRange()
+        end
+
+        local function IsCurrentSeasonEntry(entry)
+            local ts = tonumber(entry and (entry.timestamp or entry.endTime)) or 0
+            if seasonStart and ts < seasonStart then return false end
+            if seasonFinish and ts >= seasonFinish then return false end
+            return true
+        end
+
         local function GetPlayerRating(entry)
             if entry and entry.playerStats then
                 for _, ps in ipairs(entry.playerStats) do
@@ -5125,10 +5136,12 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
         end
 
         for _, e in ipairs(tbl) do
-            local preCR, postCR = GetPlayerRating(e)
+            if IsCurrentSeasonEntry(e) then
+                local preCR, postCR = GetPlayerRating(e)
 
-            if preCR and preCR < eliteDropCR then
-                hasElite = false
+                if preCR and preCR < eliteDropCR then
+                    hasElite = false
+                end
             end
 
             local countsAtElite = hasElite and preCR and preCR >= eliteDropCR
