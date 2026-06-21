@@ -5144,7 +5144,7 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
                     hasElite = false
                 end
 
-                local countsAtElite = hasElite and preCR and preCR >= eliteDropCR
+                local countsAtElite = (crReq == 0) or (hasElite and preCR and preCR >= eliteDropCR)
 
                 if countsAtElite then
                     if winsMode == "ss_rounds" then
@@ -5236,7 +5236,7 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
             if progStrat < 25 then
                 return { name="Strategist", icon=ICON_ELITEPLUS, tint=TINT_STRAT, reqCR=MILESTONE_CR, reqWins=25, winsMode="match_wins" }
             end
-            local progR1 = CountWinsAboveCR(9, MILESTONE_CR, "match_wins")
+            local progR1 = CountWinsAboveCR(9, 0, "match_wins")
             if progR1 < 50 then
                 return { name="Rank 1", icon=ICON_ELITEPLUS, tint=nil, reqCR=MILESTONE_CR, reqWins=50, countCR=0, topText="Top 0.1% of Season", winsMode="match_wins" }
             end
@@ -5248,7 +5248,7 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
             if progR1 < 50 then
                 return { name="Rank 1", icon=ICON_ELITEPLUS, tint=nil, reqCR=MILESTONE_CR, reqWins=50, countCR=0, topText="Top 0.1% of Season", winsMode="ss_rounds" }
             end
-            local progLeg = CountWinsAboveCR(7, MILESTONE_CR, "ss_rounds")
+            local progLeg = CountWinsAboveCR(7, 0, "ss_rounds")
             if progLeg < 100 then
                 return { name="Legend", icon=ICON_ELITEPLUS, tint=TINT_LEG, reqCR=MILESTONE_CR, reqWins=100, winsMode="ss_rounds" }
             end
@@ -5263,7 +5263,7 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
             if cr < 2700 then
                 return { name="Three's Company", icon=ICON_3C, tint=nil, reqCR=2700 }
             end
-            local progR1 = CountWinsAboveCR(2, MILESTONE_CR, "match_wins")
+            local progR1 = CountWinsAboveCR(2, 0, "match_wins")
             if progR1 < 150 then
                 return { name="Rank 1", icon=ICON_ELITEPLUS, tint=nil, reqCR=MILESTONE_CR, reqWins=150, countCR=0, topText="Top 0.1% of Season", winsMode="match_wins" }
             end
@@ -5271,10 +5271,10 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
         end
 
         if bracketID == 4 then
-            -- HotX: 2300 + X wins + Top 0.5%. Wins counted only at/above 2300.
+            -- HotX: 2300 + season wins + Top 0.5%.
             local faction = UnitFactionGroup("player")
             local icon = (faction == "Horde") and ICON_HERO_H or ICON_HERO_A
-            local prog = CountWinsAboveCR(4, MILESTONE_CR, "match_wins")
+            local prog = CountWinsAboveCR(4, 0, "match_wins")
             if prog < 50 then
                 return { name="HotX", icon=icon, tint=nil, reqCR=MILESTONE_CR, reqWins=50, countCR=0, topText="Top 0.5% of Season", winsMode="match_wins" }
             end
