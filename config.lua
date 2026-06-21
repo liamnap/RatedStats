@@ -5099,6 +5099,7 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
         local total = 0
         local eliteDropCR = 2275
         local hasElite = false
+        local seasonStart, seasonFinish
 
         if RSTATS and RSTATS.GetSummarySeasonRange then
             seasonStart, seasonFinish = RSTATS:GetSummarySeasonRange()
@@ -5142,37 +5143,37 @@ function DisplayCurrentCRMMR(contentFrame, categoryID)
                 if preCR and preCR < eliteDropCR then
                     hasElite = false
                 end
-            end
 
-            local countsAtElite = hasElite and preCR and preCR >= eliteDropCR
+                local countsAtElite = hasElite and preCR and preCR >= eliteDropCR
 
-            if countsAtElite then
-                if winsMode == "ss_rounds" then
-                    -- Solo Shuffle: we store per-player rounds won as playerData.wins
-                    local added = 0
-                    if e.playerStats then
-                        for _, ps in ipairs(e.playerStats) do
-                            if ps and ps.name == playerName then
-                                added = tonumber(ps.wins) or 0
-                                break
+                if countsAtElite then
+                    if winsMode == "ss_rounds" then
+                        -- Solo Shuffle: we store per-player rounds won as playerData.wins
+                        local added = 0
+                        if e.playerStats then
+                            for _, ps in ipairs(e.playerStats) do
+                                if ps and ps.name == playerName then
+                                    added = tonumber(ps.wins) or 0
+                                    break
+                                end
                             end
                         end
-                    end
-                    if added <= 0 then
-                        added = tonumber(e.roundsWon) or 0
-                    end
-                    total = total + added
-                else
-                    -- Other brackets: count match wins from friendlyWinLoss
-                    local wl = e and e.friendlyWinLoss
-                    if type(wl) == "string" and wl:find("W", 1, true) then
-                        total = total + 1
+                        if added <= 0 then
+                            added = tonumber(e.roundsWon) or 0
+                        end
+                        total = total + added
+                    else
+                        -- Other brackets: count match wins from friendlyWinLoss
+                        local wl = e and e.friendlyWinLoss
+                        if type(wl) == "string" and wl:find("W", 1, true) then
+                            total = total + 1
+                        end
                     end
                 end
-            end
 
-            if postCR and postCR >= crReq then
-                hasElite = true
+                if postCR and postCR >= crReq then
+                    hasElite = true
+                end
             end
         end
 
