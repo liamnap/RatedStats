@@ -1284,6 +1284,9 @@ function Summary:_RenderCardGraph(card)
         seasonFinish = seasonFinish or RSTATS:GetCurrentSeasonFinish()
     end
 
+    local useTimeX = seasonStart and seasonFinish and seasonFinish > seasonStart
+    local xMin = useTimeX and seasonStart or nil
+    local xMax = useTimeX and seasonFinish or nil
     local yMin, yMax
 
     if useCandles then
@@ -1291,8 +1294,8 @@ function Summary:_RenderCardGraph(card)
             card.spark,
             candles or {},
             candleTimes,
-            nil,
-            nil,
+            xMin,
+            xMax,
             nil,
             nil,
             card._xInsetL or 0,
@@ -1303,8 +1306,8 @@ function Summary:_RenderCardGraph(card)
             card.spark,
             series or {},
             times,
-            nil,
-            nil,
+            xMin,
+            xMax,
             nil,
             nil,
             card._xInsetL or 0,
@@ -1316,7 +1319,7 @@ function Summary:_RenderCardGraph(card)
     card.spark._hover = card.spark._hover or {}
     local hv = card.spark._hover
     hv.series = series or {}
-    hv.times  = times or {}
+    hv.times  = (useCandles and candleTimes or times) or {}
     hv.candles = candles or {}
     hv.candleTimes = candleTimes or {}
     hv.yMin   = yMin
@@ -1325,22 +1328,16 @@ function Summary:_RenderCardGraph(card)
     hv.graphStyle = graphStyle
     hv.xInsetL = card._xInsetL or 0
     hv.xInsetR = card._xInsetR or 0
-    hv.xMin = nil
-    hv.xMax = nil
-    hv.useTimeX = false
+    hv.xMin = xMin
+    hv.xMax = xMax
+    hv.useTimeX = useTimeX and true or false
 
     if card.axisYMin then card.axisYMin:SetText(yMin and tostring(math.floor(yMin)) or "") end
     if card.axisYMax then card.axisYMax:SetText(yMax and tostring(math.floor(yMax)) or "") end
 
     if seasonStart and seasonFinish then
-        local nowTime = time()
-        local rightTime = nowTime
-        if nowTime >= seasonFinish then
-            rightTime = seasonFinish
-        end
-
         if card.axisXStart then card.axisXStart:SetText(date("%d %b", seasonStart)) end
-        if card.axisXEnd then card.axisXEnd:SetText(date("%d %b", rightTime)) end
+        if card.axisXEnd then card.axisXEnd:SetText(date("%d %b", seasonFinish)) end
     else
         if card.axisXStart then card.axisXStart:SetText("") end
         if card.axisXEnd then card.axisXEnd:SetText("") end
