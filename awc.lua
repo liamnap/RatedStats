@@ -152,15 +152,27 @@ local function BuildAWCEvents()
         },
         {
             day = 13,
+            start = time({ year = 2026, month = 9, day = 12, hour = 0, min = 0, sec = 0 }),
+            finish = time({ year = 2026, month = 9, day = 12, hour = 23, min = 59, sec = 59 }),
+            todayText = "AWC Grand Finals Today at ",
+            display = "BlizzCon Grand Finals - Sep 12-13, 2026 | 19:00 CEST",
+            timeByRegion = {
+                [1] = "10:00 PDT",
+                [2] = "02:00 KST",
+                [3] = "19:00 CEST",
+                [4] = "01:00 CST",
+            },
+        },
+        {
+            day = 14,
             start = time({ year = 2026, month = 9, day = 13, hour = 0, min = 0, sec = 0 }),
             finish = time({ year = 2026, month = 9, day = 13, hour = 23, min = 59, sec = 59 }),
-            todayText = "AWC Grand Finals Today at ",
-            display = "BlizzCon Grand Finals - Sep 13, 2026 | 19:45 CEST",
+            todayText = "Day 2 of AWC Grand Finals Today at ",
             timeByRegion = {
-                [1] = "10:45 PDT",
-                [2] = "02:45 KST",
-                [3] = "19:45 CEST",
-                [4] = "01:45 CST",
+                [1] = "10:00 PDT",
+                [2] = "02:00 KST",
+                [3] = "19:00 CEST",
+                [4] = "01:00 CST",
             },
         },
     }
