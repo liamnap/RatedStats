@@ -2541,6 +2541,10 @@ function Summary:Refresh()
         local txt
         if seasonFinish then
             txt = ColorText("Season End: ") .. date("%d %b %Y", seasonFinish)
+            local season = GetActiveOrPreviousSeason()
+            if season and season.finishEstimated then
+                txt = txt .. " (estimated)"
+            end
         else
             txt = ColorText("Season End: ") .. "?"
         end

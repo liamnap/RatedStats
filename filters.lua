@@ -65,6 +65,11 @@ local function KR_TW_ResetUTC(y, mo, d)
     return UtcTime(y, mo, d, 0, 0, 0) - 3600 -- 23:00 UTC the previous day
 end
 
+-- MN S2: Blizzard's Season 2 announcement (article 24294369) gives Aug 18 US
+-- and Aug 20 KR. EU/TW follow the regional reset calendar; all timestamps
+-- retain the reset anchors above, not an exact maintenance-completion time.
+-- End dates are estimates: recent seasons ran about 21-24 weeks; use 23 weeks
+-- and the existing regional ratings-lock convention until Blizzard confirms them.
 local function BuildSeasons_US()
     return {
         -- Start aligned to weekly reset (maintenance start). Finish aligned to Blizzard "ratings lock" time when known.
@@ -78,6 +83,7 @@ local function BuildSeasons_US()
         { label = "TWW S3", start = UtcTime(2025, 8, 12, 15, 0, 0), finish = UtcTime(2026, 1, 20, 6, 0, 0) },
         -- Midnight S1 (your planned dates): align start to reset; finish left as "night before maintenance" pattern.
         { label = "MN S1", start = UtcTime(2026, 3, 17, 15, 0, 0), finish = UtcTime(2026, 8, 11, 5, 0, 0) },
+        { label = "MN S2", start = UtcTime(2026, 8, 18, 15, 0, 0), finish = UtcTime(2027, 1, 26, 6, 0, 0), finishEstimated = true },
     }
 end
 
@@ -92,6 +98,7 @@ local function BuildSeasons_EU()
         -- TWW S3: EU Jan 20 22:00 CET => 21:00 UTC
         { label = "TWW S3", start = UtcTime(2025, 8, 13, 4, 0, 0),  finish = UtcTime(2026, 1, 20, 21, 0, 0) },
         { label = "MN S1", start = UtcTime(2026, 3, 18, 4, 0, 0), finish = UtcTime(2026, 8, 11, 20, 0, 0) },
+        { label = "MN S2", start = UtcTime(2026, 8, 19, 4, 0, 0), finish = UtcTime(2027, 1, 26, 21, 0, 0), finishEstimated = true },
     }
 end
 
@@ -104,6 +111,7 @@ local function BuildSeasons_KR()
         { label = "TWW S2", start = KR_TW_ResetUTC(2025, 3, 6),  finish = UtcTime(2025, 8, 6, 13, 0, 0) },
         { label = "TWW S3", start = KR_TW_ResetUTC(2025, 8, 14), finish = UtcTime(2026, 1, 21, 13, 0, 0) },
         { label = "MN S1", start = KR_TW_ResetUTC(2026, 3, 19), finish = UtcTime(2026, 8, 6, 13, 0, 0) },
+        { label = "MN S2", start = KR_TW_ResetUTC(2026, 8, 20), finish = UtcTime(2027, 1, 27, 13, 0, 0), finishEstimated = true },
     }
 end
 
@@ -116,6 +124,7 @@ local function BuildSeasons_TW()
         { label = "TWW S2", start = KR_TW_ResetUTC(2025, 3, 6),  finish = UtcTime(2025, 8, 6, 14, 0, 0) },
         { label = "TWW S3", start = KR_TW_ResetUTC(2025, 8, 14), finish = UtcTime(2026, 1, 21, 14, 0, 0) },
         { label = "MN S1", start = KR_TW_ResetUTC(2026, 3, 19), finish = UtcTime(2026, 8, 6, 14, 0, 0) },
+        { label = "MN S2", start = KR_TW_ResetUTC(2026, 8, 20), finish = UtcTime(2027, 1, 27, 14, 0, 0), finishEstimated = true },
     }
 end
 

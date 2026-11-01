@@ -180,6 +180,16 @@ end
 
 RSTATS.AWCEvents = BuildAWCEvents()
 
+-- No future AWC schedule announced as of 2026-11-01. Blizzard's first Cups
+-- began Apr 4 in 2025 (article 24187199) and Apr 10 in 2026 (24272606).
+-- This is a month-only planning estimate, not a confirmed tournament event.
+local function GetAWCForecast()
+    if time() < time({ year = 2027, month = 5, day = 1, hour = 0, min = 0, sec = 0 }) then
+        return "Apr 2027 (estimated; dates/time TBC)"
+    end
+    return nil
+end
+
 function RSTATS:GetAWCAnnouncement()
     local now = time()
     local region = (GetCurrentRegion and GetCurrentRegion()) or 3
@@ -199,7 +209,8 @@ function RSTATS:GetAWCAnnouncement()
         end
     end
 
-    return nil
+    local forecast = GetAWCForecast()
+    return forecast and ("Next AWC expected " .. forecast) or nil
 end
 
 function RSTATS:GetAWCBannerText()
@@ -224,9 +235,10 @@ function RSTATS:GetAWCBannerText()
         end
     end
 
+    local forecast = GetAWCForecast()
     return {
-        left = "Next AWC on",
-        right = " TBC",
+        left = forecast and "Next AWC expected" or "Next AWC on",
+        right = forecast and (" " .. forecast) or " TBC",
     }
 end
 
@@ -246,7 +258,7 @@ function RSTATS:GetNextAWCDisplay()
         end
     end
 
-    return "TBC"
+    return GetAWCForecast() or "TBC"
 end
 
 local function GetAWCDateKey(ts)
