@@ -75,6 +75,20 @@ function promptForMessage() {
     }
 }
 
+function updateTocVersion(version) {
+    const tocPath = path.join(process.cwd(), 'RatedStats.toc');
+    let content = fs.readFileSync(tocPath, 'utf8');
+
+    if (/^##\s*Version:/m.test(content)) {
+        content = content.replace(/^##[^\S\r\n]*Version:[^\r\n]*/m, `## Version: ${version}`);
+    } else {
+        const newline = content.includes('\r\n') ? '\r\n' : '\n';
+        content = `## Version: ${version}${newline}` + content;
+    }
+
+    fs.writeFileSync(tocPath, content, 'utf8');
+}
+
 function commitAndTag(version, message, file) {
     if (!message) {
         console.log('No commit message entered. Aborting.');
@@ -88,6 +102,8 @@ function commitAndTag(version, message, file) {
 
     try {
         console.log("Adding file to Git:", file.replace(/\\/g, "/"));
+        // Keep the in-game addon version aligned with the beta tag.
+        updateTocVersion(version);
         execSync(`git add .`);
         execSync(`git commit -m "${message}"`);
         execSync(`git tag ${version}`);
