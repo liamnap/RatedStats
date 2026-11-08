@@ -4363,7 +4363,7 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
     local width = math.min(900, viewportWidth)
     local alignRight = false
     local layout, playerRows = {}, {}
-    local iconSize = 12
+    local iconSize = 12 -- Shared by the achievement badge and the other Shuffle icons.
     panel:SetWidth(viewportWidth)
     panel:SetFrameStrata("HIGH")
     panel:SetFrameLevel(22)
@@ -4449,26 +4449,34 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
         end
     end
 
-    local function resizeIcon(icon, size)
-        return (icon:gsub("(|T[^:|]+:)%d+:%d+", function(prefix)
-            return prefix .. size .. ":" .. size
-        end))
-    end
-
     local function rosterIcon(icon, tooltip)
         local button = CreateFrame("Button", nil, panel)
-        local glyph = button:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        glyph:SetFont(GetUnicodeSafeFont(), 14)
-        glyph:SetAllPoints()
-        glyph:SetWordWrap(false)
-        glyph:SetJustifyH("LEFT")
+        local path, crop = icon:match("^|T([^:|]+):%d+:%d+(.-)|t$")
+        if path then
+            local texture = button:CreateTexture(nil, "OVERLAY")
+            texture:SetAllPoints()
+            texture:SetTexture(path)
+            -- Preserve the atlas crop from the legacy inline icon.
+            local textureWidth, textureHeight, left, right, top, bottom =
+                crop:match("^:%-?%d+:%-?%d+:(%d+):(%d+):(%d+):(%d+):(%d+):(%d+)$")
+            textureWidth, textureHeight = tonumber(textureWidth), tonumber(textureHeight)
+            if textureWidth and textureWidth > 0 and textureHeight and textureHeight > 0 then
+                texture:SetTexCoord(tonumber(left) / textureWidth, tonumber(right) / textureWidth,
+                    tonumber(top) / textureHeight, tonumber(bottom) / textureHeight)
+            end
+        else
+            local placeholder = button:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+            placeholder:SetFont(GetUnicodeSafeFont(), entryFontSize)
+            placeholder:SetAllPoints()
+            placeholder:SetText("-")
+        end
         button:SetScript("OnEnter", function()
             GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
             GameTooltip:SetText(tooltip)
             GameTooltip:Show()
         end)
         button:SetScript("OnLeave", GameTooltip_Hide)
-        return {widget = button, glyph = glyph, icon = icon}
+        return button
     end
 
     local function rosterPlayer(player, x, y, w)
@@ -4486,7 +4494,7 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
         }
         local name = ReadableScoreValue(player.name)
         local achievement = name and CreatePlayerAchievementIcon(panel, name, iconSize)
-        if achievement then icons[#icons + 1] = {widget = achievement} end
+        if achievement then icons[#icons + 1] = achievement end
         playerRows[#playerRows + 1] = {
             x = x / width, y = y, width = w / width, alignRight = alignRight,
             icons = icons, name = playerName(player),
@@ -4622,14 +4630,11 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
             local rightOffset = row.alignRight and (opponentsStart - rosterStart) or 0
             local x = row.x * currentWidth + rightOffset
             local rowWidth = row.width * currentWidth
-            -- Reserve room for the name before shrinking the shared icon size.
-            local iconWidth = math.max(1, math.min(iconSize + 2, math.floor(rowWidth / 10)))
-            local size = math.min(iconSize, iconWidth)
+            local iconWidth = iconSize + 2
             for i, icon in ipairs(row.icons) do
-                icon.widget:ClearAllPoints()
-                icon.widget:SetPoint("TOPLEFT", self, "TOPLEFT", x + (i - 1) * iconWidth, -row.y - (18 - size) / 2)
-                icon.widget:SetSize(size, size)
-                if icon.glyph then icon.glyph:SetText(resizeIcon(icon.icon, size)) end
+                icon:ClearAllPoints()
+                icon:SetPoint("TOPLEFT", self, "TOPLEFT", x + (i - 1) * iconWidth, -row.y - (18 - iconSize) / 2)
+                icon:SetSize(iconSize, iconSize)
             end
             local nameOffset = #row.icons * iconWidth + 4
             row.name:ClearAllPoints()
