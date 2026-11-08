@@ -915,6 +915,87 @@ local function IsFinalSoloShuffleEntry(entry)
     return false
 end
 
+-- Scoreboard wins are lobby totals; round results are separate. When all six
+-- lineups are available, use all six totals to verify the round results.
+local function ShuffleScoreboardWins(player)
+    local wins = ComparableScoreNumber(player.wins)
+    if wins and wins >= 0 and wins <= 6 and wins % 1 == 0 then return wins end
+end
+
+local function ReconcileShuffleHistory(history)
+    local byID = {}
+    for _, entry in ipairs(history) do
+        local id = entry.matchID
+        if type(id) == "number" then
+            if byID[id] == nil then byID[id] = entry else byID[id] = false end
+        end
+    end
+    local me = GetUnitNameRealmKey("player")
+    if not me then return end
+    for id, final in pairs(byID) do
+        if final and final.shuffleLayoutVersion == 2 and not final.shuffleResultsVerified
+            and IsFinalSoloShuffleEntry(final) and #(final.playerStats or {}) == 6 then
+            local totals, rounds, valid = {}, {}, true
+            for _, player in ipairs(final.playerStats) do
+                local key = GetScoreInfoNameRealmKey(ReadableScoreValue(player.name))
+                local wins = ShuffleScoreboardWins(player)
+                if not key or totals[key] ~= nil or wins == nil then valid = false; break end
+                totals[key] = wins
+            end
+            local previousTime
+            for i = 1, 6 do
+                if not valid then break end
+                local row = byID[id - 6 + i]
+                if not row or row.shuffleLayoutVersion ~= 2 or row.mapName ~= final.mapName
+                    or not row.friendlyWinLoss or not row.friendlyWinLoss:match("^RND%s+" .. i .. "%s")
+                    or type(row.endTime) ~= "number" or type(final.endTime) ~= "number"
+                    or final.endTime - row.endTime > 3600 or (previousTime and row.endTime <= previousTime)
+                    or #(row.playerStats or {}) ~= 6 then valid = false; break end
+                previousTime = row.endTime
+                local teams, allies = {}, 0
+                for _, player in ipairs(row.playerStats) do
+                    local key = GetScoreInfoNameRealmKey(ReadableScoreValue(player.name))
+                    if not key or totals[key] == nil or teams[key] ~= nil
+                        or type(player.isFriendly) ~= "boolean" then valid = false; break end
+                    teams[key] = player.isFriendly
+                    if player.isFriendly then allies = allies + 1 end
+                end
+                if allies ~= 3 or teams[me] ~= true then valid = false end
+                rounds[i] = {row = row, teams = teams}
+            end
+            if valid then
+                local solution
+                for mask = 0, 63 do
+                    local wins, count = {}, {}
+                    for i, round in ipairs(rounds) do
+                        wins[i] = math.floor(mask / 2 ^ (i - 1)) % 2 == 1
+                        for key, friendly in pairs(round.teams) do
+                            if friendly == wins[i] then count[key] = (count[key] or 0) + 1 end
+                        end
+                    end
+                    local matches = true
+                    for key, total in pairs(totals) do
+                        if (count[key] or 0) ~= total then matches = false; break end
+                    end
+                    if matches then
+                        if solution then solution = nil; break end
+                        solution = wins
+                    end
+                end
+                if solution then
+                    local cumulative = 0
+                    for i, round in ipairs(rounds) do
+                        if solution[i] then cumulative = cumulative + 1 end
+                        round.row.friendlyWinLoss = "RND " .. i .. (solution[i] and "  +   W" or "  +   L")
+                        round.row.roundsWon = cumulative
+                    end
+                    final.shuffleResultsVerified = true
+                end
+            end
+        end
+    end
+end
+
 local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categoryName, categoryID, startTime)
     local mapID = GetCurrentMapID()
     local mapName = GetMapName(mapID) or "Unknown"
@@ -2913,7 +2994,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 
 							-- Solo Shuffle rounds won comes from scoreInfo.stats
 							do
-								local wins = 0
+								local wins = "-"
                                 if ReadableScoreValue(scoreInfo.stats) and #scoreInfo.stats > 0 then
                                     -- Solo Shuffle stat column is the first stat entry
                                     wins = ComparableScoreNumber(scoreInfo.stats[1].pvpStatValue) or "-" -- roundsWon from SS stats Scoreboard, not main Scoreboard
@@ -3063,7 +3144,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 
 							-- Solo Shuffle rounds won comes from scoreInfo.stats
 							do
-								local wins = 0
+								local wins = "-"
                                 if ReadableScoreValue(scoreInfo.stats) and #scoreInfo.stats > 0 then
                                     -- Solo Shuffle stat column is the first stat entry
                                     wins = ComparableScoreNumber(scoreInfo.stats[1].pvpStatValue) or "-" -- roundsWon from SS stats Scoreboard, not main Scoreboard
@@ -3129,11 +3210,17 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                     entry.enemyRatingChange = enemyAvgRatingChange
                     -- Update playerStats with the new player data
                     entry.playerStats = playerStats
+                    for _, player in ipairs(playerStats) do
+                        if playerNameKey and GetScoreInfoNameRealmKey(ReadableScoreValue(player.name)) == playerNameKey then
+                            entry.roundsWon = ShuffleScoreboardWins(player) or entry.roundsWon
+                            break
+                        end
+                    end
                     break
                 end
             end
 
-            -- Save the updated data
+            ReconcileShuffleHistory(historyTable)
             SaveData()
 		
 			if RSTATS.GetTalents then
@@ -3169,9 +3256,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 				    })[tabID]
 		
 				    if content and frame then
-					    -- Clear match frames cache so DisplayHistory redraws fresh
-					    content.matchFrames = {}
-					    content.matchFrameByID = {}
+                        -- DisplayHistory must retain the old frame list until cleanup hides it.
 		
 					    local mmrLabel = DisplayCurrentCRMMR(frame, mmrID)
 					    FilterAndSearchMatches(RatedStatsSearchBox:GetText())
@@ -3440,7 +3525,14 @@ local function UsesCompactShuffleLayout(entry)
         and not (entry.isInitial or entry.isMissedGame)
 end
 
+local function UsesCompactShuffleHeadings(entry)
+    return UsesCompactShuffleLayout(entry) and not IsFinalSoloShuffleEntry(entry)
+end
+
 function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltered)
+    if tabID == 1 then
+        ReconcileShuffleHistory((Database and Database.SoloShuffleHistory) or historyTable)
+    end
     ClearStaleMatchFrames(content)		-- needed for rows to not overlap
 
     -- If a placeholder was previously shown (e.g. during initial menu build),
@@ -3473,7 +3565,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
     local hasModernShuffle, hasLegacyShuffle = false, false
     if tabID == 1 then
         for _, entry in ipairs(historyTable) do
-            if UsesCompactShuffleLayout(entry) then hasModernShuffle = true else hasLegacyShuffle = true end
+            if UsesCompactShuffleHeadings(entry) then hasModernShuffle = true else hasLegacyShuffle = true end
         end
     end
     content.shuffleNeutralView = hasModernShuffle and not hasLegacyShuffle
@@ -3519,8 +3611,20 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
         else
             scoreText = (match.hordeTeamScore or "-").."  : "..(match.allianceTeamScore or "-")
         end
+        local outcomeText = match.friendlyWinLoss or "-"
         if tabID == 1 then
-            scoreText = (match.roundsWon or 0) .. " / 6"
+            local wins = match.roundsWon or 0
+            if match.isSoloShuffle and IsFinalSoloShuffleEntry(match) then
+                local me = GetUnitNameRealmKey("player")
+                for _, player in ipairs(match.playerStats or {}) do
+                    if me and GetScoreInfoNameRealmKey(ReadableScoreValue(player.name)) == me then
+                        wins = ShuffleScoreboardWins(player) or wins
+                        break
+                    end
+                end
+                outcomeText = "RND 6" .. (wins > 3 and "  +   W" or wins == 3 and "  ~   D" or "  +   L")
+            end
+            scoreText = wins .. " / 6"
         elseif tabID == 2 or tabID == 3 then
             scoreText = ""
         end
@@ -3537,16 +3641,16 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
             duoText = match.duoPartner or "Solo"
         end
 
-        if tabID == 1 and UsesCompactShuffleLayout(match) then
+        if tabID == 1 and UsesCompactShuffleHeadings(match) then
             return {
-                match.friendlyWinLoss or "-", "", scoreText, mapDisplay,
+                outcomeText, "", scoreText, mapDisplay,
                 date("%a %d %b %Y - %H:%M:%S", match.endTime) or "N/A",
                 match.duration or "N/A", match.note or "",
             }
         end
 
         return {
-            (match.friendlyWinLoss or "-"),
+            outcomeText,
             duoText,
             scoreText,
             (mapDisplay or "N/A"),
@@ -3575,7 +3679,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 	
 	-- Step 2: Measure row content using formatMatch
 	for _, match in ipairs(historyTable) do
-        if not mixedShuffleLayouts or not UsesCompactShuffleLayout(match) then
+        if not mixedShuffleLayouts or not UsesCompactShuffleHeadings(match) then
 		local row = formatMatch(match)
 		for i, value in ipairs(row) do
 			tempFS:SetText(tostring(value or ""))
@@ -3617,7 +3721,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
             shuffleWidths[i] = tempFS:GetStringWidth() + spacing
         end
         for _, entry in ipairs(historyTable) do
-            if UsesCompactShuffleLayout(entry) then
+            if UsesCompactShuffleHeadings(entry) then
                 for i, value in ipairs(formatMatch(entry)) do
                     tempFS:SetText(tostring(value))
                     shuffleWidths[i] = math.max(shuffleWidths[i], tempFS:GetStringWidth() + spacing)
@@ -3758,12 +3862,21 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 			local columns = formatMatch(match)
             local rowOffsets, rowWidths = columnOffsets, columnWidths
             local rowHeaders = headers
-            if mixedShuffleLayouts and UsesCompactShuffleLayout(match) then
+            if mixedShuffleLayouts and UsesCompactShuffleHeadings(match) then
                 rowOffsets, rowWidths, rowHeaders = shuffleOffsets, shuffleWidths, shuffleHeaders
             end
-            matchFrame.shuffleMetadata = UsesCompactShuffleLayout(match) and {} or nil
+            matchFrame.shuffleMetadata = UsesCompactShuffleHeadings(match) and {} or nil
             local headingHeight = mixedShuffleLayouts and 18 or 0
             matchFrame.detailOffset = 14 + headingHeight
+            if matchFrame.shuffleMetadata then
+                function matchFrame:UpdateTeamView()
+                    local offset = content:GetParent():GetHorizontalScroll() or 0
+                    for _, item in ipairs(self.shuffleMetadata) do
+                        item.widget:ClearAllPoints()
+                        item.widget:SetPoint("TOPLEFT", self, "TOPLEFT", item.x + offset, item.y)
+                    end
+                end
+            end
             if mixedShuffleLayouts then
                 for j, title in ipairs(rowHeaders) do
                     local heading = matchFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -3818,6 +3931,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 				end
 			end
 	
+            if matchFrame.UpdateTeamView then matchFrame:UpdateTeamView() end
 			local rowHeight = CalculateRowHeight(rowFontStrings, 4) + headingHeight
 			matchFrame:SetHeight(rowHeight)
 			matchFrame.baseHeight = rowHeight
@@ -3846,22 +3960,24 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 				end
 			end
 	
-			-- Create the nested table (for match details) and parent it to the row.
-			local nestedTable = CreateNestedTable(matchFrame, match.playerStats or {}, match.teamFaction, match.isInitial, match.isMissedGame, content, match, tabID)
-			nestedTable:SetParent(matchFrame)
-			nestedTable:SetPoint("TOPLEFT", matchFrame, "TOPLEFT", 0, -(matchFrame.detailOffset or 14))
-			nestedTable:SetFrameStrata("HIGH")
-			nestedTable:SetFrameLevel(22)
-			nestedTable:Hide()
-			nestedTable:UpdateTeamView()
-			matchFrame.nestedTable = nestedTable
-	
-			-- Set a click handler for the row to toggle its nested table and reflow all rows.
-			matchFrame:SetScript("OnMouseUp", function()
-				ReflowRows(content)
-				ToggleNestedTable(matchFrame, nestedTable, content)
-			end)
-			
+            -- Building hidden detail tables for the entire history can exhaust WoW's
+            -- script budget. Construct only the requested row, then reuse it on reopen.
+            matchFrame:SetScript("OnMouseUp", function()
+                local nestedTable = matchFrame.nestedTable
+                if not nestedTable then
+                    nestedTable = CreateNestedTable(matchFrame, match.playerStats or {}, match.teamFaction,
+                        match.isInitial, match.isMissedGame, content, match, tabID)
+                    nestedTable:SetParent(matchFrame)
+                    nestedTable:SetPoint("TOPLEFT", matchFrame, "TOPLEFT", 0, -(matchFrame.detailOffset or 14))
+                    nestedTable:SetFrameStrata("HIGH")
+                    nestedTable:SetFrameLevel(22)
+                    nestedTable:Hide()
+                    nestedTable:UpdateTeamView()
+                    matchFrame.nestedTable = nestedTable
+                end
+                ToggleNestedTable(matchFrame, nestedTable, content)
+            end)
+
 			content.matchFrameByID[frameKey] = matchFrame
 			table.insert(content.matchFrames, matchFrame)
 		end
@@ -4125,7 +4241,7 @@ end
 local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
     local panel = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     local final = IsFinalSoloShuffleEntry(matchEntry)
-    local width = math.max(1, (content:GetParent():GetWidth() or parent:GetWidth()) - 12)
+    local width = math.max(1, math.min(900, (content:GetParent():GetWidth() or parent:GetWidth()) - 12))
     local finalHeight = 86 + #playerStats * 18
     local layout = {}
     panel:SetSize(width, final and finalHeight or 42)
@@ -4208,13 +4324,17 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
         end
     end
 
+    local function largerIcon(icon)
+        return (icon:gsub("(|T[^:|]+:)%d+:%d+", function(prefix) return prefix .. "16:16" end))
+    end
+
     local function roster(players, x, w)
         local slotWidth = w / math.max(3, #players)
         for i, player in ipairs(players) do
             local px = x + (i - 1) * slotWidth
             local icon = GetSpecIcon(player.class, player.spec)
             if icon == "-" then icon = SafeTableLookup(classIcons, player.class, "-") end
-            label(icon, px, 20, 18)
+            label(largerIcon(icon), px, 20, 18)
             playerName(player, px + 20, 20, math.max(1, slotWidth - 24))
         end
     end
@@ -4252,7 +4372,7 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
             local y = 84 + (i - 1) * 18
             playerName(player, positions[1], y, widths[1] - 4)
             local values = {
-                GetSpecIcon(player.class, player.spec), number(player.wins), number(player.killingBlows),
+                largerIcon(GetSpecIcon(player.class, player.spec)), number(player.wins), number(player.killingBlows),
                 number(player.damage, false, true), number(player.healing, false, true),
                 rating(player), rating(player, true),
             }
@@ -4263,7 +4383,7 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
     end
 
     function panel:UpdateTeamView()
-        local currentWidth = math.max(1, (content:GetParent():GetWidth() or parent:GetWidth()) - 12)
+        local currentWidth = math.max(1, math.min(900, (content:GetParent():GetWidth() or parent:GetWidth()) - 12))
         self:ClearAllPoints()
         self:SetWidth(currentWidth)
         local scrollOffset = content:GetParent():GetHorizontalScroll() or 0
@@ -5158,8 +5278,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
 	self:SetPoint("TOPLEFT", self:GetParent(), "TOPLEFT", 0, -(self:GetParent().detailOffset or 14))
 	end
 
-    SaveData()
-
+    -- Rendering details does not change saved match data.
 	RSTATS.LastNestedTable = nestedTable
 	nestedTable:UpdateTeamView()
 
