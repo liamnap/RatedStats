@@ -19,17 +19,23 @@ Rated Stats saves your **rated PvP match history** and the **end-of-match scoreb
 - **Win / Loss**, plus **Solo Shuffle round results**
 - **CR / rating change** and **MMR** where available
 - **Map**, **timestamp**, and **match duration**
-- **Team totals** (damage / healing)
+- **Team totals** (damage / healing), with lobby totals for Solo Shuffle
 - **BG team scores** when the scoreboard provides them
 
 ### Scoreboard player stats (per match)
 Rated Stats stores what Blizzard provides on the end-of-match scoreboard, including:
-- **Per player** stats **per round** in Solo Shuffle (**unique to Rated Stats**)
 - **Damage / Healing**
 - **Killing blows**, deaths, honorable kills
 - **Rating change** and **post-match MMR** where provided
 - **Faction, race, class, spec/role, honor level**
 - **Objectives text** on BG scoreboards (flags, bases, carts, etc. depending on map)
+
+### Solo Shuffle
+
+- Expand any saved round to see the friendly and opposing lineups, with race, class, spec and role icons. Achievement badges appear when the optional Achievements addon has data for that player.
+- Expand round 6 for the overall result and the final scoreboard across all six rounds, including total damage, healing and killing blows.
+- The final scoreboard ranks players by rounds won, then killing blows, then healing if you played a healer or damage otherwise.
+- The final scoreboard shows your MMR change when available and starting MMR for other players. Per-round combat totals are limited by what WoW exposes.
 
 ---
 

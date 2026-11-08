@@ -694,6 +694,7 @@ local roundsWon = 0
 -- KB values are still stored later, but are no longer compared for W/L.
 local soloShuffleAlliesNameAtDeath = nil
 local soloShuffleRoundWonAtDeath   = nil
+local OnSoloShuffleStateChanged -- also called by the final completion event
 
 local RBGScoreWidgets = {
     [529]  = 1671, -- Arathi Basin
@@ -867,9 +868,15 @@ local function GetRBGBDuoPartnerNameRealm()
     return nil
 end
 
+local function ReadableScoreValue(value)
+    if issecretvalue and issecretvalue(value) then return nil end
+    return value
+end
+
 local function RawScoreValue(value, keepRaw)
+    value = ReadableScoreValue(value)
     if keepRaw then
-        return value
+        return value or "-"
     end
 
     local ok, numberValue = pcall(tonumber, value)
@@ -877,21 +884,35 @@ local function RawScoreValue(value, keepRaw)
 end
 
 local function ScoreNumberOrZero(value)
+    value = ReadableScoreValue(value)
     local ok, numberValue = pcall(tonumber, value)
     return (ok and numberValue) or 0
 end
 
 local function ComparableScoreNumber(value)
+    value = ReadableScoreValue(value)
     local ok, numberValue = pcall(tonumber, value)
     if not ok or numberValue == nil then return nil end
 
-    -- Stored secret scoreboard values can be displayed, but cannot be sorted or ranked.
+    -- Defensive fallback for values that cannot be compared in this client.
     local canCompare = pcall(function()
         return numberValue < 0
     end)
 
     if not canCompare then return nil end
     return numberValue
+end
+
+local function GetShuffleMMRChange(player)
+    local before = ComparableScoreNumber(player.prematchMMR)
+    local after = ComparableScoreNumber(player.postmatchMMR)
+    if before and before > 0 and after and after > 0 then
+        return after - before
+    end
+
+    -- Older snapshots also used zero for unavailable scoreboard values.
+    local change = ComparableScoreNumber(player.mmrChange)
+    if change and change ~= 0 then return change end
 end
 
 local function IsFinalSoloShuffleEntry(entry)
@@ -904,6 +925,110 @@ local function IsFinalSoloShuffleEntry(entry)
     end
 
     return false
+end
+
+-- Scoreboard wins are lobby totals; round results are separate. When all six
+-- lineups are available, use all six totals to verify the round results.
+local function ShuffleScoreboardWins(player)
+    local wins = ComparableScoreNumber(player.wins)
+    if wins and wins >= 0 and wins <= 6 and wins % 1 == 0 then return wins end
+end
+
+local function ReconcileShuffleHistory(history)
+    local byID = {}
+    for _, entry in ipairs(history) do
+        local id = entry.matchID
+        if type(id) == "number" then
+            if byID[id] == nil then byID[id] = entry else byID[id] = false end
+        end
+    end
+    local me = GetUnitNameRealmKey("player")
+    if not me then return end
+    for id, final in pairs(byID) do
+        if final and final.shuffleLayoutVersion == 2
+            and not (final.shuffleResultsVerified and final.shuffleRosterDetailsFilled)
+            and IsFinalSoloShuffleEntry(final) and #(final.playerStats or {}) == 6 then
+            local totals, finalPlayers, rounds = {}, {}, {}
+            local valid, hasWins, hasRosterDetails = true, true, true
+            for _, player in ipairs(final.playerStats) do
+                local key = GetScoreInfoNameRealmKey(ReadableScoreValue(player.name))
+                if not key or finalPlayers[key] then valid = false; break end
+                finalPlayers[key] = player
+                totals[key] = ShuffleScoreboardWins(player)
+                if totals[key] == nil then hasWins = false end
+                local spec, role = ReadableScoreValue(player.spec), ReadableScoreValue(player.role)
+                if not spec or spec == "" or spec == "-" or not role or role == "-" or role == 0 or role == "NONE" then
+                    hasRosterDetails = false
+                end
+            end
+            local previousTime
+            for i = 1, 6 do
+                if not valid then break end
+                local row = byID[id - 6 + i]
+                if not row or row.shuffleLayoutVersion ~= 2 or row.mapName ~= final.mapName
+                    or not row.friendlyWinLoss or not row.friendlyWinLoss:match("^RND%s+" .. i .. "%s")
+                    or type(row.endTime) ~= "number" or type(final.endTime) ~= "number"
+                    or final.endTime - row.endTime > 3600 or (previousTime and row.endTime <= previousTime)
+                    or #(row.playerStats or {}) ~= 6 then valid = false; break end
+                previousTime = row.endTime
+                local teams, allies = {}, 0
+                for _, player in ipairs(row.playerStats) do
+                    local key = GetScoreInfoNameRealmKey(ReadableScoreValue(player.name))
+                    if not key or not finalPlayers[key] or teams[key] ~= nil
+                        or type(player.isFriendly) ~= "boolean" then valid = false; break end
+                    teams[key] = player.isFriendly
+                    if player.isFriendly then allies = allies + 1 end
+                end
+                if allies ~= 3 or teams[me] ~= true then valid = false end
+                rounds[i] = {row = row, teams = teams}
+            end
+            if valid and not final.shuffleRosterDetailsFilled then
+                -- Fill missing identity details only after matching the whole lobby.
+                for i = 1, 5 do
+                    for _, player in ipairs(rounds[i].row.playerStats) do
+                        local key = GetScoreInfoNameRealmKey(ReadableScoreValue(player.name))
+                        local finalPlayer = finalPlayers[key]
+                        for _, field in ipairs({"race", "class", "spec", "role"}) do
+                            local value = ReadableScoreValue(player[field])
+                            if not value or value == "" or value == "-" or value == 0 or value == "NONE" then
+                                player[field] = ReadableScoreValue(finalPlayer[field]) or value
+                            end
+                        end
+                    end
+                end
+                final.shuffleRosterDetailsFilled = hasRosterDetails or nil
+            end
+            if valid and hasWins and not final.shuffleResultsVerified then
+                local solution
+                for mask = 0, 63 do
+                    local wins, count = {}, {}
+                    for i, round in ipairs(rounds) do
+                        wins[i] = math.floor(mask / 2 ^ (i - 1)) % 2 == 1
+                        for key, friendly in pairs(round.teams) do
+                            if friendly == wins[i] then count[key] = (count[key] or 0) + 1 end
+                        end
+                    end
+                    local matches = true
+                    for key, total in pairs(totals) do
+                        if (count[key] or 0) ~= total then matches = false; break end
+                    end
+                    if matches then
+                        if solution then solution = nil; break end
+                        solution = wins
+                    end
+                end
+                if solution then
+                    local cumulative = 0
+                    for i, round in ipairs(rounds) do
+                        if solution[i] then cumulative = cumulative + 1 end
+                        round.row.friendlyWinLoss = "RND " .. i .. (solution[i] and "  +   W" or "  +   L")
+                        round.row.roundsWon = cumulative
+                    end
+                    final.shuffleResultsVerified = true
+                end
+            end
+        end
+    end
 end
 
 local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categoryName, categoryID, startTime)
@@ -1059,7 +1184,7 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
             local nameKey = GetScoreInfoNameRealmKey(name)
             local killingBlows = scoreInfo.killingBlows
             local honorableKills = scoreInfo.honorableKills
-            local deaths = tonumber(scoreInfo.deaths) or 0
+            local deaths = ScoreNumberOrZero(scoreInfo.deaths)
             local honorGained = scoreInfo.honorGained
             local faction = scoreInfo.faction
             local raceName = scoreInfo.raceName
@@ -1072,14 +1197,14 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
             local prematchMMR = scoreInfo.prematchMMR
             local mmrChange = scoreInfo.mmrChange
             local postmatchMMR = scoreInfo.postmatchMMR
-            local talentSpec = scoreInfo.talentSpec
+            local talentSpec = ReadableScoreValue(scoreInfo.talentSpec) or "-"
             local honorLevel = scoreInfo.honorLevel
-            local roleAssigned = scoreInfo.roleAssigned
+            local roleAssigned = ReadableScoreValue(scoreInfo.roleAssigned) or "-"
             local guid = nil
             if not isSoloShuffle then
                 guid = scoreInfo.guid
             end
-            local stats = scoreInfo.stats
+            local stats = ReadableScoreValue(scoreInfo.stats)
 
             -- Solo Shuffle stats can contain secret values during the active match.
             -- Objective text is only relevant for BG/BGB-style maps.
@@ -1135,6 +1260,7 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
     if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() then
         soloShuffleAlliesNameAtDeath  = nil
         soloShuffleRoundWonAtDeath    = nil
+        playerDeathSeen = false
     end
 
 	-- Call CheckPlayerTalents to process talents for new matches
@@ -1258,12 +1384,16 @@ function RefreshDataEvent(self, event, ...)
 		end)
 
     elseif event == "PVP_MATCH_COMPLETE" then
+        -- The last round can transition directly to Complete, without PostRound.
+        OnSoloShuffleStateChanged(event)
         C_Timer.After(1, function()
 			if RSTATS.GetTalents then
 				RSTATS.GetTalents:Stop(false)
 			end
 
             if self.isSoloShuffle then
+                -- Retry once after the scoreboard/party state has settled.
+                OnSoloShuffleStateChanged("PVP_MATCH_COMPLETE")
                 if roundIndex and playerDeathSeen then
                     local cr, mmr = GetCRandMMR(7)
                     local historyTable = Database.SoloShuffleHistory
@@ -2404,6 +2534,8 @@ local specIcons = {
 }
 
 local function GetSpecIcon(className, specName)
+    className = ReadableScoreValue(className)
+    specName = ReadableScoreValue(specName)
     if not specName or specName == "-" then
         return "-"
     end
@@ -2573,10 +2705,10 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                 mmrChange = RawScoreValue(scoreInfo.mmrChange, false)
                 postmatchMMR = RawScoreValue(scoreInfo.postmatchMMR, false)
             end
-            local talentSpec = scoreInfo.talentSpec
+            local talentSpec = ReadableScoreValue(scoreInfo.talentSpec) or "-"
             local honorLevel = RawScoreValue(scoreInfo.honorLevel, isSoloShuffle) or "-"
-            local roleAssigned = scoreInfo.roleAssigned
-            local stats = scoreInfo.stats
+            local roleAssigned = ReadableScoreValue(scoreInfo.roleAssigned) or "-"
+            local stats = ReadableScoreValue(scoreInfo.stats)
             local guid = nil
             if not isSoloShuffle then
                 guid = scoreInfo.guid
@@ -2774,6 +2906,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     local entry = {
         matchID = appendHistoryMatchID,
         isSoloShuffle = C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() or false,
+        shuffleLayoutVersion = isSoloShuffle and 2 or nil,
         timestamp = endTime,
         specID = mySpecID,
         specName = mySpecName,
@@ -2896,10 +3029,10 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 
 							-- Solo Shuffle rounds won comes from scoreInfo.stats
 							do
-								local wins = 0
-                                if scoreInfo.stats and #scoreInfo.stats > 0 then
+								local wins = "-"
+                                if ReadableScoreValue(scoreInfo.stats) and #scoreInfo.stats > 0 then
                                     -- Solo Shuffle stat column is the first stat entry
-                                    wins = tonumber(scoreInfo.stats[1].pvpStatValue) or 0 -- roundsWon from SS stats Scoreboard, not main Scoreboard
+                                    wins = ComparableScoreNumber(scoreInfo.stats[1].pvpStatValue) or "-" -- roundsWon from SS stats Scoreboard, not main Scoreboard
                                 end
 								playerData.wins = wins
 							end
@@ -2941,6 +3074,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             local ssRoundData = {
                 matchID = appendHistoryMatchID,
                 isSoloShuffle = true,
+                shuffleLayoutVersion = 2,
                 timestamp = endTime,
                 specID = mySpecID,
                 specName = mySpecName,
@@ -2989,7 +3123,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                 end
             end
 			SaveData()
-            playerDeathSeen = false
+            -- Round latch is cleared when its snapshot is consumed, not by this delayed callback.
 		end)
 	end
 
@@ -3028,23 +3162,30 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                     for _, playerData in ipairs(playerStats) do
 						if (guid2 and playerData.guid and playerData.guid == guid2) or playerData.name == name then
                             -- Update the playerData fields with new stats
-                            playerData.killingBlows = tonumber(scoreInfo.killingBlows) or 0
-                            playerData.honorableKills = tonumber(scoreInfo.honorableKills) or 0
-                            playerData.deaths = tonumber(scoreInfo.deaths) or 0
+                            playerData.killingBlows = ScoreNumberOrZero(scoreInfo.killingBlows)
+                            playerData.honorableKills = ScoreNumberOrZero(scoreInfo.honorableKills)
+                            playerData.deaths = ScoreNumberOrZero(scoreInfo.deaths)
+                            playerData.spec = ReadableScoreValue(scoreInfo.talentSpec) or "-"
+                            playerData.role = ReadableScoreValue(scoreInfo.roleAssigned) or "-"
                             playerData.damage = ScoreNumberOrZero(scoreInfo.damageDone)
                             playerData.healing = ScoreNumberOrZero(scoreInfo.healingDone)
-                            playerData.rating = tonumber(scoreInfo.rating) or 0
-                            playerData.ratingChange = tonumber(scoreInfo.ratingChange) or 0
-                            playerData.mmrChange = tonumber(scoreInfo.mmrChange) or 0
-                            playerData.postmatchMMR = tonumber(scoreInfo.postmatchMMR) or 0
-                            playerData.honorLevel = tonumber(scoreInfo.honorLevel) or 0
+                            playerData.rating = ScoreNumberOrZero(scoreInfo.rating)
+                            playerData.ratingChange = ScoreNumberOrZero(scoreInfo.ratingChange)
+                            playerData.newrating = playerData.rating + playerData.ratingChange
+                            playerData.prematchMMR = ComparableScoreNumber(scoreInfo.prematchMMR) or "-"
+                            playerData.postmatchMMR = ComparableScoreNumber(scoreInfo.postmatchMMR) or "-"
+                            playerData.mmrChange = ReadableScoreValue(scoreInfo.mmrChange) or "-"
+                            if playerNameKey and GetScoreInfoNameRealmKey(name) == playerNameKey then
+                                playerData.mmrChange = GetShuffleMMRChange(playerData) or "-"
+                            end
+                            playerData.honorLevel = ScoreNumberOrZero(scoreInfo.honorLevel)
 
 							-- Solo Shuffle rounds won comes from scoreInfo.stats
 							do
-								local wins = 0
-                                if scoreInfo.stats and #scoreInfo.stats > 0 then
+								local wins = "-"
+                                if ReadableScoreValue(scoreInfo.stats) and #scoreInfo.stats > 0 then
                                     -- Solo Shuffle stat column is the first stat entry
-                                    wins = tonumber(scoreInfo.stats[1].pvpStatValue) or 0 -- roundsWon from SS stats Scoreboard, not main Scoreboard
+                                    wins = ComparableScoreNumber(scoreInfo.stats[1].pvpStatValue) or "-" -- roundsWon from SS stats Scoreboard, not main Scoreboard
                                 end
 								playerData.wins = wins
 							end    
@@ -3107,11 +3248,17 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                     entry.enemyRatingChange = enemyAvgRatingChange
                     -- Update playerStats with the new player data
                     entry.playerStats = playerStats
+                    for _, player in ipairs(playerStats) do
+                        if playerNameKey and GetScoreInfoNameRealmKey(ReadableScoreValue(player.name)) == playerNameKey then
+                            entry.roundsWon = ShuffleScoreboardWins(player) or entry.roundsWon
+                            break
+                        end
+                    end
                     break
                 end
             end
 
-            -- Save the updated data
+            ReconcileShuffleHistory(historyTable)
             SaveData()
 		
 			if RSTATS.GetTalents then
@@ -3147,9 +3294,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 				    })[tabID]
 		
 				    if content and frame then
-					    -- Clear match frames cache so DisplayHistory redraws fresh
-					    content.matchFrames = {}
-					    content.matchFrameByID = {}
+                        -- DisplayHistory must retain the old frame list until cleanup hides it.
 		
 					    local mmrLabel = DisplayCurrentCRMMR(frame, mmrID)
 					    FilterAndSearchMatches(RatedStatsSearchBox:GetText())
@@ -3258,7 +3403,8 @@ function ToggleNestedTable(matchFrame, nestedTable, content)
         nestedTable:Show()
         nestedTable:SetParent(matchFrame)
         nestedTable:ClearAllPoints()
-        nestedTable:SetPoint("TOPLEFT", matchFrame, "TOPLEFT", 0, -14)
+        nestedTable:SetPoint("TOPLEFT", matchFrame, "TOPLEFT", 0, -(matchFrame.detailOffset or 14))
+        if nestedTable.UpdateTeamView then nestedTable:UpdateTeamView() end
 		nestedTable:SetFrameStrata("HIGH")
 		nestedTable:SetFrameLevel(22)
         local ntHeight = nestedTable:GetHeight() or 0
@@ -3411,7 +3557,20 @@ end
 -- is parented to the main content frame (not the previous row) so that we
 -- can reposition all rows by calling ReflowRows.
 ------------------------------------------------------------------------------
+-- Opt in only at capture time. Unmarked saved history always keeps its original layout.
+local function UsesCompactShuffleLayout(entry)
+    return entry and entry.isSoloShuffle and entry.shuffleLayoutVersion == 2
+        and not (entry.isInitial or entry.isMissedGame)
+end
+
+local function UsesCompactShuffleHeadings(entry)
+    return UsesCompactShuffleLayout(entry) and not IsFinalSoloShuffleEntry(entry)
+end
+
 function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltered)
+    if tabID == 1 then
+        ReconcileShuffleHistory((Database and Database.SoloShuffleHistory) or historyTable)
+    end
     ClearStaleMatchFrames(content)		-- needed for rows to not overlap
 
     -- If a placeholder was previously shown (e.g. during initial menu build),
@@ -3440,6 +3599,30 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 		c(factionHeaderText), c("Raid Leader"), c("Avg CR"), c("MMR"), c("Damage"), c("Healing"), c("Avg Rat Chg"), "",
 		 "", c(factionHeaderText), c("Raid Leader"), c("Avg CR"), c("MMR"), c("Damage"), c("Healing"), c("Avg Rat Chg"), c("Note")
 	}
+    local shuffleHeaders = {c("Win/Loss"), "", c("Rounds won"), c("Map"), c("Round End Time"), c("Round Duration"), c("Note")}
+    local shuffleFinalHeaders = {
+        c("Win/Loss"), "", c("Score"), c("Map"), c("Match End Time"), c("Duration"), "",
+        c("Scope"), "", c("Avg CR"), c("Avg Starting MMR"), c("Damage"), c("Healing"), c("Avg Rat Chg"), c("Note"),
+    }
+    local hasModernShuffle, hasLegacyShuffle, hasFinalShuffle = false, false, false
+    if tabID == 1 then
+        for _, entry in ipairs(historyTable) do
+            if UsesCompactShuffleHeadings(entry) then
+                hasModernShuffle = true
+            elseif UsesCompactShuffleLayout(entry) then
+                hasFinalShuffle = true
+            else
+                hasLegacyShuffle = true
+            end
+        end
+    end
+    content.shuffleNeutralView = (hasModernShuffle or hasFinalShuffle) and not hasLegacyShuffle
+    local mixedShuffleLayouts = (hasModernShuffle and (hasLegacyShuffle or hasFinalShuffle))
+        or (hasLegacyShuffle and hasFinalShuffle)
+    if not hasLegacyShuffle then
+        if hasFinalShuffle then headers = shuffleFinalHeaders
+        elseif hasModernShuffle then headers = shuffleHeaders end
+    end
 	local columnOffsets = {}
 	local spacing = 8
 	local headerFont = GetUnicodeSafeFont()
@@ -3480,8 +3663,20 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
         else
             scoreText = (match.hordeTeamScore or "-").."  : "..(match.allianceTeamScore or "-")
         end
+        local outcomeText = match.friendlyWinLoss or "-"
         if tabID == 1 then
-            scoreText = (match.roundsWon or 0) .. " / 6"
+            local wins = match.roundsWon or 0
+            if match.isSoloShuffle and IsFinalSoloShuffleEntry(match) then
+                local me = GetUnitNameRealmKey("player")
+                for _, player in ipairs(match.playerStats or {}) do
+                    if me and GetScoreInfoNameRealmKey(ReadableScoreValue(player.name)) == me then
+                        wins = ShuffleScoreboardWins(player) or wins
+                        break
+                    end
+                end
+                outcomeText = "RND 6" .. (wins > 3 and "  +   W" or wins == 3 and "  ~   D" or "  +   L")
+            end
+            scoreText = wins .. " / 6"
         elseif tabID == 2 or tabID == 3 then
             scoreText = ""
         end
@@ -3498,8 +3693,39 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
             duoText = match.duoPartner or "Solo"
         end
 
+        if tabID == 1 and UsesCompactShuffleHeadings(match) then
+            return {
+                outcomeText, "", scoreText, mapDisplay,
+                date("%a %d %b %Y - %H:%M:%S", match.endTime) or "N/A",
+                match.duration or "N/A", match.note or "",
+            }
+        end
+
+        if tabID == 1 and UsesCompactShuffleLayout(match) then
+            local players = match.playerStats or {}
+            local function aggregate(field, average, abbreviated)
+                if #players ~= 6 then return "-" end
+                local sum = 0
+                for _, player in ipairs(players) do
+                    local value = ComparableScoreNumber(player[field])
+                    if value == nil or (field == "prematchMMR" and value <= 0) then return "-" end
+                    sum = sum + value
+                end
+                if average then return tostring(math.floor(sum / #players)) end
+                return abbreviated and FormatNumber(sum) or tostring(sum)
+            end
+            return {
+                outcomeText, "", scoreText, mapDisplay,
+                date("%a %d %b %Y - %H:%M:%S", match.endTime) or "N/A",
+                match.duration or "N/A", "", "All six rounds", "",
+                aggregate("newrating", true), aggregate("prematchMMR", true),
+                aggregate("damage", false, true), aggregate("healing", false, true),
+                aggregate("ratingChange", true), match.note or "",
+            }
+        end
+
         return {
-            (match.friendlyWinLoss or "-"),
+            outcomeText,
             duoText,
             scoreText,
             (mapDisplay or "N/A"),
@@ -3528,6 +3754,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 	
 	-- Step 2: Measure row content using formatMatch
 	for _, match in ipairs(historyTable) do
+        if not mixedShuffleLayouts or not UsesCompactShuffleHeadings(match) then
 		local row = formatMatch(match)
 		for i, value in ipairs(row) do
 			tempFS:SetText(tostring(value or ""))
@@ -3537,6 +3764,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 			end
 		end
 	end
+    end
 	
 	-- Step 3: Calculate final offsets using max widths
 	local columnOffsets = {}
@@ -3552,12 +3780,32 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 	end
 	
 	-- ─────── Persist offsets for paging later ───────
+     if tabID == 1 then
+         for i = #headers + 1, 24 do columnOffsets[i] = 0 end
+     end
      content.columnOffsets = columnOffsets
      content.columnWidths  = columnWidths
      content.splitIndex    = splitIndex
 	 content.splitX		   = splitX
      -- ────────────────────────────────────────────────
 	
+    local shuffleWidths, shuffleOffsets = {}, {}
+    if mixedShuffleLayouts then
+        for i, title in ipairs(shuffleHeaders) do
+            tempFS:SetText(title)
+            shuffleWidths[i] = tempFS:GetStringWidth() + spacing
+        end
+        for _, entry in ipairs(historyTable) do
+            if UsesCompactShuffleHeadings(entry) then
+                for i, value in ipairs(formatMatch(entry)) do
+                    tempFS:SetText(tostring(value))
+                    shuffleWidths[i] = math.max(shuffleWidths[i], tempFS:GetStringWidth() + spacing)
+                end
+            end
+        end
+        local x = 0
+        for i, width in ipairs(shuffleWidths) do shuffleOffsets[i] = x; x = x + width end
+    end
 	tempFS:Hide()
 
 	local columnWidths = {}
@@ -3597,7 +3845,8 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 	
 		-- Build the label fontStrings only once
 		local headerTexts = {}
-		for i, name in ipairs(headers) do
+		for i = 1, (tabID == 1 and 24 or #headers) do
+            local name = headers[i] or ""
 			local h = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 			h:SetFont(GetUnicodeSafeFont(), headerFontSize)
 			h:SetJustifyH("CENTER")
@@ -3619,7 +3868,8 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 	-- Re-anchor the texts every call (handles window growth)
 	for i, h in ipairs(content.headerTexts) do
 		h:ClearAllPoints()
-		h:SetPoint("TOPLEFT", headerFrame, "TOPLEFT", columnOffsets[i], 0)
+		h:SetPoint("TOPLEFT", headerFrame, "TOPLEFT", columnOffsets[i] or 0, 0)
+        h:SetText(mixedShuffleLayouts and "" or (headers[i] or ""))
 	end
 
 	-- If no history, show a placeholder.
@@ -3685,16 +3935,52 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 			
 			local rowFontStrings = {}
 			local columns = formatMatch(match)
+            local rowOffsets, rowWidths = columnOffsets, columnWidths
+            local rowHeaders = headers
+            if mixedShuffleLayouts and UsesCompactShuffleHeadings(match) then
+                rowOffsets, rowWidths, rowHeaders = shuffleOffsets, shuffleWidths, shuffleHeaders
+            elseif mixedShuffleLayouts and tabID == 1 and UsesCompactShuffleLayout(match) then
+                rowHeaders = shuffleFinalHeaders
+            end
+            matchFrame.shuffleMetadata = tabID == 1 and UsesCompactShuffleLayout(match) and {} or nil
+            local headingHeight = mixedShuffleLayouts and 18 or 0
+            matchFrame.detailOffset = 14 + headingHeight
+            if matchFrame.shuffleMetadata then
+                function matchFrame:UpdateTeamView()
+                    local offset = content:GetParent():GetHorizontalScroll() or 0
+                    for _, item in ipairs(self.shuffleMetadata) do
+                        item.widget:ClearAllPoints()
+                        item.widget:SetPoint("TOPLEFT", self, "TOPLEFT", item.x + offset, item.y)
+                    end
+                end
+            end
+            if mixedShuffleLayouts then
+                for j, title in ipairs(rowHeaders) do
+                    local heading = matchFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+                    heading:SetFont(GetUnicodeSafeFont(), headerFontSize)
+                    heading:SetPoint("TOPLEFT", matchFrame, "TOPLEFT", rowOffsets[j], -2)
+                    heading:SetWidth(rowWidths[j] or 60)
+                    heading:SetWordWrap(false)
+                    heading:SetText(title)
+                    table.insert(matchFrame.fontStrings, heading)
+                    if matchFrame.shuffleMetadata then
+                        table.insert(matchFrame.shuffleMetadata, {widget = heading, x = rowOffsets[j], y = -2})
+                    end
+                end
+            end
 			for j, colText in ipairs(columns) do
 				local fs = matchFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 				fs:SetFont(GetUnicodeSafeFont(), entryFontSize)
 				fs:SetJustifyH("LEFT")
-				fs:SetPoint("TOPLEFT", matchFrame, "TOPLEFT", columnOffsets[j], -2)
-				fs:SetWidth(columnWidths[j] or 60)  -- Fallback in case
+				fs:SetPoint("TOPLEFT", matchFrame, "TOPLEFT", rowOffsets[j], -2 - headingHeight)
+				fs:SetWidth(rowWidths[j] or 60)  -- Fallback in case
 				fs:SetWordWrap(false)  -- Optional: disable wrapping if you want single-line
 				fs:SetText(tostring(colText or ""))
 				table.insert(matchFrame.fontStrings, fs)
 				table.insert(rowFontStrings, fs)
+                if matchFrame.shuffleMetadata then
+                    table.insert(matchFrame.shuffleMetadata, {widget = fs, x = rowOffsets[j], y = -2 - headingHeight})
+                end
 	
 				-- Color code column one if necessary.
 				if j == 1 then
@@ -3722,7 +4008,8 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 				end
 			end
 	
-			local rowHeight = CalculateRowHeight(rowFontStrings, 4)
+            if matchFrame.UpdateTeamView then matchFrame:UpdateTeamView() end
+			local rowHeight = CalculateRowHeight(rowFontStrings, 4) + headingHeight
 			matchFrame:SetHeight(rowHeight)
 			matchFrame.baseHeight = rowHeight
 			matchFrame:SetClipsChildren(true)
@@ -3750,22 +4037,24 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 				end
 			end
 	
-			-- Create the nested table (for match details) and parent it to the row.
-			local nestedTable = CreateNestedTable(matchFrame, match.playerStats or {}, match.teamFaction, match.isInitial, match.isMissedGame, content, match, tabID)
-			nestedTable:SetParent(matchFrame)
-			nestedTable:SetPoint("TOPLEFT", matchFrame, "TOPLEFT", 0, -14)
-			nestedTable:SetFrameStrata("HIGH")
-			nestedTable:SetFrameLevel(22)
-			nestedTable:Hide()
-			nestedTable:UpdateTeamView()
-			matchFrame.nestedTable = nestedTable
-	
-			-- Set a click handler for the row to toggle its nested table and reflow all rows.
-			matchFrame:SetScript("OnMouseUp", function()
-				ReflowRows(content)
-				ToggleNestedTable(matchFrame, nestedTable, content)
-			end)
-			
+            -- Building hidden detail tables for the entire history can exhaust WoW's
+            -- script budget. Construct only the requested row, then reuse it on reopen.
+            matchFrame:SetScript("OnMouseUp", function()
+                local nestedTable = matchFrame.nestedTable
+                if not nestedTable then
+                    nestedTable = CreateNestedTable(matchFrame, match.playerStats or {}, match.teamFaction,
+                        match.isInitial, match.isMissedGame, content, match, tabID)
+                    nestedTable:SetParent(matchFrame)
+                    nestedTable:SetPoint("TOPLEFT", matchFrame, "TOPLEFT", 0, -(matchFrame.detailOffset or 14))
+                    nestedTable:SetFrameStrata("HIGH")
+                    nestedTable:SetFrameLevel(22)
+                    nestedTable:Hide()
+                    nestedTable:UpdateTeamView()
+                    matchFrame.nestedTable = nestedTable
+                end
+                ToggleNestedTable(matchFrame, nestedTable, content)
+            end)
+
 			content.matchFrameByID[frameKey] = matchFrame
 			table.insert(content.matchFrames, matchFrame)
 		end
@@ -3952,52 +4241,47 @@ function RSTATS.OpenPlayerDetails(stats, matchEntry)
     frame:Show()
 end
 
+local PLAYER_ACHIEVEMENT_ICON_SIZE = 8
+
+local function CreatePlayerAchievementIcon(parent, playerName, iconSize)
+    if type(C_AddOns) ~= "table" or type(C_AddOns.GetAddOnEnableState) ~= "function"
+        or C_AddOns.GetAddOnEnableState("RatedStats_Achiev", nil) <= 0
+        or type(_G.RSTATS_Achiev_GetHighestPvpRank) ~= "function"
+        or type(_G.RSTATS_Achiev_AddAchievementInfoToTooltip) ~= "function" then
+        return nil
+    end
+
+    local iconPath, _, tint = _G.RSTATS_Achiev_GetHighestPvpRank(playerName)
+    if not iconPath then return nil end
+
+    local button = CreateFrame("Button", nil, parent)
+    button:SetSize(iconSize, iconSize)
+    local texture = button:CreateTexture(nil, "OVERLAY")
+    texture:SetAllPoints()
+    texture:SetTexture(iconPath)
+    if type(tint) == "table" then
+        texture:SetVertexColor(tint[1] or 1, tint[2] or 1, tint[3] or 1)
+    else
+        texture:SetVertexColor(1, 1, 1)
+    end
+    button:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        local baseName, realm = strsplit("-", playerName)
+        _G.RSTATS_Achiev_AddAchievementInfoToTooltip(GameTooltip, baseName, realm or GetRealmName())
+        GameTooltip:Show()
+    end)
+    button:SetScript("OnLeave", GameTooltip_Hide)
+    return button
+end
+
 function RSTATS.CreateClickableName(parent, stats, matchEntry, x, y, columnWidth, rowHeight)
   local playerName = stats.name
-
-  -- RatedStats_Achiev (optional): show highest PvP achievement icon if available
-  local achievIconPath, achievIconTint
-
-  if type(C_AddOns) == "table" and type(C_AddOns.GetAddOnEnableState) == "function" then
-      if C_AddOns.GetAddOnEnableState("RatedStats_Achiev", nil) > 0
-          and type(_G.RSTATS_Achiev_GetHighestPvpRank) == "function"
-          and type(_G.RSTATS_Achiev_AddAchievementInfoToTooltip) == "function"
-      then
-          achievIconPath, _, achievIconTint = _G.RSTATS_Achiev_GetHighestPvpRank(playerName)
-      end
-  end
-
   local nameOffsetX = 0
-  local iconSize = 8
-
-  -- If we have an icon, place it inside the Character column and nudge the name right
-  if achievIconPath then
+  local iconSize = PLAYER_ACHIEVEMENT_ICON_SIZE
+  local iconBtn = CreatePlayerAchievementIcon(parent, playerName, iconSize)
+  if iconBtn then
       nameOffsetX = (iconSize * 0.5) + 2
-
-      local iconBtn = CreateFrame("Button", nil, parent)
-      iconBtn:SetSize(iconSize, iconSize)
-      iconBtn:SetPoint("CENTER", parent, "TOPLEFT", x + (iconSize * 0.5) + 2, y - rowHeight/2)
-
-      local iconTex = iconBtn:CreateTexture(nil, "OVERLAY")
-      iconTex:SetAllPoints()
-      iconTex:SetTexture(achievIconPath)
-
-      if achievIconTint and type(achievIconTint) == "table" then
-          iconTex:SetVertexColor(achievIconTint[1] or 1, achievIconTint[2] or 1, achievIconTint[3] or 1)
-      else
-          iconTex:SetVertexColor(1, 1, 1)
-      end
-
-      iconBtn:SetScript("OnEnter", function(self)
-          GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-          local baseName, realm = strsplit("-", playerName)
-          realm = realm or GetRealmName()
-          _G.RSTATS_Achiev_AddAchievementInfoToTooltip(GameTooltip, baseName, realm)
-          GameTooltip:Show()
-      end)
-      iconBtn:SetScript("OnLeave", function()
-          GameTooltip:Hide()
-      end)
+      iconBtn:SetPoint("CENTER", parent, "TOPLEFT", x + nameOffsetX, y - rowHeight/2)
   end
 
   local nameText = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -4024,7 +4308,350 @@ function RSTATS.CreateClickableName(parent, stats, matchEntry, x, y, columnWidth
   return nameText
 end
 
+local function HexToRGB01(hex)
+    if type(hex) ~= "string" then return nil end
+    hex = hex:gsub("^|cff", ""):gsub("^#", "")
+    if #hex == 8 then
+        -- if someone ever feeds AARRGGBB, drop AA
+        hex = hex:sub(3)
+    end
+    if #hex ~= 6 then return nil end
+    local r = tonumber(hex:sub(1, 2), 16)
+    local g = tonumber(hex:sub(3, 4), 16)
+    local b = tonumber(hex:sub(5, 6), 16)
+    if not (r and g and b) then return nil end
+    return r / 255, g / 255, b / 255
+end
+
+local function GetPlayerHighlightColor()
+    local addonHex = (RSTATS.Config and RSTATS.Config.ThemeColor) or COLOR_HEX
+    local r, g, b = HexToRGB01(addonHex)
+    if r then return r, g, b end
+    local themeR, themeG, themeB = Config:GetThemeColor()
+    return themeR, themeG, themeB
+end
+
+local function BuildRankMap(players, field)
+    local items = {}
+    for _, p in ipairs(players) do
+        local v = p and ComparableScoreNumber(p[field])
+        if v ~= nil then
+            items[#items + 1] = { p = p, v = v }
+        end
+    end
+
+    table.sort(items, function(a, b)
+        return a.v > b.v
+    end)
+
+    local map = {}
+    local lastV, rank = nil, 0
+    for idx, it in ipairs(items) do
+        if lastV == nil or it.v ~= lastV then
+            rank = idx
+            lastV = it.v
+        end
+        map[it.p] = rank
+    end
+    return map, #items
+end
+
+local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
+    local panel = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    local final = IsFinalSoloShuffleEntry(matchEntry)
+    local viewportWidth = math.max(1, (content:GetParent():GetWidth() or parent:GetWidth()) - 12)
+    local width = math.min(900, viewportWidth)
+    local alignRight = false
+    local layout, playerRows = {}, {}
+    local iconSize = 12 -- Shared by the achievement badge and the other Shuffle icons.
+    panel:SetWidth(viewportWidth)
+    panel:SetFrameStrata("HIGH")
+    panel:SetFrameLevel(22)
+
+    local function label(text, x, y, w, highlight)
+        local fs = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        fs:SetFont(GetUnicodeSafeFont(), highlight and 10 or entryFontSize)
+        fs:SetPoint("TOPLEFT", panel, "TOPLEFT", x, -y)
+        fs:SetWidth(w)
+        fs:SetHeight(16)
+        fs:SetWordWrap(false)
+        fs:SetJustifyH("LEFT")
+        fs:SetText(text)
+        layout[#layout + 1] = {widget = fs, x = x / width, y = y, width = w / width, alignRight = alignRight}
+        return fs
+    end
+
+    local function number(value, signed, abbreviated)
+        local n = ComparableScoreNumber(value)
+        if n == nil then return "-" end
+        if abbreviated then return FormatNumber(n) end
+        if signed and n > 0 then return "+" .. tostring(n) end
+        return tostring(n)
+    end
+
+    local localPlayerKey = GetUnitNameRealmKey("player")
+    local function rating(player, change)
+        local isLocalPlayer = localPlayerKey and GetScoreInfoNameRealmKey(ReadableScoreValue(player.name)) == localPlayerKey
+        if change then
+            local mmrChange = isLocalPlayer and GetShuffleMMRChange(player) or nil
+            return number(player.ratingChange, true) .. " / " .. number(mmrChange, true)
+        end
+        local mmr = isLocalPlayer and ComparableScoreNumber(player.postmatchMMR) or nil
+        if not mmr or mmr <= 0 then
+            mmr = ComparableScoreNumber(player.prematchMMR)
+        end
+        if mmr and mmr <= 0 then mmr = nil end
+        return number(player.newrating) .. " / " .. number(mmr)
+    end
+
+    local function playerName(player)
+        local name = ReadableScoreValue(player.name) or "Unknown"
+        local button = CreateFrame("Button", nil, panel)
+        button:SetHeight(16)
+        local fs = button:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        fs:SetFont(GetUnicodeSafeFont(), entryFontSize)
+        fs:SetAllPoints()
+        fs:SetWordWrap(false)
+        fs:SetJustifyH("LEFT")
+        fs:SetText(name)
+        local key = GetScoreInfoNameRealmKey(name)
+        if key == GetUnitNameRealmKey("player") then
+            fs:SetTextColor(GetPlayerHighlightColor())
+        else
+            local class = ReadableScoreValue(player.class)
+            for token, localized in pairs(LOCALIZED_CLASS_NAMES_MALE or {}) do
+                if class == localized or class == token then
+                    local color = RAID_CLASS_COLORS and RAID_CLASS_COLORS[token]
+                    if color then fs:SetTextColor(color.r, color.g, color.b) end
+                    break
+                end
+            end
+        end
+        button:SetScript("OnEnter", function()
+            GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
+            GameTooltip:SetText(name)
+            GameTooltip:AddLine("Click to copy name and see loadout", 1, 1, 1)
+            GameTooltip:Show()
+        end)
+        button:SetScript("OnLeave", GameTooltip_Hide)
+        button:SetScript("OnClick", function() RSTATS.OpenPlayerDetails(player, matchEntry) end)
+        return button
+    end
+
+    local friendly, enemy, unknown = {}, {}, {}
+    for _, player in ipairs(playerStats) do
+        if player.isFriendly == true then
+            friendly[#friendly + 1] = player
+        elseif player.isFriendly == false then
+            enemy[#enemy + 1] = player
+        else
+            unknown[#unknown + 1] = player
+        end
+    end
+
+    local function rosterIcon(icon, tooltip)
+        local button = CreateFrame("Button", nil, panel)
+        local path, crop = icon:match("^|T([^:|]+):%d+:%d+(.-)|t$")
+        if path then
+            local texture = button:CreateTexture(nil, "OVERLAY")
+            texture:SetAllPoints()
+            texture:SetTexture(path)
+            -- Preserve the atlas crop from the legacy inline icon.
+            local textureWidth, textureHeight, left, right, top, bottom =
+                crop:match("^:%-?%d+:%-?%d+:(%d+):(%d+):(%d+):(%d+):(%d+):(%d+)$")
+            textureWidth, textureHeight = tonumber(textureWidth), tonumber(textureHeight)
+            if textureWidth and textureWidth > 0 and textureHeight and textureHeight > 0 then
+                texture:SetTexCoord(tonumber(left) / textureWidth, tonumber(right) / textureWidth,
+                    tonumber(top) / textureHeight, tonumber(bottom) / textureHeight)
+            end
+        else
+            local placeholder = button:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+            placeholder:SetFont(GetUnicodeSafeFont(), entryFontSize)
+            placeholder:SetAllPoints()
+            placeholder:SetText("-")
+        end
+        button:SetScript("OnEnter", function()
+            GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
+            GameTooltip:SetText(tooltip)
+            GameTooltip:Show()
+        end)
+        button:SetScript("OnLeave", GameTooltip_Hide)
+        return button
+    end
+
+    local function rosterPlayer(player, x, y, w)
+        local race = ReadableScoreValue(player.race)
+        local class = ReadableScoreValue(player.class)
+        local spec = ReadableScoreValue(player.spec)
+        local role = ReadableScoreValue(player.role)
+        local roleText = roleTooltips[role]
+        local specIcon = GetSpecIcon(class, spec)
+        local icons = {
+            rosterIcon(raceIcons[race] or "-", race and race ~= "-" and race or "Race unavailable"),
+            rosterIcon(classIcons[class] or "-", class and class ~= "-" and class or "Class unavailable"),
+            rosterIcon(specIcon ~= spec and specIcon or "-", spec and spec ~= "-" and spec or "Spec unavailable"),
+            rosterIcon(roleIcons[role] or "-", roleText and roleText ~= "-" and roleText or "Role unavailable"),
+        }
+        local name = ReadableScoreValue(player.name)
+        local achievement = name and CreatePlayerAchievementIcon(panel, name, iconSize)
+        if achievement then icons[#icons + 1] = achievement end
+        playerRows[#playerRows + 1] = {
+            x = x / width, y = y, width = w / width, alignRight = alignRight,
+            icons = icons, name = playerName(player),
+        }
+    end
+
+    local function roster(players, x, w)
+        for i, player in ipairs(players) do
+            rosterPlayer(player, x, 18 + (i - 1) * 20, w)
+        end
+    end
+
+    local rosterRows = #unknown > 0 and #playerStats or math.max(#friendly, #enemy)
+    local rosterHeight = 18 + rosterRows * 20
+    panel:SetHeight(rosterHeight + (final and (46 + #playerStats * 18) or 4))
+
+    if #unknown > 0 then
+        label("Round lineup unavailable", 4, 0, width - 8, true)
+        roster(playerStats, 4, width - 8)
+    else
+        local half = width / 2
+        label(final and "Round 6 - Your team" or "Your team", 4, 0, half - 8, true)
+        roster(friendly, 4, half - 8)
+        alignRight = true
+        label(final and "Round 6 - Opponents" or "Opponents", half + 4, 0, half - 8, true)
+        roster(enemy, half + 4, half - 8)
+        alignRight = false
+    end
+
+    if final then
+        -- Use the player's role in this match so everyone is ranked on the same metric.
+        local outputField = "damage"
+        for _, player in ipairs(playerStats) do
+            if localPlayerKey and GetScoreInfoNameRealmKey(ReadableScoreValue(player.name)) == localPlayerKey then
+                if roleTooltips[ReadableScoreValue(player.role)] == "Healer" then
+                    outputField = "healing"
+                end
+                break
+            end
+        end
+        local outputLabel = outputField == "healing" and "Healing" or "Damage"
+        label("Match totals - all six rounds (Rounds won, KBs, " .. outputLabel .. ")", 4, rosterHeight + 6, width - 8, true)
+        local columns = {
+            {"Rank", .045}, {"Character", .275}, {"Rounds won", .10, "wins"}, {"KBs", .06, "killingBlows"},
+            {"Damage", .12, "damage"}, {"Healing", .12, "healing"}, {"CR / MMR", .14}, {"CR / MMR change", .14},
+        }
+        local positions, widths, ranks, rankCounts, x = {}, {}, {}, {}, 4
+        for i, column in ipairs(columns) do
+            positions[i], widths[i] = x, (width - 8) * column[2]
+            label(column[1], x, rosterHeight + 26, widths[i])
+            local field = column[3]
+            if field == "wins" or field == "killingBlows" or field == outputField then
+                ranks[i], rankCounts[i] = BuildRankMap(playerStats, field)
+            end
+            x = x + widths[i]
+        end
+
+        local rankedPlayers = {}
+        for _, player in ipairs(playerStats) do
+            rankedPlayers[#rankedPlayers + 1] = {
+                player = player,
+                wins = ComparableScoreNumber(player.wins) or -math.huge,
+                kbs = ComparableScoreNumber(player.killingBlows) or -math.huge,
+                output = ComparableScoreNumber(player[outputField]) or -math.huge,
+                name = ReadableScoreValue(player.name) or "",
+            }
+        end
+        table.sort(rankedPlayers, function(a, b)
+            if a.wins ~= b.wins then return a.wins > b.wins end
+            if a.kbs ~= b.kbs then return a.kbs > b.kbs end
+            if a.output ~= b.output then return a.output > b.output end
+            return a.name < b.name
+        end)
+
+        local rankR, rankG, rankB = GetPlayerHighlightColor()
+        local rank, previous
+        for i, ranked in ipairs(rankedPlayers) do
+            if not previous or ranked.wins ~= previous.wins or ranked.kbs ~= previous.kbs or ranked.output ~= previous.output then
+                rank = i
+            end
+            previous = ranked
+            local player = ranked.player
+            local y = rosterHeight + 44 + (i - 1) * 18
+            label(ranked.wins == -math.huge and "-" or tostring(rank), positions[1], y, widths[1] - 4):SetTextColor(rankR, rankG, rankB)
+            rosterPlayer(player, positions[2], y, widths[2] - 4)
+            local values = {
+                number(player.wins), number(player.killingBlows),
+                number(player.damage, false, true), number(player.healing, false, true),
+                rating(player), rating(player, true),
+            }
+            for j, value in ipairs(values) do
+                local column = j + 2
+                local columnWidth = widths[column] - 4
+                local metricRank = ranks[column] and ranks[column][player]
+                local rankWidth = metricRank and columnWidth * 0.45 or 0
+                label(value, positions[column], y, columnWidth - rankWidth)
+                if metricRank then
+                    local indicator = label(metricRank .. "/" .. rankCounts[column],
+                        positions[column] + columnWidth - rankWidth, y, rankWidth)
+                    indicator:SetFont(GetUnicodeSafeFont(), 7)
+                    indicator:SetJustifyH("RIGHT")
+                    indicator:SetTextColor(rankR, rankG, rankB)
+                end
+            end
+        end
+    end
+
+    function panel:UpdateTeamView()
+        local visibleWidth = math.max(1, (content:GetParent():GetWidth() or parent:GetWidth()) - 12)
+        local currentWidth = math.min(900, visibleWidth)
+        self:ClearAllPoints()
+        self:SetWidth(visibleWidth)
+        local scrollOffset = content:GetParent():GetHorizontalScroll() or 0
+        self:SetPoint("TOPLEFT", parent, "TOPLEFT", scrollOffset, -(parent.detailOffset or 14))
+        for _, item in ipairs(parent.shuffleMetadata or {}) do
+            item.widget:ClearAllPoints()
+            item.widget:SetPoint("TOPLEFT", parent, "TOPLEFT", item.x + scrollOffset, item.y)
+        end
+        -- Match the first legacy enemy column in full view. In compact view,
+        -- keep both rosters on the visible page and give each one half the width.
+        local rosterStart = currentWidth * 0.5 + 4
+        local opponentsStart = visibleWidth * 0.5 + 4
+        if not UIConfig.isCompact then
+            opponentsStart = math.min(parent:GetWidth() * 0.5 + 5, visibleWidth - currentWidth * 0.5 + 4)
+        end
+        for _, item in ipairs(layout) do
+            item.widget:ClearAllPoints()
+            local rightOffset = item.alignRight and (opponentsStart - rosterStart) or 0
+            item.widget:SetPoint("TOPLEFT", self, "TOPLEFT", item.x * currentWidth + rightOffset, -item.y)
+            item.widget:SetWidth(item.width * currentWidth)
+        end
+        for _, row in ipairs(playerRows) do
+            local rightOffset = row.alignRight and (opponentsStart - rosterStart) or 0
+            local x = row.x * currentWidth + rightOffset
+            local rowWidth = row.width * currentWidth
+            local iconWidth = iconSize + 2
+            for i, icon in ipairs(row.icons) do
+                icon:ClearAllPoints()
+                icon:SetPoint("TOPLEFT", self, "TOPLEFT", x + (i - 1) * iconWidth, -row.y - (18 - iconSize) / 2)
+                icon:SetSize(iconSize, iconSize)
+            end
+            local nameOffset = 5 * iconWidth + 4 -- Keep the achievement slot even when it is empty.
+            row.name:ClearAllPoints()
+            row.name:SetPoint("TOPLEFT", self, "TOPLEFT", x + nameOffset, -row.y - 1)
+            row.name:SetWidth(math.max(1, rowWidth - nameOffset))
+        end
+    end
+    panel:UpdateTeamView()
+    panel:Hide()
+    RSTATS.LastNestedTable = panel
+    return panel
+end
+
 function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMissedGame, content, matchEntry, tabID)
+    if tabID == 1 and UsesCompactShuffleLayout(matchEntry) then
+        return CreateShuffleDetails(parent, playerStats, content, matchEntry)
+    end
     local nestedName = parent:GetName() and ("NestedTable_" .. parent:GetName()) or nil
     local nestedTable = CreateFrame("Frame", nestedName, parent, "BackdropTemplate")
 
@@ -4347,66 +4974,11 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
         end
     end
     
-    -- ------------------------------------------------------------------
-    -- Theme colour (kept - removing Config:GetThemeColor causes a lua error)
-    -- BUT: row highlighting should use the addon text colour (COLOR_HEX),
-    -- not the theme (00ccff).
-    -- ------------------------------------------------------------------
-    local themeR, themeG, themeB = Config:GetThemeColor()
-
-    local function HexToRGB01(hex)
-        if type(hex) ~= "string" then return nil end
-        hex = hex:gsub("^|cff", ""):gsub("^#", "")
-        if #hex == 8 then
-            -- if someone ever feeds AARRGGBB, drop AA
-            hex = hex:sub(3)
-        end
-        if #hex ~= 6 then return nil end
-        local r = tonumber(hex:sub(1, 2), 16)
-        local g = tonumber(hex:sub(3, 4), 16)
-        local b = tonumber(hex:sub(5, 6), 16)
-        if not (r and g and b) then return nil end
-        return r / 255, g / 255, b / 255
-    end
-
-    local highlightR, highlightG, highlightB = themeR, themeG, themeB
-    do
-        -- Use the actual addon text colour (core.lua -> RSTATS.Config.ThemeColor = "b69e86")
-        local addonHex = (RSTATS and RSTATS.Config and RSTATS.Config.ThemeColor) or COLOR_HEX
-        local r, g, b = HexToRGB01(addonHex)
-        if r then
-            highlightR, highlightG, highlightB = r, g, b
-        end
-    end
+    local highlightR, highlightG, highlightB = GetPlayerHighlightColor()
 
     -- ------------------------------------------------------------------
     -- Damage/Healing rank indicators (team + overall)
     -- ------------------------------------------------------------------
-    local function BuildRankMap(players, field)
-        local items = {}
-        for _, p in ipairs(players) do
-            local v = p and ComparableScoreNumber(p[field])
-            if v ~= nil then
-                items[#items + 1] = { p = p, v = v }
-            end
-        end
-
-        table.sort(items, function(a, b)
-            return a.v > b.v
-        end)
-
-        local map = {}
-        local lastV, rank = nil, 0
-        for idx, it in ipairs(items) do
-            if lastV == nil or it.v ~= lastV then
-                rank = idx
-                lastV = it.v
-            end
-            map[it.p] = rank
-        end
-        return map
-    end
-
     local function CreateRankIndicator(parentFrame, xPos, width, rowOffset, rowHeight, teamRank, teamSize, overallRank, totalSize, fontSize, highlightRow)
         if not (teamRank and overallRank and teamSize and totalSize) then
             return
@@ -4468,9 +5040,10 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     local enemyTeamSize     = #enemyPlayers
     local totalPlayerCount  = #allPlayers
 
-    -- CR/MMR display helpers. SS rounds 1-5 may contain protected scoreboard values:
-    -- display what was stored, but do not force numeric conversion or calculate deltas.
+    -- Older in-memory rows may still contain protected values; show unavailable as "-".
     local function FormatScoreText(value)
+        value = ReadableScoreValue(value)
+        if value == nil then return "-" end
         local okNumber, numberValue = pcall(tonumber, value)
         if okNumber and numberValue then
             local okText, textValue = pcall(tostring, numberValue)
@@ -4488,6 +5061,8 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     end
 
     local function FormatSignedNumber(value)
+        value = ReadableScoreValue(value)
+        if value == nil then return "-" end
         local okNumber, numberValue = pcall(tonumber, value)
         if okNumber and numberValue then
             local okSigned, signedText = pcall(function()
@@ -4889,11 +5464,10 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
 	-- but shift X by `offset` pixels.
 	self:ClearAllPoints()
 	self:SetWidth(baseWidth)
-	self:SetPoint("TOPLEFT", self:GetParent(), "TOPLEFT", 0, -14)
+	self:SetPoint("TOPLEFT", self:GetParent(), "TOPLEFT", 0, -(self:GetParent().detailOffset or 14))
 	end
 
-    SaveData()
-
+    -- Rendering details does not change saved match data.
 	RSTATS.LastNestedTable = nestedTable
 	nestedTable:UpdateTeamView()
 
@@ -5823,6 +6397,14 @@ function Config:CreateMenu()
     -- Logic to toggle state
     UIConfig.ActiveTeamView = 1  -- Default view
     local function UpdateArrowState()
+        local activeContent = RSTATS.ScrollContents[ACTIVE_TAB_ID or UIConfig.selectedTab or 1]
+        if activeContent and activeContent.shuffleNeutralView then
+            UIConfig.TeamLeftButton:Hide()
+            UIConfig.TeamRightButton:Hide()
+            return
+        end
+        UIConfig.TeamLeftButton:SetShown(UIConfig.isCompact)
+        UIConfig.TeamRightButton:SetShown(UIConfig.isCompact)
         if UIConfig.ActiveTeamView == 1 then
             UIConfig.TeamLeftButton:Disable()
             UIConfig.TeamRightButton:Enable()
@@ -5846,6 +6428,14 @@ function Config:CreateMenu()
 	function UpdateCompactHeaders(tabID)
 	local content     = RSTATS.ScrollContents[tabID]
 	if not content or not content.headerFrame then return end
+    if tabID == (ACTIVE_TAB_ID or UIConfig.selectedTab) then
+        if content.shuffleNeutralView then
+            UIConfig.ActiveTeamView = 1
+            local sf = RSTATS.ScrollFrames[tabID]
+            if sf then sf:SetHorizontalScroll(0) end
+        end
+        UpdateArrowState()
+    end
 	
 	local off         = content.columnOffsets
 	local splitIdx    = content.splitIndex
@@ -5858,7 +6448,7 @@ function Config:CreateMenu()
 	for i, h in ipairs(headerTexts) do
 		h:ClearAllPoints()
 	
-		if UIConfig.isCompact then
+		if UIConfig.isCompact and not content.shuffleNeutralView then
 			if UIConfig.ActiveTeamView == 1 then
 				-- friendly page: no shift
 				h:SetPoint("TOPLEFT", hf, "TOPLEFT", off[i], 0)
@@ -6216,6 +6806,7 @@ function Config:CreateMenu()
 		-- Refresh every nested table in the now-active scrollFrame
 		RefreshAllNestedTables(RSTATS.ScrollFrames[ACTIVE_TAB_ID])
 		UpdateCompactHeaders(ACTIVE_TAB_ID)
+        UpdateArrowState()
     end
 
     UIConfig.ToggleViewButton:SetScript("OnClick", function()
@@ -6395,7 +6986,7 @@ local function OnPvPMatchEvent(self, event, arg1, arg2)
     end
 end
 
-local function OnSoloShuffleStateChanged(event, ...)
+OnSoloShuffleStateChanged = function(event, ...)
     if not (C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle()) then
         return
     end
@@ -6406,7 +6997,7 @@ local function OnSoloShuffleStateChanged(event, ...)
     end
 
     local state = C_PvP.GetActiveMatchState and C_PvP.GetActiveMatchState()
-    if state ~= Enum.PvPMatchState.PostRound then
+    if state ~= Enum.PvPMatchState.PostRound and event ~= "PVP_MATCH_COMPLETE" then
         return
     end
 
@@ -6434,6 +7025,7 @@ local function OnSoloShuffleStateChanged(event, ...)
     end
 
     local winnerTeamIndex = C_PvP.GetActiveMatchWinner and C_PvP.GetActiveMatchWinner()
+    winnerTeamIndex = ReadableScoreValue(winnerTeamIndex)
     if winnerTeamIndex == nil then
         return
     end

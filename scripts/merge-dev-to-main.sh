@@ -69,7 +69,7 @@ next_main_tag() {
   printf '%s\n' "${candidate}"
 }
 
-echo "[1/8] Fetching ${remote} (including tags)..."
+echo "[1/9] Fetching ${remote} (including tags)..."
 git fetch --prune --tags "${remote}"
 
 for b in "${dev_branch}" "${main_branch}"; do
@@ -80,14 +80,14 @@ for b in "${dev_branch}" "${main_branch}"; do
   fi
 done
 
-echo "[2/8] Fast-forwarding local branches..."
+echo "[2/9] Fast-forwarding local branches..."
 git checkout -q "${dev_branch}"
 git pull --ff-only "${remote}" "${dev_branch}"
 
 git checkout -q "${main_branch}"
 git pull --ff-only "${remote}" "${main_branch}"
 
-echo "[3/8] Calculating diff ${remote}/${main_branch}..${remote}/${dev_branch}..."
+echo "[3/9] Calculating diff ${remote}/${main_branch}..${remote}/${dev_branch}..."
 mapfile -t changed < <(git diff --name-only "${remote}/${main_branch}..${remote}/${dev_branch}" | tr -d '\r')
 if [[ ${#changed[@]} -eq 0 ]]; then
   echo "Nothing to merge: ${dev_branch} has no changes vs ${main_branch}."
@@ -99,7 +99,7 @@ echo "Changed files (${#changed[@]}):"
 printf ' - %s\n' "${changed[@]}"
 
 echo
-echo "[4/8] Spam scan (prints/chat/event/ticker/onupdate)..."
+echo "[4/9] Spam scan (prints/chat/event/ticker/onupdate)..."
 
 spam_hits=0
 
@@ -147,7 +147,7 @@ else
 fi
 
 echo
-echo "[5/8] Merging ${dev_branch} into ${main_branch} (preserve history)..."
+echo "[5/9] Merging ${dev_branch} into ${main_branch} (preserve history)..."
 git checkout -q "${main_branch}"
 # Pre-calc the next main tag
 tag="$(next_main_tag)"
@@ -210,27 +210,33 @@ if git diff --cached --quiet; then
 fi
 
 echo
-echo "[5c] Committing promoted changes..."
+echo "[5c/9] Committing promoted changes..."
 git commit -m "${merge_msg}"
 
 echo
-echo "[6/8] Tagging main with next version (based on latest main tag)..."
+echo "[6/9] Tagging main with next version (based on latest main tag)..."
 echo "Tagging main: ${tag}"
 
 # RatedStats releases commonly use lightweight tags; keep that behavior.
 git tag "${tag}"
 
 echo
-echo "[7/8] Pushing ${main_branch} + tags to ${remote}..."
+echo "[7/9] Pushing ${main_branch} + tags to ${remote}..."
 git push "${remote}" "${main_branch}"
 git push "${remote}" --tags
 
 echo
-echo "Merge complete."
+echo "[8/9] Fast-forwarding ${dev_branch} to released ${main_branch}..."
+git checkout -q "${dev_branch}"
+git merge --ff-only "${main_branch}"
+git push "${remote}" "${dev_branch}"
+
+echo
+echo "Merge complete; ${dev_branch} now matches ${main_branch}."
 git checkout -q "${orig_branch}"
 
 echo
-echo "[8/8] Creating GitHub release..."
+echo "[9/9] Creating GitHub release..."
 
 if command -v gh >/dev/null 2>&1; then
   gh release create "${tag}" \
