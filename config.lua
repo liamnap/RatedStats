@@ -694,6 +694,7 @@ local roundsWon = 0
 -- KB values are still stored later, but are no longer compared for W/L.
 local soloShuffleAlliesNameAtDeath = nil
 local soloShuffleRoundWonAtDeath   = nil
+local OnSoloShuffleStateChanged -- also called by the final completion event
 
 local RBGScoreWidgets = {
     [529]  = 1671, -- Arathi Basin
@@ -867,9 +868,15 @@ local function GetRBGBDuoPartnerNameRealm()
     return nil
 end
 
+local function ReadableScoreValue(value)
+    if issecretvalue and issecretvalue(value) then return nil end
+    return value
+end
+
 local function RawScoreValue(value, keepRaw)
+    value = ReadableScoreValue(value)
     if keepRaw then
-        return value
+        return value or "-"
     end
 
     local ok, numberValue = pcall(tonumber, value)
@@ -877,15 +884,17 @@ local function RawScoreValue(value, keepRaw)
 end
 
 local function ScoreNumberOrZero(value)
+    value = ReadableScoreValue(value)
     local ok, numberValue = pcall(tonumber, value)
     return (ok and numberValue) or 0
 end
 
 local function ComparableScoreNumber(value)
+    value = ReadableScoreValue(value)
     local ok, numberValue = pcall(tonumber, value)
     if not ok or numberValue == nil then return nil end
 
-    -- Stored secret scoreboard values can be displayed, but cannot be sorted or ranked.
+    -- Defensive fallback for values that cannot be compared in this client.
     local canCompare = pcall(function()
         return numberValue < 0
     end)
@@ -1059,7 +1068,7 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
             local nameKey = GetScoreInfoNameRealmKey(name)
             local killingBlows = scoreInfo.killingBlows
             local honorableKills = scoreInfo.honorableKills
-            local deaths = tonumber(scoreInfo.deaths) or 0
+            local deaths = ScoreNumberOrZero(scoreInfo.deaths)
             local honorGained = scoreInfo.honorGained
             local faction = scoreInfo.faction
             local raceName = scoreInfo.raceName
@@ -1072,14 +1081,14 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
             local prematchMMR = scoreInfo.prematchMMR
             local mmrChange = scoreInfo.mmrChange
             local postmatchMMR = scoreInfo.postmatchMMR
-            local talentSpec = scoreInfo.talentSpec
+            local talentSpec = ReadableScoreValue(scoreInfo.talentSpec) or "-"
             local honorLevel = scoreInfo.honorLevel
-            local roleAssigned = scoreInfo.roleAssigned
+            local roleAssigned = ReadableScoreValue(scoreInfo.roleAssigned) or "-"
             local guid = nil
             if not isSoloShuffle then
                 guid = scoreInfo.guid
             end
-            local stats = scoreInfo.stats
+            local stats = ReadableScoreValue(scoreInfo.stats)
 
             -- Solo Shuffle stats can contain secret values during the active match.
             -- Objective text is only relevant for BG/BGB-style maps.
@@ -1135,6 +1144,7 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
     if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() then
         soloShuffleAlliesNameAtDeath  = nil
         soloShuffleRoundWonAtDeath    = nil
+        playerDeathSeen = false
     end
 
 	-- Call CheckPlayerTalents to process talents for new matches
@@ -1258,12 +1268,16 @@ function RefreshDataEvent(self, event, ...)
 		end)
 
     elseif event == "PVP_MATCH_COMPLETE" then
+        -- The last round can transition directly to Complete, without PostRound.
+        OnSoloShuffleStateChanged(event)
         C_Timer.After(1, function()
 			if RSTATS.GetTalents then
 				RSTATS.GetTalents:Stop(false)
 			end
 
             if self.isSoloShuffle then
+                -- Retry once after the scoreboard/party state has settled.
+                OnSoloShuffleStateChanged("PVP_MATCH_COMPLETE")
                 if roundIndex and playerDeathSeen then
                     local cr, mmr = GetCRandMMR(7)
                     local historyTable = Database.SoloShuffleHistory
@@ -2404,6 +2418,8 @@ local specIcons = {
 }
 
 local function GetSpecIcon(className, specName)
+    className = ReadableScoreValue(className)
+    specName = ReadableScoreValue(specName)
     if not specName or specName == "-" then
         return "-"
     end
@@ -2573,10 +2589,10 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                 mmrChange = RawScoreValue(scoreInfo.mmrChange, false)
                 postmatchMMR = RawScoreValue(scoreInfo.postmatchMMR, false)
             end
-            local talentSpec = scoreInfo.talentSpec
+            local talentSpec = ReadableScoreValue(scoreInfo.talentSpec) or "-"
             local honorLevel = RawScoreValue(scoreInfo.honorLevel, isSoloShuffle) or "-"
-            local roleAssigned = scoreInfo.roleAssigned
-            local stats = scoreInfo.stats
+            local roleAssigned = ReadableScoreValue(scoreInfo.roleAssigned) or "-"
+            local stats = ReadableScoreValue(scoreInfo.stats)
             local guid = nil
             if not isSoloShuffle then
                 guid = scoreInfo.guid
@@ -2897,9 +2913,9 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 							-- Solo Shuffle rounds won comes from scoreInfo.stats
 							do
 								local wins = 0
-                                if scoreInfo.stats and #scoreInfo.stats > 0 then
+                                if ReadableScoreValue(scoreInfo.stats) and #scoreInfo.stats > 0 then
                                     -- Solo Shuffle stat column is the first stat entry
-                                    wins = tonumber(scoreInfo.stats[1].pvpStatValue) or 0 -- roundsWon from SS stats Scoreboard, not main Scoreboard
+                                    wins = ComparableScoreNumber(scoreInfo.stats[1].pvpStatValue) or "-" -- roundsWon from SS stats Scoreboard, not main Scoreboard
                                 end
 								playerData.wins = wins
 							end
@@ -2989,7 +3005,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                 end
             end
 			SaveData()
-            playerDeathSeen = false
+            -- Round latch is cleared when its snapshot is consumed, not by this delayed callback.
 		end)
 	end
 
@@ -3028,23 +3044,27 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                     for _, playerData in ipairs(playerStats) do
 						if (guid2 and playerData.guid and playerData.guid == guid2) or playerData.name == name then
                             -- Update the playerData fields with new stats
-                            playerData.killingBlows = tonumber(scoreInfo.killingBlows) or 0
-                            playerData.honorableKills = tonumber(scoreInfo.honorableKills) or 0
-                            playerData.deaths = tonumber(scoreInfo.deaths) or 0
+                            playerData.killingBlows = ScoreNumberOrZero(scoreInfo.killingBlows)
+                            playerData.honorableKills = ScoreNumberOrZero(scoreInfo.honorableKills)
+                            playerData.deaths = ScoreNumberOrZero(scoreInfo.deaths)
+                            playerData.spec = ReadableScoreValue(scoreInfo.talentSpec) or "-"
+                            playerData.role = ReadableScoreValue(scoreInfo.roleAssigned) or "-"
                             playerData.damage = ScoreNumberOrZero(scoreInfo.damageDone)
                             playerData.healing = ScoreNumberOrZero(scoreInfo.healingDone)
-                            playerData.rating = tonumber(scoreInfo.rating) or 0
-                            playerData.ratingChange = tonumber(scoreInfo.ratingChange) or 0
-                            playerData.mmrChange = tonumber(scoreInfo.mmrChange) or 0
-                            playerData.postmatchMMR = tonumber(scoreInfo.postmatchMMR) or 0
-                            playerData.honorLevel = tonumber(scoreInfo.honorLevel) or 0
+                            playerData.rating = ScoreNumberOrZero(scoreInfo.rating)
+                            playerData.ratingChange = ScoreNumberOrZero(scoreInfo.ratingChange)
+                            playerData.newrating = playerData.rating + playerData.ratingChange
+                            playerData.prematchMMR = ScoreNumberOrZero(scoreInfo.prematchMMR)
+                            playerData.mmrChange = ScoreNumberOrZero(scoreInfo.mmrChange)
+                            playerData.postmatchMMR = ScoreNumberOrZero(scoreInfo.postmatchMMR)
+                            playerData.honorLevel = ScoreNumberOrZero(scoreInfo.honorLevel)
 
 							-- Solo Shuffle rounds won comes from scoreInfo.stats
 							do
 								local wins = 0
-                                if scoreInfo.stats and #scoreInfo.stats > 0 then
+                                if ReadableScoreValue(scoreInfo.stats) and #scoreInfo.stats > 0 then
                                     -- Solo Shuffle stat column is the first stat entry
-                                    wins = tonumber(scoreInfo.stats[1].pvpStatValue) or 0 -- roundsWon from SS stats Scoreboard, not main Scoreboard
+                                    wins = ComparableScoreNumber(scoreInfo.stats[1].pvpStatValue) or "-" -- roundsWon from SS stats Scoreboard, not main Scoreboard
                                 end
 								playerData.wins = wins
 							end    
@@ -4468,9 +4488,10 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     local enemyTeamSize     = #enemyPlayers
     local totalPlayerCount  = #allPlayers
 
-    -- CR/MMR display helpers. SS rounds 1-5 may contain protected scoreboard values:
-    -- display what was stored, but do not force numeric conversion or calculate deltas.
+    -- Older in-memory rows may still contain protected values; show unavailable as "-".
     local function FormatScoreText(value)
+        value = ReadableScoreValue(value)
+        if value == nil then return "-" end
         local okNumber, numberValue = pcall(tonumber, value)
         if okNumber and numberValue then
             local okText, textValue = pcall(tostring, numberValue)
@@ -4488,6 +4509,8 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     end
 
     local function FormatSignedNumber(value)
+        value = ReadableScoreValue(value)
+        if value == nil then return "-" end
         local okNumber, numberValue = pcall(tonumber, value)
         if okNumber and numberValue then
             local okSigned, signedText = pcall(function()
@@ -6395,7 +6418,7 @@ local function OnPvPMatchEvent(self, event, arg1, arg2)
     end
 end
 
-local function OnSoloShuffleStateChanged(event, ...)
+OnSoloShuffleStateChanged = function(event, ...)
     if not (C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle()) then
         return
     end
@@ -6406,7 +6429,7 @@ local function OnSoloShuffleStateChanged(event, ...)
     end
 
     local state = C_PvP.GetActiveMatchState and C_PvP.GetActiveMatchState()
-    if state ~= Enum.PvPMatchState.PostRound then
+    if state ~= Enum.PvPMatchState.PostRound and event ~= "PVP_MATCH_COMPLETE" then
         return
     end
 
@@ -6434,6 +6457,7 @@ local function OnSoloShuffleStateChanged(event, ...)
     end
 
     local winnerTeamIndex = C_PvP.GetActiveMatchWinner and C_PvP.GetActiveMatchWinner()
+    winnerTeamIndex = ReadableScoreValue(winnerTeamIndex)
     if winnerTeamIndex == nil then
         return
     end

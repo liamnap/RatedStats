@@ -104,8 +104,13 @@ local function GetActiveSpecID()
     return select(1, GetSpecializationInfo(specIndex))
 end
 
+local function ReadableNumber(v)
+    if issecretvalue and issecretvalue(v) then return nil end
+    return tonumber(v)
+end
+
 local function SafeNumber(v)
-    v = tonumber(v)
+    v = ReadableNumber(v)
     if not v then return 0 end
     return v
 end
@@ -241,17 +246,17 @@ local function GetLatestSeasonPlayerSnapshot(history, seasonStart, seasonFinish)
         return nil, nil
     end
 
-    local cr = tonumber(latestMatch.cr)
-    local mmr = tonumber(latestMatch.friendlyMMR)
-        or tonumber(latestMatch.postmatchMMR)
-        or tonumber(latestMatch.postMatchMMR)
-        or tonumber(latestMatch.mmr)
+    local cr = ReadableNumber(latestMatch.cr)
+    local mmr = ReadableNumber(latestMatch.friendlyMMR)
+        or ReadableNumber(latestMatch.postmatchMMR)
+        or ReadableNumber(latestMatch.postMatchMMR)
+        or ReadableNumber(latestMatch.mmr)
 
     if latestMatch.playerStats then
         for _, ps in ipairs(latestMatch.playerStats) do
             if ps.name == me then
-				local psCR = tonumber(ps.newrating)
-				local psMMR = tonumber(ps.postmatchMMR) or tonumber(ps.postMatchMMR)
+				local psCR = ReadableNumber(ps.newrating)
+				local psMMR = ReadableNumber(ps.postmatchMMR) or ReadableNumber(ps.postMatchMMR)
 	
 				if psCR and psCR > 0 then
 					cr = psCR
@@ -616,7 +621,7 @@ local function BuildTopAllBracketRecords(perChar, valueKey, limit, seasonStart, 
             local t = match.endTime or match.timestamp
             if t and (not seasonStart or t >= seasonStart) and (not seasonFinish or t < seasonFinish) then
                 for _, ps in ipairs(match.playerStats or {}) do
-                    local v = tonumber(ps[valueKey])
+                    local v = ReadableNumber(ps[valueKey])
                     if v and v > 0 and ps.name then
                         tmp[#tmp + 1] = {
                             ps = ps,
@@ -1176,8 +1181,8 @@ local function BuildSeasonMatchSeries(history, seasonStart, seasonFinish)
             local wl = match.friendlyWinLoss or ""
             if wl:find("W") then winsCum = winsCum + 1 end
 
-            local cr = tonumber(match.cr)
-            local mmr = tonumber(match.friendlyMMR) or tonumber(match.postmatchMMR) or tonumber(match.postMatchMMR) or tonumber(match.mmr)
+            local cr = ReadableNumber(match.cr)
+            local mmr = ReadableNumber(match.friendlyMMR) or ReadableNumber(match.postmatchMMR) or ReadableNumber(match.postMatchMMR) or ReadableNumber(match.mmr)
             if mmr and mmr <= 0 then
                 mmr = nil
             end
@@ -1185,8 +1190,8 @@ local function BuildSeasonMatchSeries(history, seasonStart, seasonFinish)
             if match.playerStats then
                 for _, ps in ipairs(match.playerStats) do
                     if ps.name == playerName then
-                        local psCR = tonumber(ps.newrating)
-                        local psMMR = tonumber(ps.postmatchMMR) or tonumber(ps.postMatchMMR)
+                        local psCR = ReadableNumber(ps.newrating)
+                        local psMMR = ReadableNumber(ps.postmatchMMR) or ReadableNumber(ps.postMatchMMR)
 
                         if psCR and psCR > 0 then
                             cr = psCR
