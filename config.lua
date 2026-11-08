@@ -4230,52 +4230,45 @@ function RSTATS.OpenPlayerDetails(stats, matchEntry)
     frame:Show()
 end
 
+local function CreatePlayerAchievementIcon(parent, playerName, iconSize)
+    if type(C_AddOns) ~= "table" or type(C_AddOns.GetAddOnEnableState) ~= "function"
+        or C_AddOns.GetAddOnEnableState("RatedStats_Achiev", nil) <= 0
+        or type(_G.RSTATS_Achiev_GetHighestPvpRank) ~= "function"
+        or type(_G.RSTATS_Achiev_AddAchievementInfoToTooltip) ~= "function" then
+        return nil
+    end
+
+    local iconPath, _, tint = _G.RSTATS_Achiev_GetHighestPvpRank(playerName)
+    if not iconPath then return nil end
+
+    local button = CreateFrame("Button", nil, parent)
+    button:SetSize(iconSize, iconSize)
+    local texture = button:CreateTexture(nil, "OVERLAY")
+    texture:SetAllPoints()
+    texture:SetTexture(iconPath)
+    if type(tint) == "table" then
+        texture:SetVertexColor(tint[1] or 1, tint[2] or 1, tint[3] or 1)
+    else
+        texture:SetVertexColor(1, 1, 1)
+    end
+    button:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        local baseName, realm = strsplit("-", playerName)
+        _G.RSTATS_Achiev_AddAchievementInfoToTooltip(GameTooltip, baseName, realm or GetRealmName())
+        GameTooltip:Show()
+    end)
+    button:SetScript("OnLeave", GameTooltip_Hide)
+    return button
+end
+
 function RSTATS.CreateClickableName(parent, stats, matchEntry, x, y, columnWidth, rowHeight)
   local playerName = stats.name
-
-  -- RatedStats_Achiev (optional): show highest PvP achievement icon if available
-  local achievIconPath, achievIconTint
-
-  if type(C_AddOns) == "table" and type(C_AddOns.GetAddOnEnableState) == "function" then
-      if C_AddOns.GetAddOnEnableState("RatedStats_Achiev", nil) > 0
-          and type(_G.RSTATS_Achiev_GetHighestPvpRank) == "function"
-          and type(_G.RSTATS_Achiev_AddAchievementInfoToTooltip) == "function"
-      then
-          achievIconPath, _, achievIconTint = _G.RSTATS_Achiev_GetHighestPvpRank(playerName)
-      end
-  end
-
   local nameOffsetX = 0
   local iconSize = 8
-
-  -- If we have an icon, place it inside the Character column and nudge the name right
-  if achievIconPath then
+  local iconBtn = CreatePlayerAchievementIcon(parent, playerName, iconSize)
+  if iconBtn then
       nameOffsetX = (iconSize * 0.5) + 2
-
-      local iconBtn = CreateFrame("Button", nil, parent)
-      iconBtn:SetSize(iconSize, iconSize)
-      iconBtn:SetPoint("CENTER", parent, "TOPLEFT", x + (iconSize * 0.5) + 2, y - rowHeight/2)
-
-      local iconTex = iconBtn:CreateTexture(nil, "OVERLAY")
-      iconTex:SetAllPoints()
-      iconTex:SetTexture(achievIconPath)
-
-      if achievIconTint and type(achievIconTint) == "table" then
-          iconTex:SetVertexColor(achievIconTint[1] or 1, achievIconTint[2] or 1, achievIconTint[3] or 1)
-      else
-          iconTex:SetVertexColor(1, 1, 1)
-      end
-
-      iconBtn:SetScript("OnEnter", function(self)
-          GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-          local baseName, realm = strsplit("-", playerName)
-          realm = realm or GetRealmName()
-          _G.RSTATS_Achiev_AddAchievementInfoToTooltip(GameTooltip, baseName, realm)
-          GameTooltip:Show()
-      end)
-      iconBtn:SetScript("OnLeave", function()
-          GameTooltip:Hide()
-      end)
+      iconBtn:SetPoint("CENTER", parent, "TOPLEFT", x + nameOffsetX, y - rowHeight/2)
   end
 
   local nameText = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -4331,9 +4324,8 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
     local viewportWidth = math.max(1, (content:GetParent():GetWidth() or parent:GetWidth()) - 12)
     local width = math.min(900, viewportWidth)
     local alignRight = false
-    local finalHeight = 102 + #playerStats * 18
     local layout = {}
-    panel:SetSize(viewportWidth, final and finalHeight or 58)
+    panel:SetWidth(viewportWidth)
     panel:SetFrameStrata("HIGH")
     panel:SetFrameLevel(22)
 
@@ -4419,7 +4411,7 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
         end))
     end
 
-    local function rosterIcon(icon, tooltip, x, w)
+    local function rosterIcon(icon, tooltip, x, y, w)
         local button = CreateFrame("Button", nil, panel)
         button:SetSize(w, 18)
         local glyph = button:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -4428,7 +4420,7 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
         glyph:SetWordWrap(false)
         glyph:SetJustifyH("LEFT")
         layout[#layout + 1] = {
-            widget = button, x = x / width, y = 18, width = w / width, alignRight = alignRight,
+            widget = button, x = x / width, y = y, width = w / width, alignRight = alignRight,
             glyph = glyph, icon = icon,
         }
         button:SetScript("OnEnter", function()
@@ -4439,24 +4431,42 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
         button:SetScript("OnLeave", GameTooltip_Hide)
     end
 
+    local function rosterPlayer(player, x, y, w)
+        local iconWidth = math.min(18, w / 10)
+        local race = ReadableScoreValue(player.race)
+        local class = ReadableScoreValue(player.class)
+        local spec = ReadableScoreValue(player.spec)
+        local role = ReadableScoreValue(player.role)
+        local roleText = roleTooltips[role]
+        rosterIcon(raceIcons[race] or "-", race and race ~= "-" and race or "Race unavailable", x, y, iconWidth)
+        rosterIcon(classIcons[class] or "-", class and class ~= "-" and class or "Class unavailable", x + iconWidth, y, iconWidth)
+        local specIcon = GetSpecIcon(class, spec)
+        rosterIcon(specIcon ~= spec and specIcon or "-", spec and spec ~= "-" and spec or "Spec unavailable", x + 2 * iconWidth, y, iconWidth)
+        rosterIcon(roleIcons[role] or "-", roleText and roleText ~= "-" and roleText or "Role unavailable", x + 3 * iconWidth, y, iconWidth)
+
+        local iconCount = 4
+        local name = ReadableScoreValue(player.name)
+        local achievement = name and CreatePlayerAchievementIcon(panel, name, math.min(16, iconWidth))
+        if achievement then
+            layout[#layout + 1] = {
+                widget = achievement, x = (x + iconCount * iconWidth) / width, y = y + 1,
+                width = math.min(16, iconWidth) / width, alignRight = alignRight, square = true,
+            }
+            iconCount = iconCount + 1
+        end
+        local nameOffset = iconCount * iconWidth + 4
+        playerName(player, x + nameOffset, y + 1, math.max(1, w - nameOffset))
+    end
+
     local function roster(players, x, w)
-        local slotWidth = w / math.max(3, #players)
-        local iconWidth = math.min(18, slotWidth / 4)
         for i, player in ipairs(players) do
-            local px = x + (i - 1) * slotWidth
-            local race = ReadableScoreValue(player.race)
-            local class = ReadableScoreValue(player.class)
-            local spec = ReadableScoreValue(player.spec)
-            local role = ReadableScoreValue(player.role)
-            local roleText = roleTooltips[role]
-            rosterIcon(raceIcons[race] or "-", race and race ~= "-" and race or "Race unavailable", px, iconWidth)
-            rosterIcon(classIcons[class] or "-", class and class ~= "-" and class or "Class unavailable", px + iconWidth, iconWidth)
-            local specIcon = GetSpecIcon(class, spec)
-            rosterIcon(specIcon ~= spec and specIcon or "-", spec and spec ~= "-" and spec or "Spec unavailable", px + 2 * iconWidth, iconWidth)
-            rosterIcon(roleIcons[role] or "-", roleText and roleText ~= "-" and roleText or "Role unavailable", px + 3 * iconWidth, iconWidth)
-            playerName(player, px, 38, math.max(1, slotWidth - 4))
+            rosterPlayer(player, x, 18 + (i - 1) * 20, w)
         end
     end
+
+    local rosterRows = #unknown > 0 and #playerStats or math.max(#friendly, #enemy)
+    local rosterHeight = 18 + rosterRows * 20
+    panel:SetHeight(rosterHeight + (final and (46 + #playerStats * 18) or 4))
 
     if #unknown > 0 then
         label("Round lineup unavailable", 4, 0, width - 8, true)
@@ -4472,15 +4482,15 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
     end
 
     if final then
-        label("Match totals - all six rounds", 4, 62, width - 8, true)
+        label("Match totals - all six rounds", 4, rosterHeight + 6, width - 8, true)
         local columns = {
-            {"Character", .25}, {"Spec", .07}, {"Rounds won", .10}, {"KBs", .06},
+            {"Character", .32}, {"Rounds won", .10}, {"KBs", .06},
             {"Damage", .12}, {"Healing", .12}, {"CR / MMR", .14}, {"CR / MMR change", .14},
         }
         local positions, widths, x = {}, {}, 4
         for i, column in ipairs(columns) do
             positions[i], widths[i] = x, (width - 8) * column[2]
-            label(column[1], x, 82, widths[i])
+            label(column[1], x, rosterHeight + 26, widths[i])
             x = x + widths[i]
         end
         -- Copy before sorting: persisted roster order and team membership stay intact.
@@ -4490,10 +4500,10 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
             return (ReadableScoreValue(a.name) or "") < (ReadableScoreValue(b.name) or "")
         end)
         for i, player in ipairs(players) do
-            local y = 100 + (i - 1) * 18
-            playerName(player, positions[1], y, widths[1] - 4)
+            local y = rosterHeight + 44 + (i - 1) * 18
+            rosterPlayer(player, positions[1], y, widths[1] - 4)
             local values = {
-                resizeIcon(GetSpecIcon(player.class, player.spec), 16), number(player.wins), number(player.killingBlows),
+                number(player.wins), number(player.killingBlows),
                 number(player.damage, false, true), number(player.healing, false, true),
                 rating(player), rating(player, true),
             }
@@ -4526,7 +4536,12 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
             local rightOffset = item.alignRight and (opponentsStart - rosterStart) or 0
             item.widget:SetPoint("TOPLEFT", self, "TOPLEFT", item.x * currentWidth + rightOffset, -item.y)
             local cellWidth = item.width * currentWidth
-            item.widget:SetWidth(cellWidth)
+            if item.square then
+                local size = math.min(16, cellWidth)
+                item.widget:SetSize(size, size)
+            else
+                item.widget:SetWidth(cellWidth)
+            end
             if item.glyph then
                 local iconSize = math.max(1, math.min(16, math.floor(cellWidth)))
                 item.glyph:SetText(resizeIcon(item.icon, iconSize))
