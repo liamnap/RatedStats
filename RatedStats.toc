@@ -1,5 +1,5 @@
 ## Title: RatedStats
-## Version: v3.331-beta
+## Version: v3.332-beta
 ## Author: liamnap
 ## Interface: 110207, 120000, 120001, 120005, 120105
 ## DefaultState: enabled

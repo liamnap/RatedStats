@@ -2790,6 +2790,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     local entry = {
         matchID = appendHistoryMatchID,
         isSoloShuffle = C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() or false,
+        shuffleLayoutVersion = isSoloShuffle and 2 or nil,
         timestamp = endTime,
         specID = mySpecID,
         specName = mySpecName,
@@ -2957,6 +2958,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
             local ssRoundData = {
                 matchID = appendHistoryMatchID,
                 isSoloShuffle = true,
+                shuffleLayoutVersion = 2,
                 timestamp = endTime,
                 specID = mySpecID,
                 specName = mySpecName,
@@ -3278,7 +3280,8 @@ function ToggleNestedTable(matchFrame, nestedTable, content)
         nestedTable:Show()
         nestedTable:SetParent(matchFrame)
         nestedTable:ClearAllPoints()
-        nestedTable:SetPoint("TOPLEFT", matchFrame, "TOPLEFT", 0, -14)
+        nestedTable:SetPoint("TOPLEFT", matchFrame, "TOPLEFT", 0, -(matchFrame.detailOffset or 14))
+        if nestedTable.UpdateTeamView then nestedTable:UpdateTeamView() end
 		nestedTable:SetFrameStrata("HIGH")
 		nestedTable:SetFrameLevel(22)
         local ntHeight = nestedTable:GetHeight() or 0
@@ -3431,6 +3434,12 @@ end
 -- is parented to the main content frame (not the previous row) so that we
 -- can reposition all rows by calling ReflowRows.
 ------------------------------------------------------------------------------
+-- Opt in only at capture time. Unmarked saved history always keeps its original layout.
+local function UsesCompactShuffleLayout(entry)
+    return entry and entry.isSoloShuffle and entry.shuffleLayoutVersion == 2
+        and not (entry.isInitial or entry.isMissedGame)
+end
+
 function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltered)
     ClearStaleMatchFrames(content)		-- needed for rows to not overlap
 
@@ -3460,6 +3469,16 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 		c(factionHeaderText), c("Raid Leader"), c("Avg CR"), c("MMR"), c("Damage"), c("Healing"), c("Avg Rat Chg"), "",
 		 "", c(factionHeaderText), c("Raid Leader"), c("Avg CR"), c("MMR"), c("Damage"), c("Healing"), c("Avg Rat Chg"), c("Note")
 	}
+    local shuffleHeaders = {c("Win/Loss"), "", c("Rounds won"), c("Map"), c("Round End Time"), c("Round Duration"), c("Note")}
+    local hasModernShuffle, hasLegacyShuffle = false, false
+    if tabID == 1 then
+        for _, entry in ipairs(historyTable) do
+            if UsesCompactShuffleLayout(entry) then hasModernShuffle = true else hasLegacyShuffle = true end
+        end
+    end
+    content.shuffleNeutralView = hasModernShuffle and not hasLegacyShuffle
+    local mixedShuffleLayouts = hasModernShuffle and hasLegacyShuffle
+    if hasModernShuffle and not hasLegacyShuffle then headers = shuffleHeaders end
 	local columnOffsets = {}
 	local spacing = 8
 	local headerFont = GetUnicodeSafeFont()
@@ -3518,6 +3537,14 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
             duoText = match.duoPartner or "Solo"
         end
 
+        if tabID == 1 and UsesCompactShuffleLayout(match) then
+            return {
+                match.friendlyWinLoss or "-", "", scoreText, mapDisplay,
+                date("%a %d %b %Y - %H:%M:%S", match.endTime) or "N/A",
+                match.duration or "N/A", match.note or "",
+            }
+        end
+
         return {
             (match.friendlyWinLoss or "-"),
             duoText,
@@ -3548,6 +3575,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 	
 	-- Step 2: Measure row content using formatMatch
 	for _, match in ipairs(historyTable) do
+        if not mixedShuffleLayouts or not UsesCompactShuffleLayout(match) then
 		local row = formatMatch(match)
 		for i, value in ipairs(row) do
 			tempFS:SetText(tostring(value or ""))
@@ -3557,6 +3585,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 			end
 		end
 	end
+    end
 	
 	-- Step 3: Calculate final offsets using max widths
 	local columnOffsets = {}
@@ -3572,12 +3601,32 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 	end
 	
 	-- ─────── Persist offsets for paging later ───────
+     if tabID == 1 then
+         for i = #headers + 1, 24 do columnOffsets[i] = 0 end
+     end
      content.columnOffsets = columnOffsets
      content.columnWidths  = columnWidths
      content.splitIndex    = splitIndex
 	 content.splitX		   = splitX
      -- ────────────────────────────────────────────────
 	
+    local shuffleWidths, shuffleOffsets = {}, {}
+    if mixedShuffleLayouts then
+        for i, title in ipairs(shuffleHeaders) do
+            tempFS:SetText(title)
+            shuffleWidths[i] = tempFS:GetStringWidth() + spacing
+        end
+        for _, entry in ipairs(historyTable) do
+            if UsesCompactShuffleLayout(entry) then
+                for i, value in ipairs(formatMatch(entry)) do
+                    tempFS:SetText(tostring(value))
+                    shuffleWidths[i] = math.max(shuffleWidths[i], tempFS:GetStringWidth() + spacing)
+                end
+            end
+        end
+        local x = 0
+        for i, width in ipairs(shuffleWidths) do shuffleOffsets[i] = x; x = x + width end
+    end
 	tempFS:Hide()
 
 	local columnWidths = {}
@@ -3617,7 +3666,8 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 	
 		-- Build the label fontStrings only once
 		local headerTexts = {}
-		for i, name in ipairs(headers) do
+		for i = 1, (tabID == 1 and 24 or #headers) do
+            local name = headers[i] or ""
 			local h = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 			h:SetFont(GetUnicodeSafeFont(), headerFontSize)
 			h:SetJustifyH("CENTER")
@@ -3639,7 +3689,8 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 	-- Re-anchor the texts every call (handles window growth)
 	for i, h in ipairs(content.headerTexts) do
 		h:ClearAllPoints()
-		h:SetPoint("TOPLEFT", headerFrame, "TOPLEFT", columnOffsets[i], 0)
+		h:SetPoint("TOPLEFT", headerFrame, "TOPLEFT", columnOffsets[i] or 0, 0)
+        h:SetText(mixedShuffleLayouts and "" or (headers[i] or ""))
 	end
 
 	-- If no history, show a placeholder.
@@ -3705,16 +3756,41 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 			
 			local rowFontStrings = {}
 			local columns = formatMatch(match)
+            local rowOffsets, rowWidths = columnOffsets, columnWidths
+            local rowHeaders = headers
+            if mixedShuffleLayouts and UsesCompactShuffleLayout(match) then
+                rowOffsets, rowWidths, rowHeaders = shuffleOffsets, shuffleWidths, shuffleHeaders
+            end
+            matchFrame.shuffleMetadata = UsesCompactShuffleLayout(match) and {} or nil
+            local headingHeight = mixedShuffleLayouts and 18 or 0
+            matchFrame.detailOffset = 14 + headingHeight
+            if mixedShuffleLayouts then
+                for j, title in ipairs(rowHeaders) do
+                    local heading = matchFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+                    heading:SetFont(GetUnicodeSafeFont(), headerFontSize)
+                    heading:SetPoint("TOPLEFT", matchFrame, "TOPLEFT", rowOffsets[j], -2)
+                    heading:SetWidth(rowWidths[j] or 60)
+                    heading:SetWordWrap(false)
+                    heading:SetText(title)
+                    table.insert(matchFrame.fontStrings, heading)
+                    if matchFrame.shuffleMetadata then
+                        table.insert(matchFrame.shuffleMetadata, {widget = heading, x = rowOffsets[j], y = -2})
+                    end
+                end
+            end
 			for j, colText in ipairs(columns) do
 				local fs = matchFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 				fs:SetFont(GetUnicodeSafeFont(), entryFontSize)
 				fs:SetJustifyH("LEFT")
-				fs:SetPoint("TOPLEFT", matchFrame, "TOPLEFT", columnOffsets[j], -2)
-				fs:SetWidth(columnWidths[j] or 60)  -- Fallback in case
+				fs:SetPoint("TOPLEFT", matchFrame, "TOPLEFT", rowOffsets[j], -2 - headingHeight)
+				fs:SetWidth(rowWidths[j] or 60)  -- Fallback in case
 				fs:SetWordWrap(false)  -- Optional: disable wrapping if you want single-line
 				fs:SetText(tostring(colText or ""))
 				table.insert(matchFrame.fontStrings, fs)
 				table.insert(rowFontStrings, fs)
+                if matchFrame.shuffleMetadata then
+                    table.insert(matchFrame.shuffleMetadata, {widget = fs, x = rowOffsets[j], y = -2 - headingHeight})
+                end
 	
 				-- Color code column one if necessary.
 				if j == 1 then
@@ -3742,7 +3818,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 				end
 			end
 	
-			local rowHeight = CalculateRowHeight(rowFontStrings, 4)
+			local rowHeight = CalculateRowHeight(rowFontStrings, 4) + headingHeight
 			matchFrame:SetHeight(rowHeight)
 			matchFrame.baseHeight = rowHeight
 			matchFrame:SetClipsChildren(true)
@@ -3773,7 +3849,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 			-- Create the nested table (for match details) and parent it to the row.
 			local nestedTable = CreateNestedTable(matchFrame, match.playerStats or {}, match.teamFaction, match.isInitial, match.isMissedGame, content, match, tabID)
 			nestedTable:SetParent(matchFrame)
-			nestedTable:SetPoint("TOPLEFT", matchFrame, "TOPLEFT", 0, -14)
+			nestedTable:SetPoint("TOPLEFT", matchFrame, "TOPLEFT", 0, -(matchFrame.detailOffset or 14))
 			nestedTable:SetFrameStrata("HIGH")
 			nestedTable:SetFrameLevel(22)
 			nestedTable:Hide()
@@ -4044,7 +4120,174 @@ function RSTATS.CreateClickableName(parent, stats, matchEntry, x, y, columnWidth
   return nameText
 end
 
+-- Shuffle round rosters and lobby totals have different scopes. Never present
+-- whole-match combat totals as the performance of the final round's teams.
+local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
+    local panel = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    local final = IsFinalSoloShuffleEntry(matchEntry)
+    local width = math.max(1, (content:GetParent():GetWidth() or parent:GetWidth()) - 12)
+    local finalHeight = 86 + #playerStats * 18
+    local layout = {}
+    panel:SetSize(width, final and finalHeight or 42)
+    panel:SetFrameStrata("HIGH")
+    panel:SetFrameLevel(22)
+
+    local function label(text, x, y, w, highlight)
+        local fs = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        fs:SetFont(GetUnicodeSafeFont(), highlight and 10 or entryFontSize)
+        fs:SetPoint("TOPLEFT", panel, "TOPLEFT", x, -y)
+        fs:SetWidth(w)
+        fs:SetHeight(16)
+        fs:SetWordWrap(false)
+        fs:SetJustifyH("LEFT")
+        fs:SetText(text)
+        layout[#layout + 1] = {widget = fs, x = x / width, y = y, width = w / width}
+        return fs
+    end
+
+    local function number(value, signed, abbreviated)
+        local n = ComparableScoreNumber(value)
+        if n == nil then return "-" end
+        if abbreviated then return FormatNumber(n) end
+        if signed and n > 0 then return "+" .. tostring(n) end
+        return tostring(n)
+    end
+
+    local function rating(player, change)
+        if change then
+            return number(player.ratingChange, true) .. " / " .. number(player.mmrChange, true)
+        end
+        local mmr = ComparableScoreNumber(player.postmatchMMR)
+            or ComparableScoreNumber(player.prematchMMR)
+        return number(player.newrating) .. " / " .. number(mmr)
+    end
+
+    local function playerName(player, x, y, w)
+        local name = ReadableScoreValue(player.name) or "Unknown"
+        local button = CreateFrame("Button", nil, panel)
+        button:SetPoint("TOPLEFT", panel, "TOPLEFT", x, -y)
+        button:SetSize(w, 16)
+        layout[#layout + 1] = {widget = button, x = x / width, y = y, width = w / width}
+        local fs = button:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        fs:SetFont(GetUnicodeSafeFont(), entryFontSize)
+        fs:SetAllPoints()
+        fs:SetWordWrap(false)
+        fs:SetJustifyH("LEFT")
+        fs:SetText(name)
+        local key = GetScoreInfoNameRealmKey(name)
+        if key == GetUnitNameRealmKey("player") then
+            fs:SetTextColor(1, 0.82, 0)
+        else
+            local class = ReadableScoreValue(player.class)
+            for token, localized in pairs(LOCALIZED_CLASS_NAMES_MALE or {}) do
+                if class == localized or class == token then
+                    local color = RAID_CLASS_COLORS and RAID_CLASS_COLORS[token]
+                    if color then fs:SetTextColor(color.r, color.g, color.b) end
+                    break
+                end
+            end
+        end
+        button:SetScript("OnEnter", function()
+            GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
+            GameTooltip:SetText(name)
+            GameTooltip:AddLine("Click to copy name and see loadout", 1, 1, 1)
+            GameTooltip:Show()
+        end)
+        button:SetScript("OnLeave", GameTooltip_Hide)
+        button:SetScript("OnClick", function() RSTATS.OpenPlayerDetails(player, matchEntry) end)
+    end
+
+    local friendly, enemy, unknown = {}, {}, {}
+    for _, player in ipairs(playerStats) do
+        if player.isFriendly == true then
+            friendly[#friendly + 1] = player
+        elseif player.isFriendly == false then
+            enemy[#enemy + 1] = player
+        else
+            unknown[#unknown + 1] = player
+        end
+    end
+
+    local function roster(players, x, w)
+        local slotWidth = w / math.max(3, #players)
+        for i, player in ipairs(players) do
+            local px = x + (i - 1) * slotWidth
+            local icon = GetSpecIcon(player.class, player.spec)
+            if icon == "-" then icon = SafeTableLookup(classIcons, player.class, "-") end
+            label(icon, px, 20, 18)
+            playerName(player, px + 20, 20, math.max(1, slotWidth - 24))
+        end
+    end
+
+    if #unknown > 0 then
+        label("Round lineup unavailable", 4, 0, width - 8, true)
+        roster(playerStats, 4, width - 8)
+    else
+        local half = width / 2
+        label(final and "Round 6 - Your team" or "Your team", 4, 0, half - 8, true)
+        label(final and "Round 6 - Opponents" or "Opponents", half + 4, 0, half - 8, true)
+        roster(friendly, 4, half - 8)
+        roster(enemy, half + 4, half - 8)
+    end
+
+    if final then
+        label("Match totals - all six rounds", 4, 46, width - 8, true)
+        local columns = {
+            {"Character", .25}, {"Spec", .07}, {"Rounds won", .10}, {"KBs", .06},
+            {"Damage", .12}, {"Healing", .12}, {"CR / MMR", .14}, {"CR / MMR change", .14},
+        }
+        local positions, widths, x = {}, {}, 4
+        for i, column in ipairs(columns) do
+            positions[i], widths[i] = x, (width - 8) * column[2]
+            label(column[1], x, 66, widths[i])
+            x = x + widths[i]
+        end
+        -- Copy before sorting: persisted roster order and team membership stay intact.
+        local players = {}
+        for _, player in ipairs(playerStats) do players[#players + 1] = player end
+        table.sort(players, function(a, b)
+            return (ReadableScoreValue(a.name) or "") < (ReadableScoreValue(b.name) or "")
+        end)
+        for i, player in ipairs(players) do
+            local y = 84 + (i - 1) * 18
+            playerName(player, positions[1], y, widths[1] - 4)
+            local values = {
+                GetSpecIcon(player.class, player.spec), number(player.wins), number(player.killingBlows),
+                number(player.damage, false, true), number(player.healing, false, true),
+                rating(player), rating(player, true),
+            }
+            for j, value in ipairs(values) do
+                label(value, positions[j + 1], y, widths[j + 1] - 4)
+            end
+        end
+    end
+
+    function panel:UpdateTeamView()
+        local currentWidth = math.max(1, (content:GetParent():GetWidth() or parent:GetWidth()) - 12)
+        self:ClearAllPoints()
+        self:SetWidth(currentWidth)
+        local scrollOffset = content:GetParent():GetHorizontalScroll() or 0
+        self:SetPoint("TOPLEFT", parent, "TOPLEFT", scrollOffset, -(parent.detailOffset or 14))
+        for _, item in ipairs(parent.shuffleMetadata or {}) do
+            item.widget:ClearAllPoints()
+            item.widget:SetPoint("TOPLEFT", parent, "TOPLEFT", item.x + scrollOffset, item.y)
+        end
+        for _, item in ipairs(layout) do
+            item.widget:ClearAllPoints()
+            item.widget:SetPoint("TOPLEFT", self, "TOPLEFT", item.x * currentWidth, -item.y)
+            item.widget:SetWidth(item.width * currentWidth)
+        end
+    end
+    panel:UpdateTeamView()
+    panel:Hide()
+    RSTATS.LastNestedTable = panel
+    return panel
+end
+
 function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMissedGame, content, matchEntry, tabID)
+    if tabID == 1 and UsesCompactShuffleLayout(matchEntry) then
+        return CreateShuffleDetails(parent, playerStats, content, matchEntry)
+    end
     local nestedName = parent:GetName() and ("NestedTable_" .. parent:GetName()) or nil
     local nestedTable = CreateFrame("Frame", nestedName, parent, "BackdropTemplate")
 
@@ -4912,7 +5155,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
 	-- but shift X by `offset` pixels.
 	self:ClearAllPoints()
 	self:SetWidth(baseWidth)
-	self:SetPoint("TOPLEFT", self:GetParent(), "TOPLEFT", 0, -14)
+	self:SetPoint("TOPLEFT", self:GetParent(), "TOPLEFT", 0, -(self:GetParent().detailOffset or 14))
 	end
 
     SaveData()
@@ -5846,6 +6089,14 @@ function Config:CreateMenu()
     -- Logic to toggle state
     UIConfig.ActiveTeamView = 1  -- Default view
     local function UpdateArrowState()
+        local activeContent = RSTATS.ScrollContents[ACTIVE_TAB_ID or UIConfig.selectedTab or 1]
+        if activeContent and activeContent.shuffleNeutralView then
+            UIConfig.TeamLeftButton:Hide()
+            UIConfig.TeamRightButton:Hide()
+            return
+        end
+        UIConfig.TeamLeftButton:SetShown(UIConfig.isCompact)
+        UIConfig.TeamRightButton:SetShown(UIConfig.isCompact)
         if UIConfig.ActiveTeamView == 1 then
             UIConfig.TeamLeftButton:Disable()
             UIConfig.TeamRightButton:Enable()
@@ -5869,6 +6120,14 @@ function Config:CreateMenu()
 	function UpdateCompactHeaders(tabID)
 	local content     = RSTATS.ScrollContents[tabID]
 	if not content or not content.headerFrame then return end
+    if tabID == (ACTIVE_TAB_ID or UIConfig.selectedTab) then
+        if content.shuffleNeutralView then
+            UIConfig.ActiveTeamView = 1
+            local sf = RSTATS.ScrollFrames[tabID]
+            if sf then sf:SetHorizontalScroll(0) end
+        end
+        UpdateArrowState()
+    end
 	
 	local off         = content.columnOffsets
 	local splitIdx    = content.splitIndex
@@ -5881,7 +6140,7 @@ function Config:CreateMenu()
 	for i, h in ipairs(headerTexts) do
 		h:ClearAllPoints()
 	
-		if UIConfig.isCompact then
+		if UIConfig.isCompact and not content.shuffleNeutralView then
 			if UIConfig.ActiveTeamView == 1 then
 				-- friendly page: no shift
 				h:SetPoint("TOPLEFT", hf, "TOPLEFT", off[i], 0)
@@ -6239,6 +6498,7 @@ function Config:CreateMenu()
 		-- Refresh every nested table in the now-active scrollFrame
 		RefreshAllNestedTables(RSTATS.ScrollFrames[ACTIVE_TAB_ID])
 		UpdateCompactHeaders(ACTIVE_TAB_ID)
+        UpdateArrowState()
     end
 
     UIConfig.ToggleViewButton:SetScript("OnClick", function()
