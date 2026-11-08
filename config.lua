@@ -3174,8 +3174,10 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                             playerData.newrating = playerData.rating + playerData.ratingChange
                             playerData.prematchMMR = ComparableScoreNumber(scoreInfo.prematchMMR) or "-"
                             playerData.postmatchMMR = ComparableScoreNumber(scoreInfo.postmatchMMR) or "-"
-                            playerData.mmrChange = ReadableScoreValue(scoreInfo.mmrChange)
-                            playerData.mmrChange = GetShuffleMMRChange(playerData) or "-"
+                            playerData.mmrChange = ReadableScoreValue(scoreInfo.mmrChange) or "-"
+                            if playerNameKey and GetScoreInfoNameRealmKey(name) == playerNameKey then
+                                playerData.mmrChange = GetShuffleMMRChange(playerData) or "-"
+                            end
                             playerData.honorLevel = ScoreNumberOrZero(scoreInfo.honorLevel)
 
 							-- Solo Shuffle rounds won comes from scoreInfo.stats
@@ -3600,7 +3602,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
     local shuffleHeaders = {c("Win/Loss"), "", c("Rounds won"), c("Map"), c("Round End Time"), c("Round Duration"), c("Note")}
     local shuffleFinalHeaders = {
         c("Win/Loss"), "", c("Score"), c("Map"), c("Match End Time"), c("Duration"), "",
-        c("Scope"), "", c("Avg CR"), c("Avg MMR"), c("Damage"), c("Healing"), c("Avg Rat Chg"), c("Note"),
+        c("Scope"), "", c("Avg CR"), c("Avg Starting MMR"), c("Damage"), c("Healing"), c("Avg Rat Chg"), c("Note"),
     }
     local hasModernShuffle, hasLegacyShuffle, hasFinalShuffle = false, false, false
     if tabID == 1 then
@@ -3706,11 +3708,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
                 local sum = 0
                 for _, player in ipairs(players) do
                     local value = ComparableScoreNumber(player[field])
-                    if field == "postmatchMMR" and (not value or value <= 0) then
-                        value = ComparableScoreNumber(player.prematchMMR)
-                        if value and value <= 0 then value = nil end
-                    end
-                    if value == nil then return "-" end
+                    if value == nil or (field == "prematchMMR" and value <= 0) then return "-" end
                     sum = sum + value
                 end
                 if average then return tostring(math.floor(sum / #players)) end
@@ -3720,7 +3718,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
                 outcomeText, "", scoreText, mapDisplay,
                 date("%a %d %b %Y - %H:%M:%S", match.endTime) or "N/A",
                 match.duration or "N/A", "", "All six rounds", "",
-                aggregate("newrating", true), aggregate("postmatchMMR", true),
+                aggregate("newrating", true), aggregate("prematchMMR", true),
                 aggregate("damage", false, true), aggregate("healing", false, true),
                 aggregate("ratingChange", true), match.note or "",
             }
@@ -4365,11 +4363,14 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
         return tostring(n)
     end
 
+    local localPlayerKey = GetUnitNameRealmKey("player")
     local function rating(player, change)
+        local isLocalPlayer = localPlayerKey and GetScoreInfoNameRealmKey(ReadableScoreValue(player.name)) == localPlayerKey
         if change then
-            return number(player.ratingChange, true) .. " / " .. number(GetShuffleMMRChange(player), true)
+            local mmrChange = isLocalPlayer and GetShuffleMMRChange(player) or nil
+            return number(player.ratingChange, true) .. " / " .. number(mmrChange, true)
         end
-        local mmr = ComparableScoreNumber(player.postmatchMMR)
+        local mmr = isLocalPlayer and ComparableScoreNumber(player.postmatchMMR) or nil
         if not mmr or mmr <= 0 then
             mmr = ComparableScoreNumber(player.prematchMMR)
         end
@@ -4464,7 +4465,7 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
 
         local iconCount = 4
         local name = ReadableScoreValue(player.name)
-        local achievementSize = math.min(PLAYER_ACHIEVEMENT_ICON_SIZE, iconWidth)
+        local achievementSize = math.min(12, iconWidth)
         local achievement = name and CreatePlayerAchievementIcon(panel, name, achievementSize)
         if achievement then
             layout[#layout + 1] = {
@@ -4556,7 +4557,7 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
             item.widget:SetPoint("TOPLEFT", self, "TOPLEFT", item.x * currentWidth + rightOffset, -item.y)
             local cellWidth = item.width * currentWidth
             if item.square then
-                local size = math.min(PLAYER_ACHIEVEMENT_ICON_SIZE, cellWidth)
+                local size = math.max(1, math.min(12, math.floor(cellWidth)))
                 item.widget:SetSize(size, size)
             else
                 item.widget:SetWidth(cellWidth)
