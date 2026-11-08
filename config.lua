@@ -4636,7 +4636,7 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
                 icon:SetPoint("TOPLEFT", self, "TOPLEFT", x + (i - 1) * iconWidth, -row.y - (18 - iconSize) / 2)
                 icon:SetSize(iconSize, iconSize)
             end
-            local nameOffset = #row.icons * iconWidth + 4
+            local nameOffset = 5 * iconWidth + 4 -- Keep the achievement slot even when it is empty.
             row.name:ClearAllPoints()
             row.name:SetPoint("TOPLEFT", self, "TOPLEFT", x + nameOffset, -row.y - 1)
             row.name:SetWidth(math.max(1, rowWidth - nameOffset))
