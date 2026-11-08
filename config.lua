@@ -3562,15 +3562,29 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
 		 "", c(factionHeaderText), c("Raid Leader"), c("Avg CR"), c("MMR"), c("Damage"), c("Healing"), c("Avg Rat Chg"), c("Note")
 	}
     local shuffleHeaders = {c("Win/Loss"), "", c("Rounds won"), c("Map"), c("Round End Time"), c("Round Duration"), c("Note")}
-    local hasModernShuffle, hasLegacyShuffle = false, false
+    local shuffleFinalHeaders = {
+        c("Win/Loss"), "", c("Score"), c("Map"), c("Match End Time"), c("Duration"), "",
+        c("Scope"), "", c("Avg CR"), c("Avg MMR"), c("Damage"), c("Healing"), c("Avg Rat Chg"), c("Note"),
+    }
+    local hasModernShuffle, hasLegacyShuffle, hasFinalShuffle = false, false, false
     if tabID == 1 then
         for _, entry in ipairs(historyTable) do
-            if UsesCompactShuffleHeadings(entry) then hasModernShuffle = true else hasLegacyShuffle = true end
+            if UsesCompactShuffleHeadings(entry) then
+                hasModernShuffle = true
+            elseif UsesCompactShuffleLayout(entry) then
+                hasFinalShuffle = true
+            else
+                hasLegacyShuffle = true
+            end
         end
     end
-    content.shuffleNeutralView = hasModernShuffle and not hasLegacyShuffle
-    local mixedShuffleLayouts = hasModernShuffle and hasLegacyShuffle
-    if hasModernShuffle and not hasLegacyShuffle then headers = shuffleHeaders end
+    content.shuffleNeutralView = (hasModernShuffle or hasFinalShuffle) and not hasLegacyShuffle
+    local mixedShuffleLayouts = (hasModernShuffle and (hasLegacyShuffle or hasFinalShuffle))
+        or (hasLegacyShuffle and hasFinalShuffle)
+    if not hasLegacyShuffle then
+        if hasFinalShuffle then headers = shuffleFinalHeaders
+        elseif hasModernShuffle then headers = shuffleHeaders end
+    end
 	local columnOffsets = {}
 	local spacing = 8
 	local headerFont = GetUnicodeSafeFont()
@@ -3646,6 +3660,33 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
                 outcomeText, "", scoreText, mapDisplay,
                 date("%a %d %b %Y - %H:%M:%S", match.endTime) or "N/A",
                 match.duration or "N/A", match.note or "",
+            }
+        end
+
+        if tabID == 1 and UsesCompactShuffleLayout(match) then
+            local players = match.playerStats or {}
+            local function aggregate(field, average, abbreviated)
+                if #players ~= 6 then return "-" end
+                local sum = 0
+                for _, player in ipairs(players) do
+                    local value = ComparableScoreNumber(player[field])
+                    if field == "postmatchMMR" and (not value or value <= 0) then
+                        value = ComparableScoreNumber(player.prematchMMR)
+                        if value and value <= 0 then value = nil end
+                    end
+                    if value == nil then return "-" end
+                    sum = sum + value
+                end
+                if average then return tostring(math.floor(sum / #players)) end
+                return abbreviated and FormatNumber(sum) or tostring(sum)
+            end
+            return {
+                outcomeText, "", scoreText, mapDisplay,
+                date("%a %d %b %Y - %H:%M:%S", match.endTime) or "N/A",
+                match.duration or "N/A", "", "All six rounds", "",
+                aggregate("newrating", true), aggregate("postmatchMMR", true),
+                aggregate("damage", false, true), aggregate("healing", false, true),
+                aggregate("ratingChange", true), match.note or "",
             }
         end
 
@@ -3864,8 +3905,10 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
             local rowHeaders = headers
             if mixedShuffleLayouts and UsesCompactShuffleHeadings(match) then
                 rowOffsets, rowWidths, rowHeaders = shuffleOffsets, shuffleWidths, shuffleHeaders
+            elseif mixedShuffleLayouts and tabID == 1 and UsesCompactShuffleLayout(match) then
+                rowHeaders = shuffleFinalHeaders
             end
-            matchFrame.shuffleMetadata = UsesCompactShuffleHeadings(match) and {} or nil
+            matchFrame.shuffleMetadata = tabID == 1 and UsesCompactShuffleLayout(match) and {} or nil
             local headingHeight = mixedShuffleLayouts and 18 or 0
             matchFrame.detailOffset = 14 + headingHeight
             if matchFrame.shuffleMetadata then
@@ -4241,10 +4284,12 @@ end
 local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
     local panel = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     local final = IsFinalSoloShuffleEntry(matchEntry)
-    local width = math.max(1, math.min(900, (content:GetParent():GetWidth() or parent:GetWidth()) - 12))
+    local viewportWidth = math.max(1, (content:GetParent():GetWidth() or parent:GetWidth()) - 12)
+    local width = math.min(900, viewportWidth)
+    local alignRight = false
     local finalHeight = 86 + #playerStats * 18
     local layout = {}
-    panel:SetSize(width, final and finalHeight or 42)
+    panel:SetSize(viewportWidth, final and finalHeight or 42)
     panel:SetFrameStrata("HIGH")
     panel:SetFrameLevel(22)
 
@@ -4257,7 +4302,7 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
         fs:SetWordWrap(false)
         fs:SetJustifyH("LEFT")
         fs:SetText(text)
-        layout[#layout + 1] = {widget = fs, x = x / width, y = y, width = w / width}
+        layout[#layout + 1] = {widget = fs, x = x / width, y = y, width = w / width, alignRight = alignRight}
         return fs
     end
 
@@ -4283,7 +4328,7 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
         local button = CreateFrame("Button", nil, panel)
         button:SetPoint("TOPLEFT", panel, "TOPLEFT", x, -y)
         button:SetSize(w, 16)
-        layout[#layout + 1] = {widget = button, x = x / width, y = y, width = w / width}
+        layout[#layout + 1] = {widget = button, x = x / width, y = y, width = w / width, alignRight = alignRight}
         local fs = button:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         fs:SetFont(GetUnicodeSafeFont(), entryFontSize)
         fs:SetAllPoints()
@@ -4345,9 +4390,11 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
     else
         local half = width / 2
         label(final and "Round 6 - Your team" or "Your team", 4, 0, half - 8, true)
-        label(final and "Round 6 - Opponents" or "Opponents", half + 4, 0, half - 8, true)
         roster(friendly, 4, half - 8)
+        alignRight = true
+        label(final and "Round 6 - Opponents" or "Opponents", half + 4, 0, half - 8, true)
         roster(enemy, half + 4, half - 8)
+        alignRight = false
     end
 
     if final then
@@ -4383,9 +4430,10 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
     end
 
     function panel:UpdateTeamView()
-        local currentWidth = math.max(1, math.min(900, (content:GetParent():GetWidth() or parent:GetWidth()) - 12))
+        local visibleWidth = math.max(1, (content:GetParent():GetWidth() or parent:GetWidth()) - 12)
+        local currentWidth = math.min(900, visibleWidth)
         self:ClearAllPoints()
-        self:SetWidth(currentWidth)
+        self:SetWidth(visibleWidth)
         local scrollOffset = content:GetParent():GetHorizontalScroll() or 0
         self:SetPoint("TOPLEFT", parent, "TOPLEFT", scrollOffset, -(parent.detailOffset or 14))
         for _, item in ipairs(parent.shuffleMetadata or {}) do
@@ -4394,7 +4442,8 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
         end
         for _, item in ipairs(layout) do
             item.widget:ClearAllPoints()
-            item.widget:SetPoint("TOPLEFT", self, "TOPLEFT", item.x * currentWidth, -item.y)
+            local rightOffset = item.alignRight and (visibleWidth - currentWidth) or 0
+            item.widget:SetPoint("TOPLEFT", self, "TOPLEFT", item.x * currentWidth + rightOffset, -item.y)
             item.widget:SetWidth(item.width * currentWidth)
         end
     end
