@@ -933,14 +933,21 @@ local function ReconcileShuffleHistory(history)
     local me = GetUnitNameRealmKey("player")
     if not me then return end
     for id, final in pairs(byID) do
-        if final and final.shuffleLayoutVersion == 2 and not final.shuffleResultsVerified
+        if final and final.shuffleLayoutVersion == 2
+            and not (final.shuffleResultsVerified and final.shuffleRosterDetailsFilled)
             and IsFinalSoloShuffleEntry(final) and #(final.playerStats or {}) == 6 then
-            local totals, rounds, valid = {}, {}, true
+            local totals, finalPlayers, rounds = {}, {}, {}
+            local valid, hasWins, hasRosterDetails = true, true, true
             for _, player in ipairs(final.playerStats) do
                 local key = GetScoreInfoNameRealmKey(ReadableScoreValue(player.name))
-                local wins = ShuffleScoreboardWins(player)
-                if not key or totals[key] ~= nil or wins == nil then valid = false; break end
-                totals[key] = wins
+                if not key or finalPlayers[key] then valid = false; break end
+                finalPlayers[key] = player
+                totals[key] = ShuffleScoreboardWins(player)
+                if totals[key] == nil then hasWins = false end
+                local spec, role = ReadableScoreValue(player.spec), ReadableScoreValue(player.role)
+                if not spec or spec == "" or spec == "-" or not role or role == "-" or role == 0 or role == "NONE" then
+                    hasRosterDetails = false
+                end
             end
             local previousTime
             for i = 1, 6 do
@@ -955,7 +962,7 @@ local function ReconcileShuffleHistory(history)
                 local teams, allies = {}, 0
                 for _, player in ipairs(row.playerStats) do
                     local key = GetScoreInfoNameRealmKey(ReadableScoreValue(player.name))
-                    if not key or totals[key] == nil or teams[key] ~= nil
+                    if not key or not finalPlayers[key] or teams[key] ~= nil
                         or type(player.isFriendly) ~= "boolean" then valid = false; break end
                     teams[key] = player.isFriendly
                     if player.isFriendly then allies = allies + 1 end
@@ -963,7 +970,23 @@ local function ReconcileShuffleHistory(history)
                 if allies ~= 3 or teams[me] ~= true then valid = false end
                 rounds[i] = {row = row, teams = teams}
             end
-            if valid then
+            if valid and not final.shuffleRosterDetailsFilled then
+                -- Fill missing identity details only after matching the whole lobby.
+                for i = 1, 5 do
+                    for _, player in ipairs(rounds[i].row.playerStats) do
+                        local key = GetScoreInfoNameRealmKey(ReadableScoreValue(player.name))
+                        local finalPlayer = finalPlayers[key]
+                        for _, field in ipairs({"race", "class", "spec", "role"}) do
+                            local value = ReadableScoreValue(player[field])
+                            if not value or value == "" or value == "-" or value == 0 or value == "NONE" then
+                                player[field] = ReadableScoreValue(finalPlayer[field]) or value
+                            end
+                        end
+                    end
+                end
+                final.shuffleRosterDetailsFilled = hasRosterDetails or nil
+            end
+            if valid and hasWins and not final.shuffleResultsVerified then
                 local solution
                 for mask = 0, 63 do
                     local wins, count = {}, {}
@@ -4308,9 +4331,9 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
     local viewportWidth = math.max(1, (content:GetParent():GetWidth() or parent:GetWidth()) - 12)
     local width = math.min(900, viewportWidth)
     local alignRight = false
-    local finalHeight = 86 + #playerStats * 18
+    local finalHeight = 102 + #playerStats * 18
     local layout = {}
-    panel:SetSize(viewportWidth, final and finalHeight or 42)
+    panel:SetSize(viewportWidth, final and finalHeight or 58)
     panel:SetFrameStrata("HIGH")
     panel:SetFrameLevel(22)
 
@@ -4390,18 +4413,48 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
         end
     end
 
-    local function largerIcon(icon)
-        return (icon:gsub("(|T[^:|]+:)%d+:%d+", function(prefix) return prefix .. "16:16" end))
+    local function resizeIcon(icon, size)
+        return (icon:gsub("(|T[^:|]+:)%d+:%d+", function(prefix)
+            return prefix .. size .. ":" .. size
+        end))
+    end
+
+    local function rosterIcon(icon, tooltip, x, w)
+        local button = CreateFrame("Button", nil, panel)
+        button:SetSize(w, 18)
+        local glyph = button:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        glyph:SetFont(GetUnicodeSafeFont(), entryFontSize)
+        glyph:SetAllPoints()
+        glyph:SetWordWrap(false)
+        glyph:SetJustifyH("LEFT")
+        layout[#layout + 1] = {
+            widget = button, x = x / width, y = 18, width = w / width, alignRight = alignRight,
+            glyph = glyph, icon = icon,
+        }
+        button:SetScript("OnEnter", function()
+            GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
+            GameTooltip:SetText(tooltip)
+            GameTooltip:Show()
+        end)
+        button:SetScript("OnLeave", GameTooltip_Hide)
     end
 
     local function roster(players, x, w)
         local slotWidth = w / math.max(3, #players)
+        local iconWidth = math.min(18, slotWidth / 4)
         for i, player in ipairs(players) do
             local px = x + (i - 1) * slotWidth
-            local icon = GetSpecIcon(player.class, player.spec)
-            if icon == "-" then icon = SafeTableLookup(classIcons, player.class, "-") end
-            label(largerIcon(icon), px, 20, 18)
-            playerName(player, px + 20, 20, math.max(1, slotWidth - 24))
+            local race = ReadableScoreValue(player.race)
+            local class = ReadableScoreValue(player.class)
+            local spec = ReadableScoreValue(player.spec)
+            local role = ReadableScoreValue(player.role)
+            local roleText = roleTooltips[role]
+            rosterIcon(raceIcons[race] or "-", race and race ~= "-" and race or "Race unavailable", px, iconWidth)
+            rosterIcon(classIcons[class] or "-", class and class ~= "-" and class or "Class unavailable", px + iconWidth, iconWidth)
+            local specIcon = GetSpecIcon(class, spec)
+            rosterIcon(specIcon ~= spec and specIcon or "-", spec and spec ~= "-" and spec or "Spec unavailable", px + 2 * iconWidth, iconWidth)
+            rosterIcon(roleIcons[role] or "-", roleText and roleText ~= "-" and roleText or "Role unavailable", px + 3 * iconWidth, iconWidth)
+            playerName(player, px, 38, math.max(1, slotWidth - 4))
         end
     end
 
@@ -4419,7 +4472,7 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
     end
 
     if final then
-        label("Match totals - all six rounds", 4, 46, width - 8, true)
+        label("Match totals - all six rounds", 4, 62, width - 8, true)
         local columns = {
             {"Character", .25}, {"Spec", .07}, {"Rounds won", .10}, {"KBs", .06},
             {"Damage", .12}, {"Healing", .12}, {"CR / MMR", .14}, {"CR / MMR change", .14},
@@ -4427,7 +4480,7 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
         local positions, widths, x = {}, {}, 4
         for i, column in ipairs(columns) do
             positions[i], widths[i] = x, (width - 8) * column[2]
-            label(column[1], x, 66, widths[i])
+            label(column[1], x, 82, widths[i])
             x = x + widths[i]
         end
         -- Copy before sorting: persisted roster order and team membership stay intact.
@@ -4437,10 +4490,10 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
             return (ReadableScoreValue(a.name) or "") < (ReadableScoreValue(b.name) or "")
         end)
         for i, player in ipairs(players) do
-            local y = 84 + (i - 1) * 18
+            local y = 100 + (i - 1) * 18
             playerName(player, positions[1], y, widths[1] - 4)
             local values = {
-                largerIcon(GetSpecIcon(player.class, player.spec)), number(player.wins), number(player.killingBlows),
+                resizeIcon(GetSpecIcon(player.class, player.spec), 16), number(player.wins), number(player.killingBlows),
                 number(player.damage, false, true), number(player.healing, false, true),
                 rating(player), rating(player, true),
             }
@@ -4472,7 +4525,12 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
             item.widget:ClearAllPoints()
             local rightOffset = item.alignRight and (opponentsStart - rosterStart) or 0
             item.widget:SetPoint("TOPLEFT", self, "TOPLEFT", item.x * currentWidth + rightOffset, -item.y)
-            item.widget:SetWidth(item.width * currentWidth)
+            local cellWidth = item.width * currentWidth
+            item.widget:SetWidth(cellWidth)
+            if item.glyph then
+                local iconSize = math.max(1, math.min(16, math.floor(cellWidth)))
+                item.glyph:SetText(resizeIcon(item.icon, iconSize))
+            end
         end
     end
     panel:UpdateTeamView()
