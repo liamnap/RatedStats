@@ -4279,8 +4279,29 @@ function RSTATS.CreateClickableName(parent, stats, matchEntry, x, y, columnWidth
   return nameText
 end
 
--- Shuffle round rosters and lobby totals have different scopes. Never present
--- whole-match combat totals as the performance of the final round's teams.
+local function HexToRGB01(hex)
+    if type(hex) ~= "string" then return nil end
+    hex = hex:gsub("^|cff", ""):gsub("^#", "")
+    if #hex == 8 then
+        -- if someone ever feeds AARRGGBB, drop AA
+        hex = hex:sub(3)
+    end
+    if #hex ~= 6 then return nil end
+    local r = tonumber(hex:sub(1, 2), 16)
+    local g = tonumber(hex:sub(3, 4), 16)
+    local b = tonumber(hex:sub(5, 6), 16)
+    if not (r and g and b) then return nil end
+    return r / 255, g / 255, b / 255
+end
+
+local function GetPlayerHighlightColor()
+    local addonHex = (RSTATS.Config and RSTATS.Config.ThemeColor) or COLOR_HEX
+    local r, g, b = HexToRGB01(addonHex)
+    if r then return r, g, b end
+    local themeR, themeG, themeB = Config:GetThemeColor()
+    return themeR, themeG, themeB
+end
+
 local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
     local panel = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     local final = IsFinalSoloShuffleEntry(matchEntry)
@@ -4337,7 +4358,7 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
         fs:SetText(name)
         local key = GetScoreInfoNameRealmKey(name)
         if key == GetUnitNameRealmKey("player") then
-            fs:SetTextColor(1, 0.82, 0)
+            fs:SetTextColor(GetPlayerHighlightColor())
         else
             local class = ReadableScoreValue(player.class)
             for token, localized in pairs(LOCALIZED_CLASS_NAMES_MALE or {}) do
@@ -4440,9 +4461,16 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
             item.widget:ClearAllPoints()
             item.widget:SetPoint("TOPLEFT", parent, "TOPLEFT", item.x + scrollOffset, item.y)
         end
+        -- Match the first legacy enemy column in full view. In compact view,
+        -- keep both rosters on the visible page and give each one half the width.
+        local rosterStart = currentWidth * 0.5 + 4
+        local opponentsStart = visibleWidth * 0.5 + 4
+        if not UIConfig.isCompact then
+            opponentsStart = math.min(parent:GetWidth() * 0.5 + 5, visibleWidth - currentWidth * 0.5 + 4)
+        end
         for _, item in ipairs(layout) do
             item.widget:ClearAllPoints()
-            local rightOffset = item.alignRight and (visibleWidth - currentWidth) or 0
+            local rightOffset = item.alignRight and (opponentsStart - rosterStart) or 0
             item.widget:SetPoint("TOPLEFT", self, "TOPLEFT", item.x * currentWidth + rightOffset, -item.y)
             item.widget:SetWidth(item.width * currentWidth)
         end
@@ -4779,37 +4807,7 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
         end
     end
     
-    -- ------------------------------------------------------------------
-    -- Theme colour (kept - removing Config:GetThemeColor causes a lua error)
-    -- BUT: row highlighting should use the addon text colour (COLOR_HEX),
-    -- not the theme (00ccff).
-    -- ------------------------------------------------------------------
-    local themeR, themeG, themeB = Config:GetThemeColor()
-
-    local function HexToRGB01(hex)
-        if type(hex) ~= "string" then return nil end
-        hex = hex:gsub("^|cff", ""):gsub("^#", "")
-        if #hex == 8 then
-            -- if someone ever feeds AARRGGBB, drop AA
-            hex = hex:sub(3)
-        end
-        if #hex ~= 6 then return nil end
-        local r = tonumber(hex:sub(1, 2), 16)
-        local g = tonumber(hex:sub(3, 4), 16)
-        local b = tonumber(hex:sub(5, 6), 16)
-        if not (r and g and b) then return nil end
-        return r / 255, g / 255, b / 255
-    end
-
-    local highlightR, highlightG, highlightB = themeR, themeG, themeB
-    do
-        -- Use the actual addon text colour (core.lua -> RSTATS.Config.ThemeColor = "b69e86")
-        local addonHex = (RSTATS and RSTATS.Config and RSTATS.Config.ThemeColor) or COLOR_HEX
-        local r, g, b = HexToRGB01(addonHex)
-        if r then
-            highlightR, highlightG, highlightB = r, g, b
-        end
-    end
+    local highlightR, highlightG, highlightB = GetPlayerHighlightColor()
 
     -- ------------------------------------------------------------------
     -- Damage/Healing rank indicators (team + overall)
