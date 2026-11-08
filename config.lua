@@ -903,6 +903,18 @@ local function ComparableScoreNumber(value)
     return numberValue
 end
 
+local function GetShuffleMMRChange(player)
+    local before = ComparableScoreNumber(player.prematchMMR)
+    local after = ComparableScoreNumber(player.postmatchMMR)
+    if before and before > 0 and after and after > 0 then
+        return after - before
+    end
+
+    -- Older snapshots also used zero for unavailable scoreboard values.
+    local change = ComparableScoreNumber(player.mmrChange)
+    if change and change ~= 0 then return change end
+end
+
 local function IsFinalSoloShuffleEntry(entry)
     if not entry or not entry.isSoloShuffle then return true end
     if entry.roundIndex == 6 then return true end
@@ -3160,9 +3172,10 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                             playerData.rating = ScoreNumberOrZero(scoreInfo.rating)
                             playerData.ratingChange = ScoreNumberOrZero(scoreInfo.ratingChange)
                             playerData.newrating = playerData.rating + playerData.ratingChange
-                            playerData.prematchMMR = ScoreNumberOrZero(scoreInfo.prematchMMR)
-                            playerData.mmrChange = ScoreNumberOrZero(scoreInfo.mmrChange)
-                            playerData.postmatchMMR = ScoreNumberOrZero(scoreInfo.postmatchMMR)
+                            playerData.prematchMMR = ComparableScoreNumber(scoreInfo.prematchMMR) or "-"
+                            playerData.postmatchMMR = ComparableScoreNumber(scoreInfo.postmatchMMR) or "-"
+                            playerData.mmrChange = ReadableScoreValue(scoreInfo.mmrChange)
+                            playerData.mmrChange = GetShuffleMMRChange(playerData) or "-"
                             playerData.honorLevel = ScoreNumberOrZero(scoreInfo.honorLevel)
 
 							-- Solo Shuffle rounds won comes from scoreInfo.stats
@@ -4230,6 +4243,8 @@ function RSTATS.OpenPlayerDetails(stats, matchEntry)
     frame:Show()
 end
 
+local PLAYER_ACHIEVEMENT_ICON_SIZE = 8
+
 local function CreatePlayerAchievementIcon(parent, playerName, iconSize)
     if type(C_AddOns) ~= "table" or type(C_AddOns.GetAddOnEnableState) ~= "function"
         or C_AddOns.GetAddOnEnableState("RatedStats_Achiev", nil) <= 0
@@ -4264,7 +4279,7 @@ end
 function RSTATS.CreateClickableName(parent, stats, matchEntry, x, y, columnWidth, rowHeight)
   local playerName = stats.name
   local nameOffsetX = 0
-  local iconSize = 8
+  local iconSize = PLAYER_ACHIEVEMENT_ICON_SIZE
   local iconBtn = CreatePlayerAchievementIcon(parent, playerName, iconSize)
   if iconBtn then
       nameOffsetX = (iconSize * 0.5) + 2
@@ -4352,10 +4367,13 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
 
     local function rating(player, change)
         if change then
-            return number(player.ratingChange, true) .. " / " .. number(player.mmrChange, true)
+            return number(player.ratingChange, true) .. " / " .. number(GetShuffleMMRChange(player), true)
         end
         local mmr = ComparableScoreNumber(player.postmatchMMR)
-            or ComparableScoreNumber(player.prematchMMR)
+        if not mmr or mmr <= 0 then
+            mmr = ComparableScoreNumber(player.prematchMMR)
+        end
+        if mmr and mmr <= 0 then mmr = nil end
         return number(player.newrating) .. " / " .. number(mmr)
     end
 
@@ -4432,7 +4450,7 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
     end
 
     local function rosterPlayer(player, x, y, w)
-        local iconWidth = math.min(18, w / 10)
+        local iconWidth = math.min(14, w / 10)
         local race = ReadableScoreValue(player.race)
         local class = ReadableScoreValue(player.class)
         local spec = ReadableScoreValue(player.spec)
@@ -4446,11 +4464,12 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
 
         local iconCount = 4
         local name = ReadableScoreValue(player.name)
-        local achievement = name and CreatePlayerAchievementIcon(panel, name, math.min(16, iconWidth))
+        local achievementSize = math.min(PLAYER_ACHIEVEMENT_ICON_SIZE, iconWidth)
+        local achievement = name and CreatePlayerAchievementIcon(panel, name, achievementSize)
         if achievement then
             layout[#layout + 1] = {
                 widget = achievement, x = (x + iconCount * iconWidth) / width, y = y + 1,
-                width = math.min(16, iconWidth) / width, alignRight = alignRight, square = true,
+                width = iconWidth / width, alignRight = alignRight, square = true,
             }
             iconCount = iconCount + 1
         end
@@ -4537,13 +4556,13 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
             item.widget:SetPoint("TOPLEFT", self, "TOPLEFT", item.x * currentWidth + rightOffset, -item.y)
             local cellWidth = item.width * currentWidth
             if item.square then
-                local size = math.min(16, cellWidth)
+                local size = math.min(PLAYER_ACHIEVEMENT_ICON_SIZE, cellWidth)
                 item.widget:SetSize(size, size)
             else
                 item.widget:SetWidth(cellWidth)
             end
             if item.glyph then
-                local iconSize = math.max(1, math.min(16, math.floor(cellWidth)))
+                local iconSize = math.max(1, math.min(12, math.floor(cellWidth)))
                 item.glyph:SetText(resizeIcon(item.icon, iconSize))
             end
         end
