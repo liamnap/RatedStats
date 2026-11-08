@@ -4331,6 +4331,31 @@ local function GetPlayerHighlightColor()
     return themeR, themeG, themeB
 end
 
+local function BuildRankMap(players, field)
+    local items = {}
+    for _, p in ipairs(players) do
+        local v = p and ComparableScoreNumber(p[field])
+        if v ~= nil then
+            items[#items + 1] = { p = p, v = v }
+        end
+    end
+
+    table.sort(items, function(a, b)
+        return a.v > b.v
+    end)
+
+    local map = {}
+    local lastV, rank = nil, 0
+    for idx, it in ipairs(items) do
+        if lastV == nil or it.v ~= lastV then
+            rank = idx
+            lastV = it.v
+        end
+        map[it.p] = rank
+    end
+    return map, #items
+end
+
 local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
     local panel = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     local final = IsFinalSoloShuffleEntry(matchEntry)
@@ -4492,33 +4517,79 @@ local function CreateShuffleDetails(parent, playerStats, content, matchEntry)
     end
 
     if final then
-        label("Match totals - all six rounds", 4, rosterHeight + 6, width - 8, true)
+        -- Use the player's role in this match so everyone is ranked on the same metric.
+        local outputField = "damage"
+        for _, player in ipairs(playerStats) do
+            if localPlayerKey and GetScoreInfoNameRealmKey(ReadableScoreValue(player.name)) == localPlayerKey then
+                if roleTooltips[ReadableScoreValue(player.role)] == "Healer" then
+                    outputField = "healing"
+                end
+                break
+            end
+        end
+        local outputLabel = outputField == "healing" and "Healing" or "Damage"
+        label("Match totals - all six rounds (Rounds won, KBs, " .. outputLabel .. ")", 4, rosterHeight + 6, width - 8, true)
         local columns = {
-            {"Character", .32}, {"Rounds won", .10}, {"KBs", .06},
-            {"Damage", .12}, {"Healing", .12}, {"CR / MMR", .14}, {"CR / MMR change", .14},
+            {"Rank", .045}, {"Character", .275}, {"Rounds won", .10, "wins"}, {"KBs", .06, "killingBlows"},
+            {"Damage", .12, "damage"}, {"Healing", .12, "healing"}, {"CR / MMR", .14}, {"CR / MMR change", .14},
         }
-        local positions, widths, x = {}, {}, 4
+        local positions, widths, ranks, rankCounts, x = {}, {}, {}, {}, 4
         for i, column in ipairs(columns) do
             positions[i], widths[i] = x, (width - 8) * column[2]
             label(column[1], x, rosterHeight + 26, widths[i])
+            local field = column[3]
+            if field == "wins" or field == "killingBlows" or field == outputField then
+                ranks[i], rankCounts[i] = BuildRankMap(playerStats, field)
+            end
             x = x + widths[i]
         end
-        -- Copy before sorting: persisted roster order and team membership stay intact.
-        local players = {}
-        for _, player in ipairs(playerStats) do players[#players + 1] = player end
-        table.sort(players, function(a, b)
-            return (ReadableScoreValue(a.name) or "") < (ReadableScoreValue(b.name) or "")
+
+        local rankedPlayers = {}
+        for _, player in ipairs(playerStats) do
+            rankedPlayers[#rankedPlayers + 1] = {
+                player = player,
+                wins = ComparableScoreNumber(player.wins) or -math.huge,
+                kbs = ComparableScoreNumber(player.killingBlows) or -math.huge,
+                output = ComparableScoreNumber(player[outputField]) or -math.huge,
+                name = ReadableScoreValue(player.name) or "",
+            }
+        end
+        table.sort(rankedPlayers, function(a, b)
+            if a.wins ~= b.wins then return a.wins > b.wins end
+            if a.kbs ~= b.kbs then return a.kbs > b.kbs end
+            if a.output ~= b.output then return a.output > b.output end
+            return a.name < b.name
         end)
-        for i, player in ipairs(players) do
+
+        local rankR, rankG, rankB = GetPlayerHighlightColor()
+        local rank, previous
+        for i, ranked in ipairs(rankedPlayers) do
+            if not previous or ranked.wins ~= previous.wins or ranked.kbs ~= previous.kbs or ranked.output ~= previous.output then
+                rank = i
+            end
+            previous = ranked
+            local player = ranked.player
             local y = rosterHeight + 44 + (i - 1) * 18
-            rosterPlayer(player, positions[1], y, widths[1] - 4)
+            label(ranked.wins == -math.huge and "-" or tostring(rank), positions[1], y, widths[1] - 4):SetTextColor(rankR, rankG, rankB)
+            rosterPlayer(player, positions[2], y, widths[2] - 4)
             local values = {
                 number(player.wins), number(player.killingBlows),
                 number(player.damage, false, true), number(player.healing, false, true),
                 rating(player), rating(player, true),
             }
             for j, value in ipairs(values) do
-                label(value, positions[j + 1], y, widths[j + 1] - 4)
+                local column = j + 2
+                local columnWidth = widths[column] - 4
+                local metricRank = ranks[column] and ranks[column][player]
+                local rankWidth = metricRank and columnWidth * 0.45 or 0
+                label(value, positions[column], y, columnWidth - rankWidth)
+                if metricRank then
+                    local indicator = label(metricRank .. "/" .. rankCounts[column],
+                        positions[column] + columnWidth - rankWidth, y, rankWidth)
+                    indicator:SetFont(GetUnicodeSafeFont(), 7)
+                    indicator:SetJustifyH("RIGHT")
+                    indicator:SetTextColor(rankR, rankG, rankB)
+                end
             end
         end
     end
@@ -4903,31 +4974,6 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
     -- ------------------------------------------------------------------
     -- Damage/Healing rank indicators (team + overall)
     -- ------------------------------------------------------------------
-    local function BuildRankMap(players, field)
-        local items = {}
-        for _, p in ipairs(players) do
-            local v = p and ComparableScoreNumber(p[field])
-            if v ~= nil then
-                items[#items + 1] = { p = p, v = v }
-            end
-        end
-
-        table.sort(items, function(a, b)
-            return a.v > b.v
-        end)
-
-        local map = {}
-        local lastV, rank = nil, 0
-        for idx, it in ipairs(items) do
-            if lastV == nil or it.v ~= lastV then
-                rank = idx
-                lastV = it.v
-            end
-            map[it.p] = rank
-        end
-        return map
-    end
-
     local function CreateRankIndicator(parentFrame, xPos, width, rowOffset, rowHeight, teamRank, teamSize, overallRank, totalSize, fontSize, highlightRow)
         if not (teamRank and overallRank and teamSize and totalSize) then
             return
