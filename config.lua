@@ -996,6 +996,25 @@ local function ReconcileShuffleHistory(history)
                 end
                 final.shuffleRosterDetailsFilled = hasRosterDetails or nil
             end
+            if valid and hasWins and final.shuffleResultSource == "widgets" and final.shuffleRoundWon == nil then
+                -- The in-match widgets can disappear at Complete. Use the unchanged
+                -- final scoreboard only after it accounts for six decisive rounds.
+                local totalWins = 0
+                for _, total in pairs(totals) do totalWins = totalWins + total end
+                local previous = rounds[5].row
+                local before = ComparableScoreNumber(previous.roundsWon)
+                local after = totals[me]
+                if totalWins == 18 and previous.shuffleResultSource == "widgets"
+                    and before and before >= 0 and before <= 5 and before % 1 == 0 and after then
+                    local delta = after - before
+                    if delta == 0 or delta == 1 then
+                        final.roundsWon = after
+                        final.shuffleRoundWon = delta == 1
+                        final.shuffleFinalScoreboard = true
+                        final.friendlyWinLoss = "RND 6" .. (delta == 1 and "  +   W" or "  +   L")
+                    end
+                end
+            end
             if valid and hasWins and final.shuffleResultSource ~= "widgets" and not final.shuffleResultsVerified then
                 local solution
                 for mask = 0, 63 do
@@ -3411,39 +3430,23 @@ end
 ------------------------------------------------------------------------------
 function ReflowRows(content)
     local matchFrames = content.matchFrames
-    if not matchFrames or #matchFrames == 0 then 
-        return 
+    if not matchFrames or #matchFrames == 0 then
+        return
     end
 
-    local seenMatchIDs = {}  -- Table to record which matchIDs we’ve seen
+    -- Detach bottom-up first, including any old sibling-to-sibling anchor chain.
+    -- Updating its first row while descendants remain attached triggers cascading layout.
+    for i = #matchFrames, 1, -1 do
+        matchFrames[i]:ClearAllPoints()
+    end
 
-    -- Loop through each matchFrame in the array.
-    for i, row in ipairs(matchFrames) do
-        row:ClearAllPoints() -- Clear any existing anchor points
-
-        -- Check for duplicate matchIDs: warn if the same matchID appears more than once.
-        local matchID = (row.matchData and row.matchData.matchID) or "??"
-		-- Get the current height of the row (this may have changed if expanded)
-        local rowHeight = row:GetHeight() or 0
-        if seenMatchIDs[matchID] then
-        else
-            seenMatchIDs[matchID] = true
-        end
-
-        if i == 1 then
-            -- Anchor the first row relative to the fixed base anchor
-            row:SetPoint("TOPLEFT", content.rowsAnchor, "BOTTOMLEFT", 0, 0)
-        else
-            -- Anchor this row relative to the above row's "BOTTOMLEFT"
-            local prevRow = matchFrames[i - 1]
-			local prevHeight = prevRow:GetHeight() or 0
-            local dynamicOffset = -(prevHeight + 5)
-            row:SetPoint("TOPLEFT", prevRow, "BOTTOMLEFT", 0, -5)
-        end
-		
-		row:SetFrameStrata("HIGH")
-		row:SetFrameLevel(22)
-
+    local offset = 0
+    for _, row in ipairs(matchFrames) do
+        -- All rows share one origin. Expanding a row changes only the offsets below it.
+        row:SetPoint("TOPLEFT", content.rowsAnchor, "BOTTOMLEFT", 0, -offset)
+        offset = offset + (row:GetHeight() or 0) + 5
+        row:SetFrameStrata("HIGH")
+        row:SetFrameLevel(22)
     end
 
     AdjustContentHeight(content)
@@ -3461,7 +3464,9 @@ function ClearStaleMatchFrames(content)
 		content.placeholder = nil
 	end
 
-    for _, frame in ipairs(content.matchFrames) do
+    -- Remove the tail first so legacy chained anchors cannot cascade during cleanup.
+    for i = #content.matchFrames, 1, -1 do
+        local frame = content.matchFrames[i]
         if frame.nestedTable then
             if frame.nestedTable.headerTexts then
                 for _, h in ipairs(frame.nestedTable.headerTexts) do
