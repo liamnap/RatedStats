@@ -690,10 +690,8 @@ local RSTATS_ScoreHistory = {}
 local allianceTeamScore = 0
 local hordeTeamScore = 0
 local roundsWon = 0
--- Solo Shuffle: per-round allies/result captured at PostRound.
--- KB values are still stored later, but are no longer compared for W/L.
+-- Solo Shuffle: roster captured at PostRound; results come from the Wins widget.
 local soloShuffleAlliesNameAtDeath = nil
-local soloShuffleRoundWonAtDeath   = nil
 local OnSoloShuffleStateChanged -- also called by the final completion event
 
 local RBGScoreWidgets = {
@@ -998,7 +996,7 @@ local function ReconcileShuffleHistory(history)
                 end
                 final.shuffleRosterDetailsFilled = hasRosterDetails or nil
             end
-            if valid and hasWins and not final.shuffleResultsVerified then
+            if valid and hasWins and final.shuffleResultSource ~= "widgets" and not final.shuffleResultsVerified then
                 local solution
                 for mask = 0, 63 do
                     local wins, count = {}, {}
@@ -1098,25 +1096,11 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
     -- BG objectives (per-player), pulled from scoreInfo.stats
     local objectiveByGUID = {}
 
-    -- ------------------------------------------------------------
-    -- Solo Shuffle: determine THIS round's win from GetActiveMatchWinner().
-    --
-    -- 12.0.5 can return secret scoreboard KB values during active PvP.
-    -- We still store KB later, but we do not compare KB values for W/L.
-    -- ------------------------------------------------------------
-    if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() and roundIndex then
-        alliesName = soloShuffleAlliesNameAtDeath or alliesName or {}
-        local myNameKey = GetUnitNameRealmKey("player")
-        if myNameKey then
-            alliesName[myNameKey] = true
-        end
-
-        -- Snapshot BEFORE we possibly increment this round.
-        previousRoundsWon = roundsWon
-
-        if soloShuffleRoundWonAtDeath then
-            roundsWon = roundsWon + 1
-        end
+    -- Round outcomes come only from the player's Wins widget, never scoreboard faction.
+    if isSoloShuffle and roundIndex then
+        local record = RSTATS.ShuffleWidgets.Get(roundIndex)
+        previousRoundsWon = record and record.baseline or 0
+        roundsWon = record and record.total or 0
     end
 
 	if C_PvP.IsRatedSoloShuffle() and roundIndex then
@@ -1163,18 +1147,11 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
 		SaveData() -- Optional: Save again to lock in the new count
 	end)
 	
-	if C_PvP.IsRatedSoloShuffle() then
-		if roundIndex == 6 and roundsWon == 3 then
-			friendlyWinLoss = "RND " .. roundIndex .. "  ~   D"
-		elseif roundsWon > previousRoundsWon then
-			friendlyWinLoss = "RND " .. roundIndex .. "  +   W"
-		elseif roundIndex == nil then
-			roundIndex = 1
-			friendlyWinLoss = "RND " .. roundIndex .. "  +   L"
-		else
-			friendlyWinLoss = "RND " .. roundIndex .. "  +   L"
-		end
-	end
+    if isSoloShuffle then
+        local record = RSTATS.ShuffleWidgets.Get(roundIndex)
+        local won = record and record.won
+        friendlyWinLoss = "RND " .. (roundIndex or 1) .. (won == nil and "  ?" or won and "  +   W" or "  +   L")
+    end
 
     -- Calculate total damage and healing for friendly and enemy teams
     for i = 1, GetNumBattlefieldScores() do
@@ -1255,11 +1232,9 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
     AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, allianceTeamScore, hordeTeamScore, roundsWon, categoryName, categoryID, damp, objectiveByGUID)
 
     -- Safe to clear AFTER stats capture:
-    -- GetPlayerStatsEndOfMatch has consumed soloShuffleRoundWonAtDeath,
-    -- and AppendHistory has consumed soloShuffleAlliesNameAtDeath for per-player "isFriendly".
+    -- AppendHistory has consumed the frozen roster for per-player "isFriendly".
     if C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() then
         soloShuffleAlliesNameAtDeath  = nil
-        soloShuffleRoundWonAtDeath    = nil
         playerDeathSeen = false
     end
 
@@ -1330,7 +1305,7 @@ function RefreshDataEvent(self, event, ...)
 				self.isSoloShuffle = true
             -- Make sure we always have a round index for Shuffle.
             if roundIndex == nil then
-                roundIndex = 1
+                roundIndex = RSTATS.ShuffleWidgets.ReadRound() or 1
             end
 
             -- If we saw a round-ending PostRound state,
@@ -1355,6 +1330,7 @@ function RefreshDataEvent(self, event, ...)
                 end)
             end
 
+            RSTATS.ShuffleWidgets.Begin(roundIndex)
             previousRoundsWon = roundsWon or 0
             -- Reset per-round flags for the upcoming round.
             lastLoggedRound = {}
@@ -1411,7 +1387,6 @@ function RefreshDataEvent(self, event, ...)
                 playerDeathSeen = false
                 scoreboardKBTotal = nil
 				soloShuffleAlliesNameAtDeath = nil
-                soloShuffleRoundWonAtDeath   = nil
                 soloShuffleLastFriendlyKBTotal = nil
                 soloShuffleLastEnemyKBTotal    = nil
             elseif C_PvP.IsRatedArena() then
@@ -2630,6 +2605,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     local playerFullName = GetPlayerFullName() -- Get the player's full name
     local playerNameKey = GetUnitNameRealmKey("player")
     local myTeamIndex
+    local ssWidgetRecord = RSTATS.ShuffleWidgets.Get(roundIndex)
     local ssAlliesName = soloShuffleAlliesNameAtDeath or nil
     local isSoloShuffle = (C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle()) or false
     local isArena = (C_PvP.IsRatedArena and C_PvP.IsRatedArena()) and not isSoloShuffle
@@ -2957,6 +2933,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 		end
 	end
 
+    if isSoloShuffle then RSTATS.ShuffleWidgets.Attach(ssWidgetRecord, entry, false) end
+
     if C_PvP.IsRatedSoloShuffle() and roundIndex >= 1 and roundIndex <= 5 then
         -- Skip table insert for now, let the 20second delay handle it
     else
@@ -3107,6 +3085,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                 playerStats = playerStats,
             }
 
+            RSTATS.ShuffleWidgets.Attach(ssWidgetRecord, ssRoundData, true)
             table.insert(historyTable, 1, ssRoundData)
             if RSTATS and RSTATS.NotifyNewGameAdded then
                 RSTATS:NotifyNewGameAdded()
@@ -3250,7 +3229,9 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
                     entry.playerStats = playerStats
                     for _, player in ipairs(playerStats) do
                         if playerNameKey and GetScoreInfoNameRealmKey(ReadableScoreValue(player.name)) == playerNameKey then
-                            entry.roundsWon = ShuffleScoreboardWins(player) or entry.roundsWon
+                            if entry.shuffleResultSource ~= "widgets" then
+                                entry.roundsWon = ShuffleScoreboardWins(player) or entry.roundsWon
+                            end
                             break
                         end
                     end
@@ -3666,7 +3647,7 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
         local outcomeText = match.friendlyWinLoss or "-"
         if tabID == 1 then
             local wins = match.roundsWon or 0
-            if match.isSoloShuffle and IsFinalSoloShuffleEntry(match) then
+            if match.isSoloShuffle and IsFinalSoloShuffleEntry(match) and match.shuffleResultSource ~= "widgets" then
                 local me = GetUnitNameRealmKey("player")
                 for _, player in ipairs(match.playerStats or {}) do
                     if me and GetScoreInfoNameRealmKey(ReadableScoreValue(player.name)) == me then
@@ -3676,7 +3657,8 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
                 end
                 outcomeText = "RND 6" .. (wins > 3 and "  +   W" or wins == 3 and "  ~   D" or "  +   L")
             end
-            scoreText = wins .. " / 6"
+            if match.shuffleResultSource == "widgets" then wins = match.roundsWon end
+            scoreText = (wins == nil and "?" or tostring(wins)) .. " / 6"
         elseif tabID == 2 or tabID == 3 then
             scoreText = ""
         end
@@ -7024,35 +7006,11 @@ OnSoloShuffleStateChanged = function(event, ...)
         return
     end
 
-    local winnerTeamIndex = C_PvP.GetActiveMatchWinner and C_PvP.GetActiveMatchWinner()
-    winnerTeamIndex = ReadableScoreValue(winnerTeamIndex)
-    if winnerTeamIndex == nil then
-        return
-    end
-
-    local myTeamIndex = nil
-    for i = 1, GetNumBattlefieldScores() do
-        local scoreInfo = C_PvP.GetScoreInfo(i)
-        if scoreInfo then
-            local rawName = scoreInfo.name
-            if rawName and not (issecretvalue and issecretvalue(rawName)) then
-                local nameKey = GetScoreInfoNameRealmKey(rawName)
-                if nameKey and allyNames[nameKey] then
-                    -- Despite the field name, this is the scoreboard team index
-                    -- used for Gold/Purple-style Solo Shuffle team grouping.
-                    myTeamIndex = scoreInfo.faction
-                    break
-                end
-            end
-        end
-    end
-
-    if myTeamIndex == nil then
-        return
-    end
-
+    -- Capture roster now, but determine W/L from the cumulative Wins widget.
+    -- A missing widget does not prevent the round row from being recorded.
+    roundIndex = roundIndex or RSTATS.ShuffleWidgets.ReadRound() or 1
+    RSTATS.ShuffleWidgets.EndRound(roundIndex)
     soloShuffleAlliesNameAtDeath = allyNames
-    soloShuffleRoundWonAtDeath   = winnerTeamIndex == myTeamIndex
     playerDeathSeen = true
 end
 
