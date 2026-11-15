@@ -67,18 +67,18 @@ end
 
 function Tracker.Sample(record, settle)
     if not record or record.generation ~= generation then return end
-    -- A later round's result must never be read back into this round.
-    local nextRecord = records[record.round + 1]
-    if nextRecord and nextRecord.ended then return end
     -- Reconciliation may have resolved the final round after its widgets vanished.
     -- Preserve that result if a late widget callback arrives with stale text.
     for _, row in ipairs(record.rows or {}) do
-        if record.round == 6 and row.shuffleFinalScoreboard then
+        if row.shuffleFinalScoreboard then
             record.total, record.won = row.roundsWon, row.shuffleRoundWon
             Apply(record)
             return
         end
     end
+    -- A later round's result must never be read back into this round.
+    local nextRecord = records[record.round + 1]
+    if nextRecord and nextRecord.ended then return end
     if not (C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle()) then return end
     local round, total = Tracker.ReadRound(), ReadWins()
     -- During preparation the round label may already point at the next round.
@@ -107,8 +107,8 @@ function Tracker.EndRound(round)
     if record.ended then return record end
     record.ended = true
     Tracker.Sample(record, false)
-    if round == 6 then
-        -- Final round has no next preparation window. Retry after the completion burst.
+    do
+        -- Widget updates can lag PostRound in any round. Retry while readable.
         for _, delay in ipairs({1, 2, 3, 5}) do
             C_Timer.After(delay, function()
                 Tracker.Sample(record, delay == 5)

@@ -946,7 +946,8 @@ local function ReconcileShuffleHistory(history)
     for id, final in pairs(byID) do
         if final and final.shuffleLayoutVersion == 2
             and not final.shuffleEarlyComplete
-            and not (final.shuffleResultsVerified and final.shuffleRosterDetailsFilled)
+            and not (final.shuffleResultsVerified and final.shuffleRosterDetailsFilled
+                and final.shuffleDurationVersion == 2)
             and IsFinalSoloShuffleEntry(final) and #(final.playerStats or {}) == 6 then
             local totals, finalPlayers, rounds = {}, {}, {}
             local valid, hasWins, hasRosterDetails = true, true, true
@@ -981,6 +982,16 @@ local function ReconcileShuffleHistory(history)
                 end
                 if allies ~= 3 or teams[me] ~= true then valid = false end
                 rounds[i] = {row = row, teams = teams}
+            end
+            if valid and final.shuffleDurationVersion ~= 2 then
+                -- Round one anchors the full lobby, including preparation intervals.
+                local first = rounds[1].row
+                local firstDuration = ComparableScoreNumber(first.durationSeconds or first.duration)
+                if firstDuration and firstDuration >= 0 and firstDuration <= 3600 then
+                    local elapsed = final.endTime - first.endTime + firstDuration
+                    final.duration, final.durationSeconds = elapsed, elapsed
+                    final.shuffleDurationVersion = 2
+                end
             end
             if valid and not final.shuffleRosterDetailsFilled then
                 -- Fill missing identity details only after matching the whole lobby.
@@ -1017,17 +1028,37 @@ local function ReconcileShuffleHistory(history)
                     end
                 end
             end
-            if valid and hasWins and final.shuffleResultSource ~= "widgets" and not final.shuffleResultsVerified then
+            local missingWidgetResult = false
+            if valid then
+                for _, round in ipairs(rounds) do
+                    if round.row.shuffleResultSource == "widgets" and round.row.shuffleRoundWon == nil then
+                        missingWidgetResult = true
+                    end
+                end
+            end
+            if valid and hasWins and not final.shuffleResultsVerified
+                and (final.shuffleResultSource ~= "widgets" or missingWidgetResult) then
                 local solution
                 for mask = 0, 63 do
                     local wins, count = {}, {}
+                    local matches, cumulative = true, 0
                     for i, round in ipairs(rounds) do
                         wins[i] = math.floor(mask / 2 ^ (i - 1)) % 2 == 1
+                        if wins[i] then cumulative = cumulative + 1 end
+                        -- Keep every readable widget observation as a constraint.
+                        local row = round.row
+                        if row.shuffleResultSource == "widgets" then
+                            local observed = ComparableScoreNumber(row.roundsWon)
+                            if (row.shuffleRoundWon ~= nil and row.shuffleRoundWon ~= wins[i])
+                                or (observed ~= nil and observed ~= cumulative) then
+                                matches = false
+                                break
+                            end
+                        end
                         for key, friendly in pairs(round.teams) do
                             if friendly == wins[i] then count[key] = (count[key] or 0) + 1 end
                         end
                     end
-                    local matches = true
                     for key, total in pairs(totals) do
                         if (count[key] or 0) ~= total then matches = false; break end
                     end
@@ -1042,6 +1073,10 @@ local function ReconcileShuffleHistory(history)
                         if solution[i] then cumulative = cumulative + 1 end
                         round.row.friendlyWinLoss = "RND " .. i .. (solution[i] and "  +   W" or "  +   L")
                         round.row.roundsWon = cumulative
+                        if round.row.shuffleResultSource == "widgets" then
+                            round.row.shuffleRoundWon = solution[i]
+                            round.row.shuffleFinalScoreboard = true
+                        end
                     end
                     final.shuffleResultsVerified = true
                 end
@@ -1113,8 +1148,9 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
 	previousRoundsWon = previousRoundsWon or 0
     roundsWon = roundsWon or 0
 	local duration = GetBattlefieldInstanceRunTime() / 1000  -- duration in seconds
-    if isSoloShuffle and isMatchComplete then
-        duration = C_PvP.GetActiveMatchDuration()
+    if isSoloShuffle and isMatchComplete and type(startTime) == "number" then
+        -- The active-match API can report only the last Shuffle round.
+        duration = math.max(0, endTime - startTime)
     end
 	local damp = C_Commentator.GetDampeningPercent()
     -- BG objectives (per-player), pulled from scoreInfo.stats
