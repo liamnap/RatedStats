@@ -915,6 +915,7 @@ end
 
 local function IsFinalSoloShuffleEntry(entry)
     if not entry or not entry.isSoloShuffle then return true end
+    if entry.shuffleEarlyComplete then return true end
     if entry.roundIndex == 6 then return true end
 
     local roundText = entry.friendlyWinLoss or entry.winLoss
@@ -944,7 +945,9 @@ local function ReconcileShuffleHistory(history)
     if not me then return end
     for id, final in pairs(byID) do
         if final and final.shuffleLayoutVersion == 2
-            and not (final.shuffleResultsVerified and final.shuffleRosterDetailsFilled)
+            and not final.shuffleEarlyComplete
+            and not (final.shuffleResultsVerified and final.shuffleRosterDetailsFilled
+                and final.shuffleDurationVersion == 2)
             and IsFinalSoloShuffleEntry(final) and #(final.playerStats or {}) == 6 then
             local totals, finalPlayers, rounds = {}, {}, {}
             local valid, hasWins, hasRosterDetails = true, true, true
@@ -979,6 +982,16 @@ local function ReconcileShuffleHistory(history)
                 end
                 if allies ~= 3 or teams[me] ~= true then valid = false end
                 rounds[i] = {row = row, teams = teams}
+            end
+            if valid and final.shuffleDurationVersion ~= 2 then
+                -- Round one anchors the full lobby, including preparation intervals.
+                local first = rounds[1].row
+                local firstDuration = ComparableScoreNumber(first.durationSeconds or first.duration)
+                if firstDuration and firstDuration >= 0 and firstDuration <= 3600 then
+                    local elapsed = final.endTime - first.endTime + firstDuration
+                    final.duration, final.durationSeconds = elapsed, elapsed
+                    final.shuffleDurationVersion = 2
+                end
             end
             if valid and not final.shuffleRosterDetailsFilled then
                 -- Fill missing identity details only after matching the whole lobby.
@@ -1015,17 +1028,37 @@ local function ReconcileShuffleHistory(history)
                     end
                 end
             end
-            if valid and hasWins and final.shuffleResultSource ~= "widgets" and not final.shuffleResultsVerified then
+            local missingWidgetResult = false
+            if valid then
+                for _, round in ipairs(rounds) do
+                    if round.row.shuffleResultSource == "widgets" and round.row.shuffleRoundWon == nil then
+                        missingWidgetResult = true
+                    end
+                end
+            end
+            if valid and hasWins and not final.shuffleResultsVerified
+                and (final.shuffleResultSource ~= "widgets" or missingWidgetResult) then
                 local solution
                 for mask = 0, 63 do
                     local wins, count = {}, {}
+                    local matches, cumulative = true, 0
                     for i, round in ipairs(rounds) do
                         wins[i] = math.floor(mask / 2 ^ (i - 1)) % 2 == 1
+                        if wins[i] then cumulative = cumulative + 1 end
+                        -- Keep every readable widget observation as a constraint.
+                        local row = round.row
+                        if row.shuffleResultSource == "widgets" then
+                            local observed = ComparableScoreNumber(row.roundsWon)
+                            if (row.shuffleRoundWon ~= nil and row.shuffleRoundWon ~= wins[i])
+                                or (observed ~= nil and observed ~= cumulative) then
+                                matches = false
+                                break
+                            end
+                        end
                         for key, friendly in pairs(round.teams) do
                             if friendly == wins[i] then count[key] = (count[key] or 0) + 1 end
                         end
                     end
-                    local matches = true
                     for key, total in pairs(totals) do
                         if (count[key] or 0) ~= total then matches = false; break end
                     end
@@ -1040,6 +1073,10 @@ local function ReconcileShuffleHistory(history)
                         if solution[i] then cumulative = cumulative + 1 end
                         round.row.friendlyWinLoss = "RND " .. i .. (solution[i] and "  +   W" or "  +   L")
                         round.row.roundsWon = cumulative
+                        if round.row.shuffleResultSource == "widgets" then
+                            round.row.shuffleRoundWon = solution[i]
+                            round.row.shuffleFinalScoreboard = true
+                        end
                     end
                     final.shuffleResultsVerified = true
                 end
@@ -1048,7 +1085,7 @@ local function ReconcileShuffleHistory(history)
     end
 end
 
-local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categoryName, categoryID, startTime)
+local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categoryName, categoryID, startTime, isMatchComplete)
     local mapID = GetCurrentMapID()
     local mapName = GetMapName(mapID) or "Unknown"
     local endTime = GetTimestamp()
@@ -1111,6 +1148,10 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
 	previousRoundsWon = previousRoundsWon or 0
     roundsWon = roundsWon or 0
 	local duration = GetBattlefieldInstanceRunTime() / 1000  -- duration in seconds
+    if isSoloShuffle and isMatchComplete and type(startTime) == "number" then
+        -- The active-match API can report only the last Shuffle round.
+        duration = math.max(0, endTime - startTime)
+    end
 	local damp = C_Commentator.GetDampeningPercent()
     -- BG objectives (per-player), pulled from scoreInfo.stats
     local objectiveByGUID = {}
@@ -1122,7 +1163,7 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
         roundsWon = record and record.total or 0
     end
 
-	if C_PvP.IsRatedSoloShuffle() and roundIndex then
+	if C_PvP.IsRatedSoloShuffle() and roundIndex and not isMatchComplete then
 		-- Hard guard: Solo Shuffle rounds are 1..6. If upstream forgot to reset, don't let it poison math/UI.
 		if type(roundIndex) ~= "number" or roundIndex < 1 or roundIndex > 6 then
 			roundIndex = 1
@@ -1248,7 +1289,7 @@ local function GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex, categ
     -- Unregister the events after obtaining the raid leader information
     UnregisterRaidLeaderEvents()
 
-    AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, allianceTeamScore, hordeTeamScore, roundsWon, categoryName, categoryID, damp, objectiveByGUID)
+    AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, allianceTeamScore, hordeTeamScore, roundsWon, categoryName, categoryID, damp, objectiveByGUID, isMatchComplete)
 
     -- Safe to clear AFTER stats capture:
     -- AppendHistory has consumed the frozen roster for per-player "isFriendly".
@@ -1389,14 +1430,12 @@ function RefreshDataEvent(self, event, ...)
             if self.isSoloShuffle then
                 -- Retry once after the scoreboard/party state has settled.
                 OnSoloShuffleStateChanged("PVP_MATCH_COMPLETE")
-                if roundIndex and playerDeathSeen then
-                    local cr, mmr = GetCRandMMR(7)
-                    local historyTable = Database.SoloShuffleHistory
-                    Database.CurrentCRforSoloShuffle = cr
-                    Database.CurrentMMRforSoloShuffle = mmr
-                    GetPlayerStatsEndOfMatch(cr, mmr, historyTable, roundIndex or 6, "SoloShuffle", 7, startTime)
-                else
-                end
+                local cr, mmr = GetCRandMMR(7)
+                local historyTable = Database.SoloShuffleHistory
+                Database.CurrentCRforSoloShuffle = cr
+                Database.CurrentMMRforSoloShuffle = mmr
+                GetPlayerStatsEndOfMatch(cr, mmr, historyTable,
+                    roundIndex or 1, "SoloShuffle", 7, startTime, true)
 
                 -- Cleanup
                 self.isSoloShuffle = nil
@@ -2603,7 +2642,7 @@ local mapShortName = {
 	["Cage of Carnage"] = "COC",
 }
 
-function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, allianceTeamScore, hordeTeamScore, roundsWon, categoryName, categoryID, damp, objectiveByGUID)
+function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, duration, teamFaction, enemyFaction, friendlyTotalDamage, friendlyTotalHealing, enemyTotalDamage, enemyTotalHealing, friendlyWinLoss, friendlyRaidLeader, enemyRaidLeader, friendlyRatingChange, enemyRatingChange, allianceTeamScore, hordeTeamScore, roundsWon, categoryName, categoryID, damp, objectiveByGUID, isMatchComplete)
     -- Solo Shuffle rounds 1-5 are inserted after a delay, so #historyTable doesn't change immediately.
     -- Reserve a unique matchID up-front to avoid duplicates.
     Database._nextMatchID = Database._nextMatchID or {}
@@ -2644,7 +2683,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     local friendlyRatingTotal, enemyRatingTotal = 0, 0
     local friendlyPlayerCount, enemyPlayerCount = 0, 0
     local friendlyRatingChangeTotal, enemyRatingChangeTotal = 0, 0
-    local deferSoloShuffleRating = isSoloShuffle and roundIndex and roundIndex >= 1 and roundIndex <= 5
+    local deferSoloShuffleRating = isSoloShuffle and not isMatchComplete
+        and roundIndex and roundIndex >= 1 and roundIndex <= 5
 
     -- Pre-pass: in arenas, grab MY team index so we can keep "my team" left consistently.
     if isArena then
@@ -2902,6 +2942,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
         matchID = appendHistoryMatchID,
         isSoloShuffle = C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle() or false,
         shuffleLayoutVersion = isSoloShuffle and 2 or nil,
+        shuffleEarlyComplete = isSoloShuffle and isMatchComplete
+            and roundIndex ~= 6 or nil,
         timestamp = endTime,
         specID = mySpecID,
         specName = mySpecName,
@@ -2952,9 +2994,14 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 		end
 	end
 
-    if isSoloShuffle then RSTATS.ShuffleWidgets.Attach(ssWidgetRecord, entry, false) end
+    if entry.shuffleEarlyComplete then
+        entry.friendlyWinLoss = "MATCH COMPLETE"
+        entry.roundsWon = nil -- Filled from the final scoreboard when available.
+    elseif isSoloShuffle then
+        RSTATS.ShuffleWidgets.Attach(ssWidgetRecord, entry, false)
+    end
 
-    if C_PvP.IsRatedSoloShuffle() and roundIndex >= 1 and roundIndex <= 5 then
+    if deferSoloShuffleRating then
         -- Skip table insert for now, let the 20second delay handle it
     else
         table.insert(historyTable, 1, entry)
@@ -2977,7 +3024,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
     end
 
 	--- Solo Shuffle logic with a 20-second delay only for round 1-5
-	if C_PvP.IsRatedSoloShuffle() and roundIndex >= 1 and roundIndex <= 5 then
+	if deferSoloShuffleRating then
 	
 		local matchIDToUpdate = appendHistoryMatchID
 	
@@ -3125,7 +3172,7 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 		end)
 	end
 
-    if C_PvP.IsRatedSoloShuffle() and roundIndex == 6 then
+    if isSoloShuffle and (isMatchComplete or roundIndex == 6) then
         local matchIDToUpdate = appendHistoryMatchID -- Track the matchID for updating the correct match entry
     
         -- Add a delay of 1 second before fetching final stats
@@ -3660,7 +3707,12 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
                         break
                     end
                 end
-                outcomeText = "RND 6" .. (wins > 3 and "  +   W" or wins == 3 and "  ~   D" or "  +   L")
+                if match.shuffleEarlyComplete then
+                    outcomeText = "MATCH COMPLETE"
+                    wins = match.roundsWon
+                else
+                    outcomeText = "RND 6" .. (wins > 3 and "  +   W" or wins == 3 and "  ~   D" or "  +   L")
+                end
             end
             if match.shuffleResultSource == "widgets" then wins = match.roundsWon end
             scoreText = (wins == nil and "?" or tostring(wins)) .. " / 6"
@@ -3704,7 +3756,8 @@ function RSTATS:DisplayHistory(content, historyTable, mmrLabel, tabID, isFiltere
             return {
                 outcomeText, "", scoreText, mapDisplay,
                 date("%a %d %b %Y - %H:%M:%S", match.endTime) or "N/A",
-                match.duration or "N/A", "", "All six rounds", "",
+                match.duration or "N/A", "",
+                match.shuffleEarlyComplete and "Completed rounds" or "All six rounds", "",
                 aggregate("newrating", true), aggregate("prematchMMR", true),
                 aggregate("damage", false, true), aggregate("healing", false, true),
                 aggregate("ratingChange", true), match.note or "",
@@ -6975,6 +7028,11 @@ end
 
 OnSoloShuffleStateChanged = function(event, ...)
     if not (C_PvP.IsRatedSoloShuffle and C_PvP.IsRatedSoloShuffle()) then
+        return
+    end
+
+    -- Early completion records a match summary, not a synthetic round.
+    if event == "PVP_MATCH_COMPLETE" and roundIndex ~= 6 then
         return
     end
 
