@@ -16,8 +16,8 @@ local function ReadText(id)
     local text = info.text
     if issecretvalue and issecretvalue(text) then return nil end
     if type(text) ~= "string" then return nil end
-    if issecretvalue and issecretvalue(info.shownState) then return nil end
-    if info.shownState == Enum.WidgetShownState.Hidden then return nil end
+    if issecretvalue and issecretvalue(info.state) then return nil end
+    if info.state == Enum.IconAndTextWidgetState.Hidden then return nil end
     return text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
 end
 
@@ -42,6 +42,10 @@ end
 function Tracker.Begin(round)
     if records[round] then activeRecord = records[round]; return end
     local previous = records[round - 1]
+    if previous and previous.ended then
+        -- Settle while the next round's cumulative wins are still unchanged.
+        Tracker.Sample(previous, true)
+    end
     local baseline = previous and previous.total
     -- The first round starts at zero. Joining/reloading later needs a readable baseline.
     if round == 1 then baseline = 0 end
@@ -63,6 +67,9 @@ end
 
 function Tracker.Sample(record, settle)
     if not record or record.generation ~= generation then return end
+    -- A later round's result must never be read back into this round.
+    local nextRecord = records[record.round + 1]
+    if nextRecord and nextRecord.ended then return end
     -- Reconciliation may have resolved the final round after its widgets vanished.
     -- Preserve that result if a late widget callback arrives with stale text.
     for _, row in ipairs(record.rows or {}) do
