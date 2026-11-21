@@ -843,18 +843,18 @@ end
 
 -- RBGB: if queued as a 2-man home party, return the partner Name-Realm, otherwise nil.
 local function GetRBGBDuoPartnerNameRealm()
+    if IsInInstance() or IsInGroup(LE_PARTY_CATEGORY_INSTANCE) then return nil end
     if not IsInGroup(LE_PARTY_CATEGORY_HOME) then return nil end
     if IsInRaid(LE_PARTY_CATEGORY_HOME) then return nil end
 
     local n = GetNumGroupMembers(LE_PARTY_CATEGORY_HOME) or 0
     if n ~= 2 then return nil end
 
-    local myName = UnitName("player")
     for i = 1, 4 do
         local unit = "party" .. i
         if UnitExists(unit) and UnitIsPlayer(unit) then
             local name, realm = UnitFullName(unit)
-            if name and name ~= myName then
+            if name and not UnitIsUnit(unit, "player") then
                 if not realm or realm == "" then
                     realm = GetRealmName()
                 end
@@ -864,6 +864,36 @@ local function GetRBGBDuoPartnerNameRealm()
     end
 
     return nil
+end
+
+-- Freeze the first readable home-party identity for this rated Blitz queue.
+-- The table also represents a captured solo queue (partner == nil).
+local function UpdateRBGBDuoQueue()
+    if IsInInstance() or IsInGroup(LE_PARTY_CATEGORY_INSTANCE) then return end
+
+    for i = 1, GetMaxBattlefieldID() do
+        local status, _, _, _, _, queueType = GetBattlefieldStatus(i)
+        if queueType == "RATEDSOLORBG" and status and status ~= "none" then
+            if status == "active" then return end
+            if status == "queued" or status == "confirm" then
+                if not Database.rbgbDuoQueue then
+                    local partner = GetRBGBDuoPartnerNameRealm()
+                    -- Wait for an unresolved two-person roster instead of saving Solo.
+                    if GetNumGroupMembers(LE_PARTY_CATEGORY_HOME) == 2
+                        and not partner then return end
+                    Database.rbgbDuoQueue = { partner = partner }
+                    SaveData()
+                end
+            end
+            return
+        end
+    end
+
+    -- Cancelled queue or returned from the match: allow the next capture.
+    if Database.rbgbDuoQueue then
+        Database.rbgbDuoQueue = nil
+        SaveData()
+    end
 end
 
 local function ReadableScoreValue(value)
@@ -2926,7 +2956,8 @@ function AppendHistory(historyTable, roundIndex, cr, mmr, mapName, endTime, dura
 
     local duoPartner = nil
     if categoryID == 9 then -- Solo RBG (RBGB)
-        duoPartner = GetRBGBDuoPartnerNameRealm()
+        local queued = Database.rbgbDuoQueue
+        duoPartner = queued and queued.partner or nil
     end
 
     -- Track the player's active spec for spec-based rated ladders (and spec-based UI display).
@@ -5154,11 +5185,9 @@ function CreateNestedTable(parent, playerStats, friendlyFaction, isInitial, isMi
 
     local function NamesMatch(a, b)
         if not (a and b) then return false end
-        if a == b then return true end
-        -- allow comparing "Name-Realm" vs "Name"
-        local abase = a:match("^(.-)%-") or a
-        local bbase = b:match("^(.-)%-") or b
-        return abase == bbase
+        local akey = GetScoreInfoNameRealmKey(a):gsub("%s+", "")
+        local bkey = GetScoreInfoNameRealmKey(b):gsub("%s+", "")
+        return akey == bkey
     end
 
     local function ShouldHighlightRow(p)
@@ -7086,8 +7115,15 @@ function Initialize()
     frame:RegisterEvent("PVP_MATCH_COMPLETE")         -- Register for the PVP_MATCH_COMPLETE event
     frame:RegisterEvent("PVP_MATCH_ACTIVE")           -- Register for the PVP_MATCH_ACTIVE event
     frame:RegisterEvent("UPDATE_UI_WIDGET")
-        
+    frame:RegisterEvent("UPDATE_BATTLEFIELD_STATUS")
+    frame:RegisterEvent("GROUP_ROSTER_UPDATE")
+
     frame:SetScript("OnEvent", function(self, event, ...)
+        if event == "UPDATE_BATTLEFIELD_STATUS"
+            or event == "GROUP_ROSTER_UPDATE"
+            or event == "PLAYER_ENTERING_WORLD" then
+            UpdateRBGBDuoQueue()
+        end
         if event == "PLAYER_ENTERING_WORLD"
             or event == "PVP_MATCH_COMPLETE"
             or event == "PVP_MATCH_ACTIVE"
